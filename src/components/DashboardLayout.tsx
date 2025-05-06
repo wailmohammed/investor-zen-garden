@@ -9,7 +9,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Menu, X, ChevronDown, Settings, LayoutDashboard, Pie, BarChart, History, Search, User } from "lucide-react";
+import { Menu, X, ChevronDown, Settings, LayoutDashboard, ChartPie, BarChart, History, Search, User } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,7 +30,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
   const menuItems = [
     { label: "Dashboard", icon: <LayoutDashboard className="w-5 h-5 mr-2" />, href: "/dashboard" },
-    { label: "Portfolio", icon: <Pie className="w-5 h-5 mr-2" />, href: "/portfolio" },
+    { label: "Portfolio", icon: <ChartPie className="w-5 h-5 mr-2" />, href: "/portfolio" },
     { label: "Market", icon: <BarChart className="w-5 h-5 mr-2" />, href: "/market" },
     { label: "Transactions", icon: <History className="w-5 h-5 mr-2" />, href: "/transactions" },
     { label: "Screener", icon: <Search className="w-5 h-5 mr-2" />, href: "/screener" },
