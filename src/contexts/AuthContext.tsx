@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
 interface AuthContextType {
   user: User | null;
@@ -11,9 +12,15 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  usingMockCredentials: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Check if we're using mock Supabase credentials
+const usingMockCredentials = 
+  !import.meta.env.VITE_SUPABASE_URL || 
+  !import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -45,6 +52,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signIn = async (email: string, password: string) => {
     try {
+      if (usingMockCredentials) {
+        toast({
+          title: "Development Mode",
+          description: "Using mock Supabase credentials. Set up real credentials to enable authentication.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       toast({
@@ -63,6 +79,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signUp = async (email: string, password: string) => {
     try {
+      if (usingMockCredentials) {
+        toast({
+          title: "Development Mode",
+          description: "Using mock Supabase credentials. Set up real credentials to enable authentication.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       const { error } = await supabase.auth.signUp({ email, password });
       if (error) throw error;
       toast({
@@ -81,6 +106,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOut = async () => {
     try {
+      if (usingMockCredentials) {
+        toast({
+          title: "Development Mode",
+          description: "Using mock Supabase credentials. Set up real credentials to enable authentication.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       toast({
@@ -103,6 +137,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     signIn,
     signUp,
     signOut,
+    usingMockCredentials,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

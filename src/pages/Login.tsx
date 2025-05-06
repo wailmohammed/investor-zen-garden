@@ -6,12 +6,14 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { AlertTriangle } from 'lucide-react';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signIn } = useAuth();
+  const { signIn, usingMockCredentials } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -45,6 +47,17 @@ const Login = () => {
           <CardDescription>Enter your email and password to access your dashboard</CardDescription>
         </CardHeader>
         <CardContent>
+          {usingMockCredentials && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Development Mode</AlertTitle>
+              <AlertDescription>
+                You are using mock Supabase credentials. To enable actual authentication, 
+                please configure real Supabase credentials in your environment variables.
+              </AlertDescription>
+            </Alert>
+          )}
+          
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium">Email</label>
