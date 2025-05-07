@@ -10,6 +10,8 @@ import NotFound from "./pages/NotFound";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import Admin from "./pages/Admin";
+import CryptoPayment from "./pages/CryptoPayment";
 
 const queryClient = new QueryClient();
 
@@ -35,6 +37,22 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/admin" 
+        element={
+          <ProtectedRoute>
+            <Admin />
+          </ProtectedRoute>
+        } 
+      />
+      <Route
+        path="/payment/crypto" 
+        element={
+          <ProtectedRoute>
+            <CryptoPayment />
           </ProtectedRoute>
         } 
       />

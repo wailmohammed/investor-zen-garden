@@ -1,9 +1,18 @@
 
 import { Button } from "@/components/ui/button";
-import { Search } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Search, User } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Navbar = () => {
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/login");
+  };
+
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -15,8 +24,8 @@ const Navbar = () => {
             <nav className="hidden md:ml-8 md:flex md:space-x-8">
               <Link to="/dashboard" className="text-gray-700 hover:text-finance-blue px-3 py-2 text-sm font-medium">Dashboard</Link>
               <Link to="/portfolio" className="text-gray-700 hover:text-finance-blue px-3 py-2 text-sm font-medium">Portfolio</Link>
-              <Link to="/stocks" className="text-gray-700 hover:text-finance-blue px-3 py-2 text-sm font-medium">Stocks</Link>
-              <Link to="/insights" className="text-gray-700 hover:text-finance-blue px-3 py-2 text-sm font-medium">Insights</Link>
+              <Link to="/payment/crypto" className="text-gray-700 hover:text-finance-blue px-3 py-2 text-sm font-medium">Payments</Link>
+              {user && <Link to="/admin" className="text-gray-700 hover:text-finance-blue px-3 py-2 text-sm font-medium">Admin</Link>}
             </nav>
           </div>
           <div className="flex items-center">
@@ -26,8 +35,17 @@ const Navbar = () => {
                   <Search className="h-5 w-5" />
                 </button>
                 <div className="ml-4">
-                  <Button variant="outline" className="mr-2">Sign In</Button>
-                  <Button className="bg-finance-blue hover:bg-blue-700">Sign Up</Button>
+                  {user ? (
+                    <div className="flex items-center space-x-4">
+                      <span className="text-sm text-gray-700">{user.email}</span>
+                      <Button variant="outline" onClick={handleSignOut}>Sign Out</Button>
+                    </div>
+                  ) : (
+                    <>
+                      <Button variant="outline" className="mr-2" onClick={() => navigate("/login")}>Sign In</Button>
+                      <Button className="bg-finance-blue hover:bg-blue-700" onClick={() => navigate("/signup")}>Sign Up</Button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
