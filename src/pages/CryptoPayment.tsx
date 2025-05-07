@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,14 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Bitcoin, Ethereum, Wallet, CreditCard } from 'lucide-react';
+import { Bitcoin, CreditCard, Wallet } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/DashboardLayout';
 
 const cryptoOptions = [
   { id: 'btc', name: 'Bitcoin (BTC)', icon: <Bitcoin className="h-6 w-6" />, address: '3FZbgi29cpjq2GjdwV8eyHuJJnkLtktZc5' },
-  { id: 'eth', name: 'Ethereum (ETH)', icon: <Ethereum className="h-6 w-6" />, address: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F' },
+  { id: 'eth', name: 'Ethereum (ETH)', icon: <CreditCard className="h-6 w-6" />, address: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F' },
   { id: 'xrp', name: 'Ripple (XRP)', icon: <CreditCard className="h-6 w-6" />, address: 'rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh' },
   { id: 'dog', name: 'Dogecoin (DOGE)', icon: <Wallet className="h-6 w-6" />, address: 'D8vFz4p1L37jdg9Hm1DdeZ5vxbY7NphHwU' },
   { id: 'sol', name: 'Solana (SOL)', icon: <CreditCard className="h-6 w-6" />, address: '5YNmRHBD3FQ9dJhYzuJ3tRYKPJ8gjE1GgakhrfxkUB7q' },
