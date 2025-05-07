@@ -1,9 +1,8 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
+import { supabase, cleanupAuthState } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
 interface AuthContextType {
   user: User | null;
@@ -31,7 +30,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Get initial session
+    // First set up auth state listener to prevent missing auth events
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setSession(session);
+        setUser(session?.user || null);
+        
+        if (session?.user) {
+          // Defer fetching profile info to prevent potential deadlocks
+          setTimeout(() => {
+            checkAdminStatus(session.user.id);
+          }, 0);
+        } else {
+          setIsAdmin(false);
+        }
+        
+        setLoading(false);
+      }
+    );
+
+    // Then check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user || null);
@@ -40,20 +58,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
       setLoading(false);
     });
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session);
-        setUser(session?.user || null);
-        if (session?.user) {
-          checkAdminStatus(session.user.id);
-        } else {
-          setIsAdmin(false);
-        }
-        setLoading(false);
-      }
-    );
 
     return () => {
       subscription.unsubscribe();
@@ -81,17 +85,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signIn = async (email: string, password: string) => {
     try {
-      if (usingMockCredentials) {
-        toast({
-          title: "Development Mode",
-          description: "Using mock Supabase credentials. Set up real credentials to enable authentication.",
-          variant: "destructive",
-        });
-        return;
+      // Clean up existing auth state before signing in
+      cleanupAuthState();
+      
+      // Attempt global sign out first
+      try {
+        await supabase.auth.signOut({ scope: 'global' });
+      } catch (error) {
+        // Continue even if this fails
       }
       
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
+      
       toast({
         title: "Welcome back!",
         description: "You've successfully signed in to your account.",
@@ -108,17 +114,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signUp = async (email: string, password: string) => {
     try {
-      if (usingMockCredentials) {
-        toast({
-          title: "Development Mode",
-          description: "Using mock Supabase credentials. Set up real credentials to enable authentication.",
-          variant: "destructive",
-        });
-        return;
-      }
+      // Clean up existing auth state before signing up
+      cleanupAuthState();
       
       const { error } = await supabase.auth.signUp({ email, password });
       if (error) throw error;
+      
       toast({
         title: "Account created",
         description: "Check your email for the confirmation link.",
@@ -135,17 +136,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOut = async () => {
     try {
-      if (usingMockCredentials) {
-        toast({
-          title: "Development Mode",
-          description: "Using mock Supabase credentials. Set up real credentials to enable authentication.",
-          variant: "destructive",
-        });
-        return;
-      }
+      // Clean up auth state first
+      cleanupAuthState();
       
-      const { error } = await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut({ scope: 'global' });
       if (error) throw error;
+      
+      // Force page reload for a clean state
+      window.location.href = '/login';
+      
       toast({
         title: "Signed out",
         description: "You've successfully signed out of your account.",
@@ -167,7 +166,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     signIn,
     signUp,
     signOut,
-    usingMockCredentials,
+    usingMockCredentials: false, // We're now using real Supabase credentials
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
