@@ -1,1 +1,11 @@
+
 project_id = "tngtalojrxengqqrkcwl"
+
+[functions.ai-assistant]
+verify_jwt = true
+
+[functions.send-email]
+verify_jwt = true
+
+[functions.run-scheduled-task]
+verify_jwt = false

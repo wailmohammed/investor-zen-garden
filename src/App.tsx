@@ -12,6 +12,8 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Admin from "./pages/Admin";
 import CryptoPayment from "./pages/CryptoPayment";
+import EmailNotifications from "./pages/EmailNotifications";
+import Tasks from "./pages/Tasks";
 
 const queryClient = new QueryClient();
 
@@ -53,6 +55,22 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <CryptoPayment />
+          </ProtectedRoute>
+        } 
+      />
+      <Route
+        path="/email-notifications" 
+        element={
+          <ProtectedRoute>
+            <EmailNotifications />
+          </ProtectedRoute>
+        } 
+      />
+      <Route
+        path="/tasks" 
+        element={
+          <ProtectedRoute>
+            <Tasks />
           </ProtectedRoute>
         } 
       />

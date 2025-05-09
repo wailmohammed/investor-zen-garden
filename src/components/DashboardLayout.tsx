@@ -9,7 +9,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Menu, X, ChevronDown, Settings, LayoutDashboard, ChartPie, BarChart, History, Search, User } from "lucide-react";
+import { Menu, X, ChevronDown, Settings, LayoutDashboard, ChartPie, BarChart, History, Search, User, Mail, Calendar, MessageSquare } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,8 +32,10 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { label: "Dashboard", icon: <LayoutDashboard className="w-5 h-5 mr-2" />, href: "/dashboard" },
     { label: "Portfolio", icon: <ChartPie className="w-5 h-5 mr-2" />, href: "/portfolio" },
     { label: "Market", icon: <BarChart className="w-5 h-5 mr-2" />, href: "/market" },
-    { label: "Transactions", icon: <History className="w-5 h-5 mr-2" />, href: "/transactions" },
-    { label: "Screener", icon: <Search className="w-5 h-5 mr-2" />, href: "/screener" },
+    { label: "Payments", icon: <History className="w-5 h-5 mr-2" />, href: "/payment/crypto" },
+    { label: "Email Notifications", icon: <Mail className="w-5 h-5 mr-2" />, href: "/email-notifications" },
+    { label: "Tasks", icon: <Calendar className="w-5 h-5 mr-2" />, href: "/tasks" },
+    { label: "Admin", icon: <Settings className="w-5 h-5 mr-2" />, href: "/admin" },
   ];
 
   const isActive = (path: string) => {
