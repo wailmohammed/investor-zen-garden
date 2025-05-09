@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase, cleanupAuthState } from '@/integrations/supabase/client';
@@ -66,24 +65,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const checkAdminStatus = async (userId: string) => {
     try {
-      // For now, we'll set the first user as admin
-      const { data: profiles, error } = await supabase
+      // Query the profiles table to check if the user is an admin
+      const { data, error } = await supabase
         .from('profiles')
-        .select('id')
-        .order('created_at', { ascending: true })
-        .limit(1);
+        .select('is_admin')
+        .eq('id', userId)
+        .single();
       
       if (error) {
         console.error("Error checking admin status:", error.message);
         return;
       }
       
-      // If this user is the first user in the system, make them an admin
-      if (profiles && profiles.length > 0 && profiles[0].id === userId) {
-        setIsAdmin(true);
-      } else {
-        setIsAdmin(false);
-      }
+      // Set isAdmin based on the value from the database
+      setIsAdmin(data?.is_admin || false);
     } catch (error) {
       console.error("Error checking admin status:", error);
     }
