@@ -66,24 +66,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const checkAdminStatus = async (userId: string) => {
     try {
-      // Instead of looking for is_admin which doesn't exist, we'll check if this user
-      // is the first user in the system, which could be considered an admin
-      const { data, error } = await supabase
+      // For now, we'll set the first user as admin
+      const { data: profiles, error } = await supabase
         .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+        .select('id')
+        .order('created_at', { ascending: true })
+        .limit(1);
       
       if (error) {
         console.error("Error checking admin status:", error.message);
         return;
       }
       
-      // For now, we'll set isAdmin to false since the column doesn't exist
-      // In a real application, you would implement proper admin checks
-      setIsAdmin(false);
-      
-      // Additional logic can be added here when admin functionality is implemented properly
+      // If this user is the first user in the system, make them an admin
+      if (profiles && profiles.length > 0 && profiles[0].id === userId) {
+        setIsAdmin(true);
+      } else {
+        setIsAdmin(false);
+      }
     } catch (error) {
       console.error("Error checking admin status:", error);
     }
