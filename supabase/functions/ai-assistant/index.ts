@@ -23,7 +23,7 @@ const generateAIResponse = async (message: string): Promise<string> => {
   }
   
   if (message.toLowerCase().includes('stock') || message.toLowerCase().includes('invest')) {
-    return 'Investing in stocks involves buying shares of publicly traded companies. It's important to research companies thoroughly and consider diversification to manage risk.'
+    return 'Investing in stocks involves buying shares of publicly traded companies. It\'s important to research companies thoroughly and consider diversification to manage risk.'
   }
   
   return 'As your finance assistant, I can help answer questions about investments, dividends, retirement planning, and other financial topics. What would you like to know?'
