@@ -11,34 +11,36 @@ import { toast } from "sonner";
 import { FileUpload } from "@/components/FileUpload";
 import { BrokerCard } from "@/components/BrokerCard";
 
+type BrokerStatus = "not_connected" | "connected" | "error";
+
 const brokers = [
   {
     id: "trading212",
     name: "Trading 212",
     description: "Connect to your Trading 212 account",
     logo: "/trading212-logo.svg",
-    status: "not_connected",
+    status: "not_connected" as BrokerStatus,
   },
   {
     id: "binance",
     name: "Binance",
     description: "Connect to your Binance account",
     logo: "/binance-logo.svg",
-    status: "not_connected",
+    status: "not_connected" as BrokerStatus,
   },
   {
     id: "etoro",
     name: "eToro",
     description: "Connect to your eToro account",
     logo: "/etoro-logo.svg",
-    status: "not_connected",
+    status: "not_connected" as BrokerStatus,
   },
   {
     id: "interactive_brokers",
     name: "Interactive Brokers",
     description: "Connect to your Interactive Brokers account",
     logo: "/interactive-brokers-logo.svg",
-    status: "not_connected",
+    status: "not_connected" as BrokerStatus,
   }
 ];
 

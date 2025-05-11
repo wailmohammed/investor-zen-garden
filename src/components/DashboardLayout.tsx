@@ -1,3 +1,4 @@
+
 import {
   LayoutDashboard,
   Settings,
@@ -22,7 +23,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 
 const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
-  const { user, logout } = useAuth();
+  const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const pathname = location.pathname;
@@ -33,7 +34,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   };
 
   const handleLogout = async () => {
-    await logout();
+    await signOut();
     navigate("/login");
   };
 
