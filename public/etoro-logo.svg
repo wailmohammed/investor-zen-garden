@@ -1,0 +1,11 @@
+
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-candlestick-chart">
+  <path d="M9 5v16"/>
+  <path d="M17 3v18"/>
+  <path d="M3 17h3"/>
+  <path d="M18 17h3"/>
+  <path d="M3 7h5"/>
+  <path d="M16 7h5"/>
+  <rect width="4" height="6" x="7" y="7" rx="1"/>
+  <rect width="4" height="8" x="15" y="9" rx="1"/>
+</svg>

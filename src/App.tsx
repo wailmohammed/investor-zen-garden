@@ -14,6 +14,7 @@ import Admin from "./pages/Admin";
 import CryptoPayment from "./pages/CryptoPayment";
 import EmailNotifications from "./pages/EmailNotifications";
 import Tasks from "./pages/Tasks";
+import BrokerIntegration from "./pages/BrokerIntegration";
 
 const queryClient = new QueryClient();
 
@@ -71,6 +72,14 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <Tasks />
+          </ProtectedRoute>
+        } 
+      />
+      <Route
+        path="/brokers" 
+        element={
+          <ProtectedRoute>
+            <BrokerIntegration />
           </ProtectedRoute>
         } 
       />
