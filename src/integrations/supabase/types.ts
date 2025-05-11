@@ -93,9 +93,31 @@ export type Database = {
         }
         Relationships: []
       }
+      global_settings: {
+        Row: {
+          default_currency: string
+          id: string
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          default_currency?: string
+          id: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          default_currency?: string
+          id?: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
+          default_currency: string | null
           email: string | null
           full_name: string | null
           id: string
@@ -105,6 +127,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          default_currency?: string | null
           email?: string | null
           full_name?: string | null
           id: string
@@ -114,6 +137,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          default_currency?: string | null
           email?: string | null
           full_name?: string | null
           id?: string
