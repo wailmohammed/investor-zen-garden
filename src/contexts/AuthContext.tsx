@@ -25,6 +25,9 @@ const usingMockCredentials =
   !import.meta.env.VITE_SUPABASE_URL || 
   !import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// Mock storage for demo purposes when not connected to Supabase
+const mockUserStorage: { [key: string]: any } = {};
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -35,6 +38,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const { toast } = useToast();
 
   useEffect(() => {
+    if (usingMockCredentials) {
+      // Initialize from localStorage if using mock credentials
+      const storedUser = localStorage.getItem('mockUser');
+      if (storedUser) {
+        try {
+          const parsedUser = JSON.parse(storedUser);
+          setUser(parsedUser);
+          setIsAdmin(parsedUser.email?.includes('admin') || false);
+          setUniqueId(generateUniqueId(parsedUser.id));
+          const storedCurrency = localStorage.getItem('mockDefaultCurrency') || 'USD';
+          setDefaultCurrency(storedCurrency);
+        } catch (error) {
+          console.error("Error parsing stored mock user:", error);
+        }
+      }
+      setLoading(false);
+      return;
+    }
+
     // First set up auth state listener to prevent missing auth events
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
@@ -87,6 +109,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const checkAdminStatus = async (userId: string) => {
     try {
+      if (usingMockCredentials) {
+        // In mock mode, any email containing 'admin' is considered an admin
+        setIsAdmin(user?.email?.includes('admin') || false);
+        return;
+      }
+
       // Query the profiles table to check if the user is an admin
       const { data, error } = await supabase
         .from('profiles')
@@ -108,6 +136,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const fetchDefaultCurrency = async (userId: string) => {
     try {
+      if (usingMockCredentials) {
+        const storedCurrency = localStorage.getItem('mockDefaultCurrency') || 'USD';
+        setDefaultCurrency(storedCurrency);
+        return;
+      }
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('default_currency')
@@ -131,6 +165,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (!user) return;
     
     try {
+      if (usingMockCredentials) {
+        localStorage.setItem('mockDefaultCurrency', currency);
+        setDefaultCurrency(currency);
+        toast({
+          title: "Currency updated",
+          description: `Default currency set to ${currency}.`,
+        });
+        return;
+      }
+      
       const { error } = await supabase
         .from('profiles')
         .update({ default_currency: currency })
@@ -161,6 +205,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signIn = async (email: string, password: string) => {
     try {
+      if (usingMockCredentials) {
+        // Mock authentication
+        const mockUser = {
+          id: `mock-${Date.now().toString(36)}`,
+          email,
+          user_metadata: { name: email.split('@')[0] },
+          app_metadata: {},
+          aud: "mock",
+          created_at: new Date().toISOString(),
+        };
+
+        localStorage.setItem('mockUser', JSON.stringify(mockUser));
+        setUser(mockUser as unknown as User);
+        setIsAdmin(email.includes('admin'));
+        setUniqueId(generateUniqueId(mockUser.id));
+        
+        toast({
+          title: "Welcome back!",
+          description: "You've successfully signed in to your account.",
+        });
+        return;
+      }
+      
       // Clean up existing auth state before signing in
       cleanupAuthState();
       
@@ -190,6 +257,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signUp = async (email: string, password: string) => {
     try {
+      if (usingMockCredentials) {
+        // Mock registration
+        const mockUser = {
+          id: `mock-${Date.now().toString(36)}`,
+          email,
+          user_metadata: { name: email.split('@')[0] },
+          app_metadata: {},
+          aud: "mock",
+          created_at: new Date().toISOString(),
+        };
+
+        localStorage.setItem('mockUser', JSON.stringify(mockUser));
+        setUser(mockUser as unknown as User);
+        setIsAdmin(email.includes('admin'));
+        setUniqueId(generateUniqueId(mockUser.id));
+        
+        toast({
+          title: "Account created",
+          description: "You've successfully registered.",
+        });
+        return;
+      }
+      
       // Clean up existing auth state before signing up
       cleanupAuthState();
       
@@ -212,6 +302,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOut = async () => {
     try {
+      if (usingMockCredentials) {
+        // Clear mock user
+        localStorage.removeItem('mockUser');
+        setUser(null);
+        setIsAdmin(false);
+        setUniqueId(null);
+        setDefaultCurrency('USD');
+        
+        // Force page reload for a clean state
+        window.location.href = '/login';
+        
+        toast({
+          title: "Signed out",
+          description: "You've successfully signed out of your account.",
+        });
+        return;
+      }
+      
       // Clean up auth state first
       cleanupAuthState();
       
@@ -242,7 +350,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     signIn,
     signUp,
     signOut,
-    usingMockCredentials: false, // We're now using real Supabase credentials
+    usingMockCredentials,
     uniqueId,
     defaultCurrency,
     updateDefaultCurrency,
