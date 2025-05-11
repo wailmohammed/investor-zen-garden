@@ -1,123 +1,92 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
-import DashboardLayout from "@/components/DashboardLayout";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { useToast } from "@/hooks/use-toast";
-import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { supabase } from "@/lib/supabase";
 
-type UserType = {
-  id: string;
-  email: string;
-  created_at: string;
-  is_admin?: boolean;
-  last_sign_in_at?: string;
-};
+import { useState, useEffect } from "react";
+import DashboardLayout from "@/components/DashboardLayout";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { supabase } from "@/integrations/supabase/client";
+import { ChartLine, Settings, Users, Info } from "lucide-react";
 
 const Admin = () => {
-  const { user } = useAuth();
-  const navigate = useNavigate();
+  const { isAdmin, user } = useAuth();
   const { toast } = useToast();
-  const [users, setUsers] = useState<UserType[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [globalDefaultCurrency, setGlobalDefaultCurrency] = useState<string>("USD");
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Since we don't have a proper admin check yet, we'll use this as a temporary solution
-  // In a real application, you would implement proper admin checks
   useEffect(() => {
-    // For demo purposes, we're setting the first user as admin
-    const checkAdminStatus = async () => {
-      try {
-        if (!user) {
-          navigate("/login");
-          return;
-        }
+    if (isAdmin) {
+      fetchGlobalSettings();
+    }
+  }, [isAdmin]);
 
-        // For now, we're considering the logged-in user as an admin for demo purposes
-        setIsAdmin(true);
-        fetchUsers();
-      } catch (error: any) {
-        console.error("Error checking admin status:", error.message);
-        toast({
-          title: "Error",
-          description: "Failed to verify admin permissions.",
-          variant: "destructive",
-        });
-        navigate("/dashboard");
-      }
-    };
-
-    checkAdminStatus();
-  }, [user, navigate, toast]);
-
-  const fetchUsers = async () => {
+  const fetchGlobalSettings = async () => {
     try {
-      setLoading(true);
-      const { data: profiles, error: profilesError } = await supabase
-        .from("profiles")
-        .select("*");
-
-      if (profilesError) throw profilesError;
-
-      // Get all users from auth.users (requires admin rights via RPC)
-      // Note: This might fail if the RPC isn't properly set up
-      let users = [];
-      try {
-        const { data: authUsers, error: usersError } = await supabase.rpc('get_all_users');
-        if (!usersError && authUsers) {
-          users = authUsers;
-        }
-      } catch (e) {
-        console.error("Failed to get users from auth.users. Using profiles table instead.");
-        // If we can't get users from auth.users, we'll just use the profiles
-        users = profiles || [];
+      const { data, error } = await supabase
+        .from('global_settings')
+        .select('default_currency')
+        .single();
+      
+      if (error) {
+        console.error("Error fetching global settings:", error);
+        return;
       }
-
-      // Combine the data
-      const combinedUsers = users.map((authUser: any) => {
-        const profile = profiles?.find(p => p.id === authUser.id) || {};
-        return {
-          ...authUser,
-          ...profile,
-          // Since is_admin doesn't exist, we'll set it to false for now
-          is_admin: false
-        };
-      });
-
-      setUsers(combinedUsers);
-    } catch (error: any) {
-      console.error("Error fetching users:", error.message);
-      toast({
-        title: "Error",
-        description: "Failed to load users.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
+      
+      if (data && data.default_currency) {
+        setGlobalDefaultCurrency(data.default_currency);
+      }
+    } catch (error) {
+      console.error("Error fetching global settings:", error);
     }
   };
 
-  // This function would normally toggle admin status, but since the column doesn't exist,
-  // we'll just show a toast notification for now
-  const toggleAdminStatus = async (userId: string, currentStatus: boolean) => {
-    toast({
-      title: "Feature not available",
-      description: "Admin status management is not currently implemented.",
-      variant: "default",
-    });
+  const updateGlobalDefaultCurrency = async () => {
+    setIsLoading(true);
+    try {
+      const { error } = await supabase
+        .from('global_settings')
+        .upsert({ 
+          id: 'default', 
+          default_currency: globalDefaultCurrency,
+          updated_by: user?.id,
+          updated_at: new Date().toISOString() 
+        });
+      
+      if (error) {
+        toast({
+          title: "Failed to update global currency",
+          description: error.message,
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      toast({
+        title: "Global currency updated",
+        description: `Default subscription currency set to ${globalDefaultCurrency}.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error updating global currency",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  if (loading || !isAdmin) {
+  if (!isAdmin) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center h-full">
-          <p className="text-lg">Loading admin panel...</p>
+        <div className="flex flex-col items-center justify-center h-[70vh]">
+          <Info className="h-16 w-16 text-gray-400" />
+          <h2 className="text-2xl font-bold mt-4">Admin Access Required</h2>
+          <p className="text-muted-foreground mt-2">
+            You do not have permission to view this page.
+          </p>
         </div>
       </DashboardLayout>
     );
@@ -128,17 +97,68 @@ const Admin = () => {
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-          <p className="text-muted-foreground">Manage users and system settings</p>
+          <p className="text-muted-foreground">Manage system settings and users</p>
         </div>
 
-        <Tabs defaultValue="users">
+        <Tabs defaultValue="settings">
           <TabsList>
-            <TabsTrigger value="users">Users</TabsTrigger>
-            <TabsTrigger value="payments">Payments</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
+            <TabsTrigger value="settings">
+              <Settings className="w-4 h-4 mr-2" />
+              Settings
+            </TabsTrigger>
+            <TabsTrigger value="users">
+              <Users className="w-4 h-4 mr-2" />
+              Users
+            </TabsTrigger>
+            <TabsTrigger value="analytics">
+              <ChartLine className="w-4 h-4 mr-2" />
+              Analytics
+            </TabsTrigger>
           </TabsList>
           
-          <TabsContent value="users" className="space-y-4 mt-4">
+          <TabsContent value="settings" className="space-y-4 mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Default Subscription Currency</CardTitle>
+                <CardDescription>
+                  Set the default currency for all new subscriptions
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Select Currency</label>
+                    <Select
+                      value={globalDefaultCurrency}
+                      onValueChange={setGlobalDefaultCurrency}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select currency" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="USD">USD ($)</SelectItem>
+                        <SelectItem value="EUR">EUR (€)</SelectItem>
+                        <SelectItem value="GBP">GBP (£)</SelectItem>
+                        <SelectItem value="JPY">JPY (¥)</SelectItem>
+                        <SelectItem value="CAD">CAD ($)</SelectItem>
+                        <SelectItem value="AUD">AUD ($)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <Button 
+                  onClick={updateGlobalDefaultCurrency} 
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Updating..." : "Update Default Currency"}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Additional admin settings cards would go here */}
+          </TabsContent>
+          
+          <TabsContent value="users" className="space-y-4 mt-6">
             <Card>
               <CardHeader>
                 <CardTitle>User Management</CardTitle>
@@ -147,91 +167,28 @@ const Admin = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Created</TableHead>
-                        <TableHead>Last Sign In</TableHead>
-                        <TableHead>Admin</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {users.map((user) => (
-                        <TableRow key={user.id}>
-                          <TableCell className="font-medium">{user.email}</TableCell>
-                          <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
-                          <TableCell>
-                            {user.last_sign_in_at 
-                              ? new Date(user.last_sign_in_at).toLocaleDateString() 
-                              : "Never"}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center space-x-2">
-                              <Switch 
-                                checked={!!user.is_admin} 
-                                onCheckedChange={() => toggleAdminStatus(user.id, !!user.is_admin)}
-                                disabled={true} // Disabled since the feature isn't implemented
-                              />
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => navigate(`/admin/users/${user.id}`)}
-                            >
-                              View Details
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                {/* User management UI would go here */}
+                <p className="text-muted-foreground py-8 text-center">
+                  User management functionality coming soon
+                </p>
               </CardContent>
             </Card>
           </TabsContent>
-
-          <TabsContent value="payments" className="space-y-4 mt-4">
+          
+          <TabsContent value="analytics" className="space-y-4 mt-6">
             <Card>
               <CardHeader>
-                <CardTitle>Payment Management</CardTitle>
+                <CardTitle>System Analytics</CardTitle>
                 <CardDescription>
-                  View and manage payment transactions
+                  View system performance metrics
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <p>Payment transaction history will be displayed here.</p>
+                {/* Analytics UI would go here */}
+                <p className="text-muted-foreground py-8 text-center">
+                  Analytics dashboard coming soon
+                </p>
               </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="settings" className="space-y-4 mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>System Settings</CardTitle>
-                <CardDescription>
-                  Configure application settings
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="site-name">Site Name</Label>
-                    <Input id="site-name" defaultValue="InvestorZen" />
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Label htmlFor="maintenance-mode">Maintenance Mode</Label>
-                    <Switch id="maintenance-mode" />
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter>
-                <Button>Save Settings</Button>
-              </CardFooter>
             </Card>
           </TabsContent>
         </Tabs>

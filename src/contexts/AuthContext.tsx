@@ -1,3 +1,4 @@
+
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase, cleanupAuthState } from '@/integrations/supabase/client';
@@ -12,6 +13,9 @@ interface AuthContextType {
   signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   usingMockCredentials: boolean;
+  uniqueId: string | null;
+  defaultCurrency: string;
+  updateDefaultCurrency: (currency: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -26,6 +30,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [uniqueId, setUniqueId] = useState<string | null>(null);
+  const [defaultCurrency, setDefaultCurrency] = useState<string>('USD');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -36,12 +42,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(session?.user || null);
         
         if (session?.user) {
+          // Generate a unique ID based on the user's ID
+          setUniqueId(generateUniqueId(session.user.id));
+          
           // Defer fetching profile info to prevent potential deadlocks
           setTimeout(() => {
             checkAdminStatus(session.user.id);
+            fetchDefaultCurrency(session.user.id);
           }, 0);
         } else {
           setIsAdmin(false);
+          setUniqueId(null);
+          setDefaultCurrency('USD');
         }
         
         setLoading(false);
@@ -53,7 +65,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setSession(session);
       setUser(session?.user || null);
       if (session?.user) {
+        setUniqueId(generateUniqueId(session.user.id));
         checkAdminStatus(session.user.id);
+        fetchDefaultCurrency(session.user.id);
       }
       setLoading(false);
     });
@@ -62,6 +76,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       subscription.unsubscribe();
     };
   }, []);
+
+  const generateUniqueId = (userId: string): string => {
+    // Generate a shorter, readable unique ID based on the user's UUID
+    // Take first 8 chars and add timestamp for uniqueness
+    const shortId = userId.substring(0, 8);
+    const timestamp = Date.now().toString(36).substring(4);
+    return `UID-${shortId}-${timestamp}`.toUpperCase();
+  };
 
   const checkAdminStatus = async (userId: string) => {
     try {
@@ -81,6 +103,59 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setIsAdmin(data?.is_admin || false);
     } catch (error) {
       console.error("Error checking admin status:", error);
+    }
+  };
+
+  const fetchDefaultCurrency = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('default_currency')
+        .eq('id', userId)
+        .single();
+      
+      if (error) {
+        console.error("Error fetching default currency:", error.message);
+        return;
+      }
+      
+      if (data && data.default_currency) {
+        setDefaultCurrency(data.default_currency);
+      }
+    } catch (error) {
+      console.error("Error fetching default currency:", error);
+    }
+  };
+
+  const updateDefaultCurrency = async (currency: string) => {
+    if (!user) return;
+    
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ default_currency: currency })
+        .eq('id', user.id);
+      
+      if (error) {
+        toast({
+          title: "Failed to update currency",
+          description: error.message,
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      setDefaultCurrency(currency);
+      toast({
+        title: "Currency updated",
+        description: `Default currency set to ${currency}.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error updating currency",
+        description: error.message,
+        variant: "destructive",
+      });
     }
   };
 
@@ -168,6 +243,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     signUp,
     signOut,
     usingMockCredentials: false, // We're now using real Supabase credentials
+    uniqueId,
+    defaultCurrency,
+    updateDefaultCurrency,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

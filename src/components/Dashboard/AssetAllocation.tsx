@@ -1,36 +1,43 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
+import { useState } from "react";
 
 const AssetAllocation = () => {
+  const [data] = useState([
+    { name: "Stocks", value: 65, color: "#4f46e5" },
+    { name: "Bonds", value: 25, color: "#0d9488" },
+    { name: "Cash", value: 10, color: "#16a34a" },
+    { name: "Other", value: 5, color: "#38bdf8" },
+  ]);
+
   return (
     <Card>
       <CardHeader className="pb-2">
         <CardTitle>Asset Allocation</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="h-[300px] flex items-center justify-center bg-muted/20 rounded-md">
-          <div className="text-center text-muted-foreground">
-            <p>Asset Allocation Chart</p>
-            <p className="text-sm">(Placeholder for a pie chart)</p>
-          </div>
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <div className="flex items-center">
-            <div className="w-3 h-3 rounded-full bg-finance-blue mr-2"></div>
-            <span className="text-sm">Stocks (65%)</span>
-          </div>
-          <div className="flex items-center">
-            <div className="w-3 h-3 rounded-full bg-finance-teal mr-2"></div>
-            <span className="text-sm">Bonds (25%)</span>
-          </div>
-          <div className="flex items-center">
-            <div className="w-3 h-3 rounded-full bg-finance-green mr-2"></div>
-            <span className="text-sm">Cash (10%)</span>
-          </div>
-          <div className="flex items-center">
-            <div className="w-3 h-3 rounded-full bg-finance-light-blue mr-2"></div>
-            <span className="text-sm">Other (0%)</span>
-          </div>
+        <div className="h-[300px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={data}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                outerRadius={100}
+                fill="#8884d8"
+                dataKey="value"
+                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+              >
+                {data.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+              <Tooltip formatter={(value) => `${value}%`} />
+              <Legend layout="horizontal" verticalAlign="bottom" align="center" />
+            </PieChart>
+          </ResponsiveContainer>
         </div>
       </CardContent>
     </Card>
