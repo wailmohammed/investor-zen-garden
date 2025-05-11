@@ -9,6 +9,7 @@ import {
   HelpCircle,
   LogOut,
   Database,
+  DollarSign,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
@@ -78,6 +79,16 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
           >
             <LayoutDashboard className="mr-3 h-5 w-5" />
             Dashboard
+          </Link>
+
+          <Link
+            to="/dividends"
+            className={`flex items-center rounded-md px-3 py-2 text-gray-600 hover:bg-gray-100 ${
+              pathname === "/dividends" ? "bg-gray-100 font-medium" : ""
+            }`}
+          >
+            <DollarSign className="mr-3 h-5 w-5" />
+            Dividends
           </Link>
 
           <Link

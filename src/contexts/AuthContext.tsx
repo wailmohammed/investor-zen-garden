@@ -1,8 +1,19 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-import { supabase, cleanupAuthState } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+
+import {
+  usingMockCredentials,
+  generateUniqueId,
+  checkAdminStatus,
+  fetchDefaultCurrency,
+  handleSignIn,
+  handleSignUp,
+  handleSignOut,
+  updateUserCurrency
+} from '@/utils/authUtils';
 
 interface AuthContextType {
   user: User | null;
@@ -19,14 +30,6 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Check if we're using mock Supabase credentials
-const usingMockCredentials = 
-  !import.meta.env.VITE_SUPABASE_URL || 
-  !import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-// Mock storage for demo purposes when not connected to Supabase
-const mockUserStorage: { [key: string]: any } = {};
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -69,8 +72,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           
           // Defer fetching profile info to prevent potential deadlocks
           setTimeout(() => {
-            checkAdminStatus(session.user.id);
-            fetchDefaultCurrency(session.user.id);
+            checkAdminStatus(session.user.id, session.user).then(isAdmin => {
+              setIsAdmin(isAdmin);
+            });
+            
+            fetchDefaultCurrency(session.user.id).then(currency => {
+              setDefaultCurrency(currency);
+            });
           }, 0);
         } else {
           setIsAdmin(false);
@@ -88,8 +96,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(session?.user || null);
       if (session?.user) {
         setUniqueId(generateUniqueId(session.user.id));
-        checkAdminStatus(session.user.id);
-        fetchDefaultCurrency(session.user.id);
+        checkAdminStatus(session.user.id, session.user).then(isAdmin => {
+          setIsAdmin(isAdmin);
+        });
+        fetchDefaultCurrency(session.user.id).then(currency => {
+          setDefaultCurrency(currency);
+        });
       }
       setLoading(false);
     });
@@ -99,146 +111,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, []);
 
-  const generateUniqueId = (userId: string): string => {
-    // Generate a shorter, readable unique ID based on the user's UUID
-    // Take first 8 chars and add timestamp for uniqueness
-    const shortId = userId.substring(0, 8);
-    const timestamp = Date.now().toString(36).substring(4);
-    return `UID-${shortId}-${timestamp}`.toUpperCase();
-  };
-
-  const checkAdminStatus = async (userId: string) => {
-    try {
-      if (usingMockCredentials) {
-        // In mock mode, any email containing 'admin' is considered an admin
-        setIsAdmin(user?.email?.includes('admin') || false);
-        return;
-      }
-
-      // Query the profiles table to check if the user is an admin
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('is_admin')
-        .eq('id', userId)
-        .single();
-      
-      if (error) {
-        console.error("Error checking admin status:", error.message);
-        return;
-      }
-      
-      // Set isAdmin based on the value from the database
-      setIsAdmin(data?.is_admin || false);
-    } catch (error) {
-      console.error("Error checking admin status:", error);
-    }
-  };
-
-  const fetchDefaultCurrency = async (userId: string) => {
-    try {
-      if (usingMockCredentials) {
-        const storedCurrency = localStorage.getItem('mockDefaultCurrency') || 'USD';
-        setDefaultCurrency(storedCurrency);
-        return;
-      }
-      
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('default_currency')
-        .eq('id', userId)
-        .single();
-      
-      if (error) {
-        console.error("Error fetching default currency:", error.message);
-        return;
-      }
-      
-      if (data && data.default_currency) {
-        setDefaultCurrency(data.default_currency);
-      }
-    } catch (error) {
-      console.error("Error fetching default currency:", error);
-    }
-  };
-
-  const updateDefaultCurrency = async (currency: string) => {
-    if (!user) return;
-    
-    try {
-      if (usingMockCredentials) {
-        localStorage.setItem('mockDefaultCurrency', currency);
-        setDefaultCurrency(currency);
-        toast({
-          title: "Currency updated",
-          description: `Default currency set to ${currency}.`,
-        });
-        return;
-      }
-      
-      const { error } = await supabase
-        .from('profiles')
-        .update({ default_currency: currency })
-        .eq('id', user.id);
-      
-      if (error) {
-        toast({
-          title: "Failed to update currency",
-          description: error.message,
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      setDefaultCurrency(currency);
-      toast({
-        title: "Currency updated",
-        description: `Default currency set to ${currency}.`,
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error updating currency",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
-  };
-
   const signIn = async (email: string, password: string) => {
     try {
-      if (usingMockCredentials) {
-        // Mock authentication
-        const mockUser = {
-          id: `mock-${Date.now().toString(36)}`,
-          email,
-          user_metadata: { name: email.split('@')[0] },
-          app_metadata: {},
-          aud: "mock",
-          created_at: new Date().toISOString(),
-        };
-
-        localStorage.setItem('mockUser', JSON.stringify(mockUser));
-        setUser(mockUser as unknown as User);
-        setIsAdmin(email.includes('admin'));
-        setUniqueId(generateUniqueId(mockUser.id));
-        
-        toast({
-          title: "Welcome back!",
-          description: "You've successfully signed in to your account.",
-        });
-        return;
-      }
+      const { user, error } = await handleSignIn(email, password);
       
-      // Clean up existing auth state before signing in
-      cleanupAuthState();
-      
-      // Attempt global sign out first
-      try {
-        await supabase.auth.signOut({ scope: 'global' });
-      } catch (error) {
-        // Continue even if this fails
-      }
-      
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       
       toast({
@@ -257,38 +133,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signUp = async (email: string, password: string) => {
     try {
-      if (usingMockCredentials) {
-        // Mock registration
-        const mockUser = {
-          id: `mock-${Date.now().toString(36)}`,
-          email,
-          user_metadata: { name: email.split('@')[0] },
-          app_metadata: {},
-          aud: "mock",
-          created_at: new Date().toISOString(),
-        };
-
-        localStorage.setItem('mockUser', JSON.stringify(mockUser));
-        setUser(mockUser as unknown as User);
-        setIsAdmin(email.includes('admin'));
-        setUniqueId(generateUniqueId(mockUser.id));
-        
-        toast({
-          title: "Account created",
-          description: "You've successfully registered.",
-        });
-        return;
-      }
+      const { user, error } = await handleSignUp(email, password);
       
-      // Clean up existing auth state before signing up
-      cleanupAuthState();
-      
-      const { error } = await supabase.auth.signUp({ email, password });
       if (error) throw error;
       
       toast({
         title: "Account created",
-        description: "Check your email for the confirmation link.",
+        description: usingMockCredentials 
+          ? "You've successfully registered." 
+          : "Check your email for the confirmation link.",
       });
     } catch (error: any) {
       toast({
@@ -302,32 +155,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOut = async () => {
     try {
-      if (usingMockCredentials) {
-        // Clear mock user
-        localStorage.removeItem('mockUser');
-        setUser(null);
-        setIsAdmin(false);
-        setUniqueId(null);
-        setDefaultCurrency('USD');
-        
-        // Force page reload for a clean state
-        window.location.href = '/login';
-        
-        toast({
-          title: "Signed out",
-          description: "You've successfully signed out of your account.",
-        });
-        return;
-      }
+      const { error } = await handleSignOut();
       
-      // Clean up auth state first
-      cleanupAuthState();
-      
-      const { error } = await supabase.auth.signOut({ scope: 'global' });
       if (error) throw error;
-      
-      // Force page reload for a clean state
-      window.location.href = '/login';
       
       toast({
         title: "Signed out",
@@ -336,6 +166,35 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     } catch (error: any) {
       toast({
         title: "Sign out failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const updateDefaultCurrency = async (currency: string) => {
+    if (!user) return;
+    
+    try {
+      const { error } = await updateUserCurrency(user.id, currency);
+      
+      if (error) {
+        toast({
+          title: "Failed to update currency",
+          description: error.message,
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      setDefaultCurrency(currency);
+      toast({
+        title: "Currency updated",
+        description: `Default currency set to ${currency}.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error updating currency",
         description: error.message,
         variant: "destructive",
       });

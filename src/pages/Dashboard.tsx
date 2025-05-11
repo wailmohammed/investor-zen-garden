@@ -7,6 +7,7 @@ import RecentActivity from "@/components/Dashboard/RecentActivity";
 import AssetAllocation from "@/components/Dashboard/AssetAllocation";
 import MarketOverview from "@/components/Dashboard/MarketOverview";
 import AIChat from "@/components/AIChat";
+import DividendTracking from "@/components/Dashboard/DividendTracking";
 
 const Dashboard = () => {
   return (
@@ -33,8 +34,12 @@ const Dashboard = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <DividendTracking />
+          <AIChat />
+        </div>
+
+        <div className="grid grid-cols-1 gap-6">
           <MarketOverview />
-          <AIChat />  {/* Add the AI Chat component */}
         </div>
       </div>
     </DashboardLayout>
