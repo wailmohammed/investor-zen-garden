@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -22,40 +23,57 @@ import AdminWallets from "./pages/AdminWallets";
 
 const queryClient = new QueryClient();
 
-// Protected route component
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading } = useAuth();
-  
-  if (loading) {
-    return <div className="flex h-screen items-center justify-center">Loading...</div>;
-  }
-  
-  return user ? <>{children}</> : <Navigate to="/login" />;
-};
+// Protected route component - moved inside the AppRoutes to ensure it's used within AuthProvider
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <BrowserRouter>
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </BrowserRouter>
+    </TooltipProvider>
+  </QueryClientProvider>
+);
 
-const AdminRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading, isAdmin } = useAuth();
-  
-  console.log("AdminRoute check - User:", user?.email, "IsAdmin:", isAdmin, "Loading:", loading);
-  
-  if (loading) {
-    return <div className="flex h-screen items-center justify-center">Loading...</div>;
-  }
-  
-  if (!user) {
-    return <Navigate to="/login" />;
-  }
-  
-  if (!isAdmin) {
-    console.log("Access denied: User is not an admin");
-    return <Navigate to="/dashboard" />;
-  }
-  
-  console.log("Admin access granted");
-  return <>{children}</>;
-};
-
+// AppRoutes component that contains all routes
+// Now this is inside AuthProvider so useAuth is available
 const AppRoutes = () => {
+  // Protected route component
+  const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+    const { user, loading } = useAuth();
+    
+    if (loading) {
+      return <div className="flex h-screen items-center justify-center">Loading...</div>;
+    }
+    
+    return user ? <>{children}</> : <Navigate to="/login" />;
+  };
+
+  const AdminRoute = ({ children }: { children: React.ReactNode }) => {
+    const { user, loading, isAdmin } = useAuth();
+    
+    console.log("AdminRoute check - User:", user?.email, "IsAdmin:", isAdmin, "Loading:", loading);
+    
+    if (loading) {
+      return <div className="flex h-screen items-center justify-center">Loading...</div>;
+    }
+    
+    if (!user) {
+      return <Navigate to="/login" />;
+    }
+    
+    if (!isAdmin) {
+      console.log("Access denied: User is not an admin");
+      return <Navigate to="/dashboard" />;
+    }
+    
+    console.log("Admin access granted");
+    return <>{children}</>;
+  };
+
   return (
     <Routes>
       <Route path="/" element={<Index />} />
@@ -154,19 +172,5 @@ const AppRoutes = () => {
     </Routes>
   );
 };
-
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <AppRoutes />
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
 
 export default App;
