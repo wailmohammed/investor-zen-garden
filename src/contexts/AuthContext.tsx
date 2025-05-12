@@ -49,6 +49,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           const parsedUser = JSON.parse(storedUser);
           setUser(parsedUser);
           setIsAdmin(parsedUser.email?.includes('admin') || false);
+          console.log("Mock admin status:", parsedUser.email?.includes('admin') || false);
           setUniqueId(generateUniqueId(parsedUser.id));
           const storedCurrency = localStorage.getItem('mockDefaultCurrency') || 'USD';
           setDefaultCurrency(storedCurrency);
@@ -63,6 +64,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // First set up auth state listener to prevent missing auth events
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        console.log("Auth state change event:", event);
         setSession(session);
         setUser(session?.user || null);
         
@@ -73,6 +75,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           // Defer fetching profile info to prevent potential deadlocks
           setTimeout(() => {
             checkAdminStatus(session.user.id, session.user).then(isAdmin => {
+              console.log("Admin status check result:", isAdmin);
               setIsAdmin(isAdmin);
             });
             
@@ -97,6 +100,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (session?.user) {
         setUniqueId(generateUniqueId(session.user.id));
         checkAdminStatus(session.user.id, session.user).then(isAdmin => {
+          console.log("Initial admin status check result:", isAdmin);
           setIsAdmin(isAdmin);
         });
         fetchDefaultCurrency(session.user.id).then(currency => {

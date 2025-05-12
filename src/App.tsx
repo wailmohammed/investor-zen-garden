@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -37,6 +36,8 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading, isAdmin } = useAuth();
   
+  console.log("AdminRoute check - User:", user?.email, "IsAdmin:", isAdmin, "Loading:", loading);
+  
   if (loading) {
     return <div className="flex h-screen items-center justify-center">Loading...</div>;
   }
@@ -45,7 +46,13 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
     return <Navigate to="/login" />;
   }
   
-  return isAdmin ? <>{children}</> : <Navigate to="/dashboard" />;
+  if (!isAdmin) {
+    console.log("Access denied: User is not an admin");
+    return <Navigate to="/dashboard" />;
+  }
+  
+  console.log("Admin access granted");
+  return <>{children}</>;
 };
 
 const AppRoutes = () => {
