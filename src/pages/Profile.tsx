@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 
 const Profile = () => {
-  const { user, updateUserProfile } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [profile, setProfile] = useState({
@@ -77,13 +76,8 @@ const Profile = () => {
         description: "Your profile has been successfully updated.",
       });
       
-      // Update local profile state if needed
-      if (updateUserProfile) {
-        updateUserProfile({
-          username: profile.username,
-          fullName: profile.fullName,
-        });
-      }
+      // Refresh profile data
+      fetchProfile();
     } catch (error: any) {
       toast({
         title: "Error updating profile",
