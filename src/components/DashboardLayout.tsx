@@ -10,6 +10,7 @@ import {
   LogOut,
   Database,
   DollarSign,
+  WalletCards
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
@@ -19,12 +20,13 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
 
 const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
-  const { user, signOut } = useAuth();
+  const { user, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const pathname = location.pathname;
@@ -48,7 +50,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
       >
         <div className="flex items-center justify-between px-4 py-3">
           <Link to="/" className="font-bold text-xl">
-            FinanceGPT
+            InvestorZen
           </Link>
           <button
             className="lg:hidden text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
@@ -91,15 +93,29 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
             Dividends
           </Link>
 
-          <Link
-            to="/admin"
-            className={`flex items-center rounded-md px-3 py-2 text-gray-600 hover:bg-gray-100 ${
-              pathname === "/admin" ? "bg-gray-100 font-medium" : ""
-            }`}
-          >
-            <Settings className="mr-3 h-5 w-5" />
-            Admin
-          </Link>
+          {isAdmin && (
+            <>
+              <Link
+                to="/admin"
+                className={`flex items-center rounded-md px-3 py-2 text-gray-600 hover:bg-gray-100 ${
+                  pathname === "/admin" ? "bg-gray-100 font-medium" : ""
+                }`}
+              >
+                <Settings className="mr-3 h-5 w-5" />
+                Admin
+              </Link>
+              
+              <Link
+                to="/admin/wallets"
+                className={`flex items-center rounded-md px-3 py-2 text-gray-600 hover:bg-gray-100 ${
+                  pathname === "/admin/wallets" ? "bg-gray-100 font-medium" : ""
+                }`}
+              >
+                <WalletCards className="mr-3 h-5 w-5" />
+                Admin Wallets
+              </Link>
+            </>
+          )}
 
           <Link
             to="/payment/crypto"
@@ -145,29 +161,30 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
         <div className="border-t p-4">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="flex h-8 w-full items-center justify-center gap-2 rounded-md p-0 text-sm font-normal">
+              <Button variant="ghost" className="flex h-8 w-full items-center justify-start gap-2 rounded-md p-2 text-sm font-normal">
                 <Avatar className="h-8 w-8">
                   <AvatarImage src="https://github.com/shadcn.png" alt="Avatar" />
-                  <AvatarFallback>CN</AvatarFallback>
+                  <AvatarFallback>{user?.email?.charAt(0).toUpperCase() || "U"}</AvatarFallback>
                 </Avatar>
-                <span className="hidden lg:inline-block">
+                <span className="hidden lg:inline-block truncate">
                   {user?.email}
                 </span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={() => navigate('/profile')}>
                 <User className="mr-2 h-4 w-4" />
                 <span>Profile</span>
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/settings')}>
                 <Settings className="mr-2 h-4 w-4" />
                 <span>Settings</span>
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/support')}>
                 <HelpCircle className="mr-2 h-4 w-4" />
                 <span>Support</span>
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout}>
                 <LogOut className="mr-2 h-4 w-4" />
                 <span>Log out</span>

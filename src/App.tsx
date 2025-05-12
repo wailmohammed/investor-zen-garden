@@ -16,6 +16,10 @@ import EmailNotifications from "./pages/EmailNotifications";
 import Tasks from "./pages/Tasks";
 import BrokerIntegration from "./pages/BrokerIntegration";
 import Dividends from "./pages/Dividends";
+import Profile from "./pages/Profile";
+import Settings from "./pages/Settings";
+import Support from "./pages/Support";
+import AdminWallets from "./pages/AdminWallets";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +32,20 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   }
   
   return user ? <>{children}</> : <Navigate to="/login" />;
+};
+
+const AdminRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, loading, isAdmin } = useAuth();
+  
+  if (loading) {
+    return <div className="flex h-screen items-center justify-center">Loading...</div>;
+  }
+  
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
+  
+  return isAdmin ? <>{children}</> : <Navigate to="/dashboard" />;
 };
 
 const AppRoutes = () => {
@@ -50,6 +68,14 @@ const AppRoutes = () => {
           <ProtectedRoute>
             <Admin />
           </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/admin/wallets" 
+        element={
+          <AdminRoute>
+            <AdminWallets />
+          </AdminRoute>
         } 
       />
       <Route
@@ -89,6 +115,30 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <Dividends />
+          </ProtectedRoute>
+        } 
+      />
+      <Route
+        path="/profile" 
+        element={
+          <ProtectedRoute>
+            <Profile />
+          </ProtectedRoute>
+        } 
+      />
+      <Route
+        path="/settings" 
+        element={
+          <ProtectedRoute>
+            <Settings />
+          </ProtectedRoute>
+        } 
+      />
+      <Route
+        path="/support" 
+        element={
+          <ProtectedRoute>
+            <Support />
           </ProtectedRoute>
         } 
       />
