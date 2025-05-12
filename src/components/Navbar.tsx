@@ -1,11 +1,11 @@
 
 import { Button } from "@/components/ui/button";
-import { Search, User, Mail, Calendar, MessageSquare } from "lucide-react";
+import { Search, User, Mail, Calendar, MessageSquare, Shield } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
 const Navbar = () => {
-  const { user, signOut } = useAuth();
+  const { user, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
@@ -40,7 +40,19 @@ const Navbar = () => {
                 </>
               )}
               
-              {user && <Link to="/admin" className="text-gray-700 hover:text-finance-blue px-3 py-2 text-sm font-medium">Admin</Link>}
+              {/* Admin navigation links - only visible to admin users */}
+              {isAdmin && (
+                <div className="relative group">
+                  <Link to="/admin" className="text-gray-700 hover:text-finance-blue px-3 py-2 text-sm font-medium flex items-center">
+                    <Shield className="h-4 w-4 mr-1" />
+                    <span>Admin</span>
+                  </Link>
+                  <div className="absolute left-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-40 hidden group-hover:block">
+                    <Link to="/admin" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Dashboard</Link>
+                    <Link to="/admin/wallets" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Crypto Wallets</Link>
+                  </div>
+                </div>
+              )}
             </nav>
           </div>
           <div className="flex items-center">
@@ -52,7 +64,10 @@ const Navbar = () => {
                 <div className="ml-4">
                   {user ? (
                     <div className="flex items-center space-x-4">
-                      <span className="text-sm text-gray-700">{user.email}</span>
+                      <span className="text-sm text-gray-700">
+                        {user.email} 
+                        {isAdmin && <span className="ml-1 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">Admin</span>}
+                      </span>
                       <Button variant="outline" onClick={handleSignOut}>Sign Out</Button>
                     </div>
                   ) : (
