@@ -1,6 +1,6 @@
 
 import { Button } from "@/components/ui/button";
-import { Search, User, Mail, Calendar, MessageSquare, Shield } from "lucide-react";
+import { Search, User, Mail, Calendar, MessageSquare, Shield, DollarSign } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -24,6 +24,10 @@ const Navbar = () => {
             <nav className="hidden md:ml-8 md:flex md:space-x-8">
               <Link to="/dashboard" className="text-gray-700 hover:text-finance-blue px-3 py-2 text-sm font-medium">Dashboard</Link>
               <Link to="/portfolio" className="text-gray-700 hover:text-finance-blue px-3 py-2 text-sm font-medium">Portfolio</Link>
+              <Link to="/pricing" className="text-gray-700 hover:text-finance-blue px-3 py-2 text-sm font-medium flex items-center">
+                <DollarSign className="h-4 w-4 mr-1" />
+                <span>Pricing</span>
+              </Link>
               <Link to="/payment/crypto" className="text-gray-700 hover:text-finance-blue px-3 py-2 text-sm font-medium">Payments</Link>
               
               {/* New links for our features */}

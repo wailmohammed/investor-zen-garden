@@ -8,7 +8,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { ChartLine, Settings, Users, Info } from "lucide-react";
+import { ChartLine, Settings, Users, Info, DollarSign } from "lucide-react";
+import SubscriptionPriceEditor from "@/components/admin/SubscriptionPriceEditor";
 
 const Admin = () => {
   const { isAdmin, user } = useAuth();
@@ -114,6 +115,10 @@ const Admin = () => {
               <ChartLine className="w-4 h-4 mr-2" />
               Analytics
             </TabsTrigger>
+            <TabsTrigger value="pricing">
+              <DollarSign className="w-4 h-4 mr-2" />
+              Pricing
+            </TabsTrigger>
           </TabsList>
           
           <TabsContent value="settings" className="space-y-4 mt-6">
@@ -190,6 +195,10 @@ const Admin = () => {
                 </p>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="pricing" className="space-y-4 mt-6">
+            <SubscriptionPriceEditor />
           </TabsContent>
         </Tabs>
       </div>

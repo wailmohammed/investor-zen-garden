@@ -1,55 +1,70 @@
 
 import { Button } from "@/components/ui/button";
 import { Check } from "lucide-react";
-
-const tiers = [
-  {
-    name: 'Free',
-    price: '$0',
-    description: 'Basic portfolio tracking for beginners',
-    features: [
-      'Track up to 10 investments',
-      'Basic portfolio analytics',
-      'Daily data updates',
-      'Email support',
-    ],
-    cta: 'Start for Free',
-    highlighted: false,
-  },
-  {
-    name: 'Premium',
-    price: '$19',
-    description: 'Advanced tools for active investors',
-    features: [
-      'Unlimited investment tracking',
-      'Advanced analytics and reports',
-      'Real-time data updates',
-      'Dividend tracking and forecasting',
-      'Tax optimization suggestions',
-      'Priority email & chat support',
-    ],
-    cta: 'Start 14-day Free Trial',
-    highlighted: true,
-  },
-  {
-    name: 'Professional',
-    price: '$39',
-    description: 'For serious investors and professionals',
-    features: [
-      'All Premium features',
-      'API access',
-      'Custom watchlists',
-      'Advanced screening tools',
-      'Portfolio risk analysis',
-      'Priority phone support',
-      'Dedicated account manager',
-    ],
-    cta: 'Contact Sales',
-    highlighted: false,
-  }
-];
+import { useNavigate } from "react-router-dom";
+import { toast } from "@/hooks/use-toast";
 
 const PricingSection = () => {
+  const navigate = useNavigate();
+
+  const handleSubscribe = (tier: string) => {
+    toast({
+      title: "Subscription selection",
+      description: `You selected the ${tier} plan. Redirecting to checkout...`,
+    });
+    // In a real app, this would redirect to a checkout page
+    setTimeout(() => {
+      navigate("/payment/crypto");
+    }, 1500);
+  };
+
+  const tiers = [
+    {
+      name: 'Free',
+      price: '$0',
+      description: 'Basic portfolio tracking for beginners',
+      features: [
+        'Track up to 10 investments',
+        'Basic portfolio analytics',
+        'Daily data updates',
+        'Email support',
+      ],
+      cta: 'Start for Free',
+      highlighted: false,
+    },
+    {
+      name: 'Premium',
+      price: '$19',
+      description: 'Advanced tools for active investors',
+      features: [
+        'Unlimited investment tracking',
+        'Advanced analytics and reports',
+        'Real-time data updates',
+        'Dividend tracking and forecasting',
+        'Tax optimization suggestions',
+        'Priority email & chat support',
+      ],
+      cta: 'Start 14-day Free Trial',
+      highlighted: true,
+    },
+    {
+      name: 'Professional',
+      price: '$39',
+      description: 'For serious investors and professionals',
+      features: [
+        'All Premium features',
+        'API access',
+        'Custom watchlists',
+        'Advanced screening tools',
+        'Portfolio risk analysis',
+        'Priority phone support',
+        'Dedicated account manager',
+      ],
+      cta: 'Contact Sales',
+      highlighted: false,
+    }
+  ];
+
   return (
     <div className="bg-white py-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -95,6 +110,7 @@ const PricingSection = () => {
                   <Button 
                     className={`w-full ${tier.highlighted ? 'bg-finance-blue hover:bg-blue-700' : 'bg-gray-50 text-gray-800 hover:bg-gray-100'}`}
                     variant={tier.highlighted ? "default" : "outline"}
+                    onClick={() => handleSubscribe(tier.name)}
                   >
                     {tier.cta}
                   </Button>
