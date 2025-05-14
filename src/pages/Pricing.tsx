@@ -3,6 +3,8 @@ import { Helmet } from "react-helmet-async";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import PricingSection from "@/components/PricingSection";
+import PricingComparison from "@/components/PricingComparison";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const Pricing = () => {
   return (
@@ -22,7 +24,21 @@ const Pricing = () => {
             </p>
           </div>
           
-          <PricingSection />
+          <Tabs defaultValue="cards" className="w-full mb-12">
+            <TabsList className="grid w-full max-w-md mx-auto grid-cols-2 mb-8">
+              <TabsTrigger value="cards">Pricing Cards</TabsTrigger>
+              <TabsTrigger value="comparison">Feature Comparison</TabsTrigger>
+            </TabsList>
+            <TabsContent value="cards">
+              <PricingSection />
+            </TabsContent>
+            <TabsContent value="comparison">
+              <div className="bg-white rounded-lg shadow p-6">
+                <h2 className="text-2xl font-bold mb-6 text-center">Compare Plans and Features</h2>
+                <PricingComparison />
+              </div>
+            </TabsContent>
+          </Tabs>
           
           <div className="max-w-3xl mx-auto mt-16 bg-gray-50 rounded-lg p-8">
             <h2 className="text-2xl font-bold mb-4">Frequently Asked Questions</h2>
