@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +6,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { BarChart as BarChartIcon, ArrowRight } from "lucide-react";
+import { Link } from "react-router-dom";
 
 // Mock data inspired by Snowball Analytics and Simply Safe Dividends
 const dividendsByMonth = [
@@ -74,9 +75,19 @@ const Dividends = () => {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Dividend Tracker</h1>
-          <p className="text-muted-foreground">Track, analyze and forecast your dividend income</p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold">Dividend Tracker</h1>
+            <p className="text-muted-foreground">Track, analyze and forecast your dividend income</p>
+          </div>
+          
+          <Link to="/dividend-stats">
+            <Button className="flex items-center gap-2">
+              <BarChartIcon size={16} />
+              <span>Dividend Stats</span>
+              <ArrowRight size={16} />
+            </Button>
+          </Link>
         </div>
         
         <div className="flex flex-wrap gap-4 mb-6">

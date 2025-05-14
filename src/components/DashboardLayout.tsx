@@ -10,7 +10,8 @@ import {
   LogOut,
   Database,
   DollarSign,
-  WalletCards
+  WalletCards,
+  BarChart
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
@@ -91,6 +92,16 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
           >
             <DollarSign className="mr-3 h-5 w-5" />
             Dividends
+          </Link>
+
+          <Link
+            to="/dividend-stats"
+            className={`flex items-center rounded-md px-3 py-2 text-gray-600 hover:bg-gray-100 ${
+              pathname === "/dividend-stats" ? "bg-gray-100 font-medium" : ""
+            }`}
+          >
+            <BarChart className="mr-3 h-5 w-5" />
+            Dividend Stats
           </Link>
 
           {isAdmin && (

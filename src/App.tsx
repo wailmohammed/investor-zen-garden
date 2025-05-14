@@ -16,6 +16,7 @@ import EmailNotifications from "./pages/EmailNotifications";
 import Tasks from "./pages/Tasks";
 import BrokerIntegration from "./pages/BrokerIntegration";
 import Dividends from "./pages/Dividends";
+import DividendStats from "./pages/DividendStats";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
 import Support from "./pages/Support";
@@ -140,6 +141,14 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <Dividends />
+          </ProtectedRoute>
+        } 
+      />
+      <Route
+        path="/dividend-stats" 
+        element={
+          <ProtectedRoute>
+            <DividendStats />
           </ProtectedRoute>
         } 
       />
