@@ -6,8 +6,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
-import { BarChart as BarChartIcon, ArrowRight } from "lucide-react";
+import { BarChart as BarChartIcon, ArrowRight, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
+import { Calendar } from "@/components/ui/calendar";
+import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay } from "date-fns";
 
 // Mock data inspired by Snowball Analytics and Simply Safe Dividends
 const dividendsByMonth = [
@@ -71,6 +73,58 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'
 const Dividends = () => {
   const { user, defaultCurrency } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
+  const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
+  const [calendarView, setCalendarView] = useState<'month' | 'list'>('month');
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  
+  // Create dividend event data for the calendar
+  const dividendEvents = upcomingDividends.reduce((acc: Record<string, any[]>, div) => {
+    const date = div.exDate.split('-').join('/');
+    if (!acc[date]) {
+      acc[date] = [];
+    }
+    acc[date].push({
+      symbol: div.symbol,
+      name: div.name,
+      amount: div.amount,
+      type: 'ex-dividend'
+    });
+    
+    const payDate = div.payDate.split('-').join('/');
+    if (!acc[payDate]) {
+      acc[payDate] = [];
+    }
+    acc[payDate].push({
+      symbol: div.symbol,
+      name: div.name, 
+      amount: div.amount,
+      type: 'payment'
+    });
+    
+    return acc;
+  }, {});
+
+  const handlePreviousMonth = () => {
+    setSelectedMonth(subMonths(selectedMonth, 1));
+  };
+
+  const handleNextMonth = () => {
+    setSelectedMonth(addMonths(selectedMonth, 1));
+  };
+
+  const handleDateSelect = (date: Date | undefined) => {
+    setSelectedDate(date);
+  };
+  
+  // Convert dates to the format used in dividendEvents
+  const getFormattedDate = (date: Date) => {
+    return format(date, 'yyyy/MM/dd');
+  };
+
+  // Get events for the selected date
+  const selectedDateEvents = selectedDate 
+    ? dividendEvents[getFormattedDate(selectedDate)] || [] 
+    : [];
   
   return (
     <DashboardLayout>
@@ -389,123 +443,263 @@ const Dividends = () => {
           <TabsContent value="calendar" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Dividend Calendar</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h3 className="font-medium">May 2025</h3>
-                    <div className="flex space-x-2">
-                      <Button variant="outline" size="sm">&lt; April</Button>
-                      <Button variant="outline" size="sm">June &gt;</Button>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-7 gap-2 text-center text-sm font-medium">
-                    <div>Sun</div>
-                    <div>Mon</div>
-                    <div>Tue</div>
-                    <div>Wed</div>
-                    <div>Thu</div>
-                    <div>Fri</div>
-                    <div>Sat</div>
-                  </div>
-                  
-                  <div className="grid grid-cols-7 gap-2">
-                    {/* Empty cells for previous month */}
-                    {[...Array(4)].map((_, i) => (
-                      <div key={`empty-start-${i}`} className="h-24 p-2 bg-muted rounded-md opacity-50"></div>
-                    ))}
-                    
-                    {/* Actual days */}
-                    {[...Array(31)].map((_, i) => {
-                      const day = i + 1;
-                      const hasDividend = [9, 15, 28].includes(day);
-                      return (
-                        <div 
-                          key={`day-${day}`} 
-                          className={`h-24 p-2 rounded-md border ${hasDividend ? 'border-blue-500 bg-blue-50' : 'bg-white'}`}
-                        >
-                          <div className="font-medium mb-1">{day}</div>
-                          {day === 9 && (
-                            <div className="text-xs p-1 bg-blue-100 rounded truncate">
-                              AAPL Ex-div $0.24
-                            </div>
-                          )}
-                          {day === 15 && (
-                            <div className="text-xs p-1 bg-blue-100 rounded truncate">
-                              MSFT Ex-div $0.75
-                            </div>
-                          )}
-                          {day === 28 && (
-                            <div className="text-xs p-1 bg-blue-100 rounded truncate">
-                              KO Ex-div $0.46
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                    
-                    {/* Empty cells for next month */}
-                    {[...Array(1)].map((_, i) => (
-                      <div key={`empty-end-${i}`} className="h-24 p-2 bg-muted rounded-md opacity-50"></div>
-                    ))}
+                <div className="flex items-center justify-between">
+                  <CardTitle>Dividend Calendar</CardTitle>
+                  <div className="flex space-x-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => setCalendarView('month')}
+                      className={calendarView === 'month' ? 'bg-primary text-primary-foreground' : ''}
+                    >
+                      Month View
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => setCalendarView('list')}
+                      className={calendarView === 'list' ? 'bg-primary text-primary-foreground' : ''}
+                    >
+                      List View
+                    </Button>
                   </div>
                 </div>
+              </CardHeader>
+              <CardContent>
+                {calendarView === 'month' ? (
+                  <div className="space-y-4">
+                    <div className="flex flex-col space-y-4">
+                      <div className="flex justify-between items-center">
+                        <h3 className="font-medium text-lg">{format(selectedMonth, 'MMMM yyyy')}</h3>
+                        <div className="flex space-x-2">
+                          <Button variant="outline" size="sm" onClick={handlePreviousMonth}>
+                            <ChevronLeft className="h-4 w-4" />
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={handleNextMonth}>
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <Calendar
+                            mode="single"
+                            selected={selectedDate}
+                            onSelect={handleDateSelect}
+                            month={selectedMonth}
+                            className="rounded-md border"
+                          />
+                        </div>
+                        
+                        <div className="bg-muted p-4 rounded-lg">
+                          <h3 className="font-medium mb-2">{selectedDate ? format(selectedDate, 'MMMM d, yyyy') : 'Select a date'}</h3>
+                          {selectedDateEvents.length > 0 ? (
+                            <div className="space-y-3">
+                              {selectedDateEvents.map((event, i) => (
+                                <div key={i} className={`p-3 rounded-md ${event.type === 'ex-dividend' ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-200'} border`}>
+                                  <div className="flex justify-between">
+                                    <div>
+                                      <div className="font-medium">{event.symbol}</div>
+                                      <div className="text-xs text-muted-foreground">{event.name}</div>
+                                    </div>
+                                    <div className="text-right">
+                                      <div className="font-medium">${event.amount.toFixed(2)}</div>
+                                      <div className="text-xs text-muted-foreground">
+                                        {event.type === 'ex-dividend' ? 'Ex-Dividend' : 'Payment'}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : selectedDate ? (
+                            <p className="text-muted-foreground">No dividend events for this date.</p>
+                          ) : (
+                            <p className="text-muted-foreground">Select a date to view dividend events.</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="font-medium text-lg">Upcoming Dividend Events</h3>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1">
+                          <div className="h-3 w-3 rounded-full bg-blue-500"></div>
+                          <span className="text-xs text-muted-foreground">Ex-Dividend</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <div className="h-3 w-3 rounded-full bg-green-500"></div>
+                          <span className="text-xs text-muted-foreground">Payment</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Stock</TableHead>
+                            <TableHead>Event Type</TableHead>
+                            <TableHead>Amount</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          <TableRow>
+                            <TableCell>May 9, 2025</TableCell>
+                            <TableCell>
+                              <div className="font-medium">AAPL</div>
+                              <div className="text-xs text-muted-foreground">Apple Inc.</div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                Ex-Dividend
+                              </div>
+                            </TableCell>
+                            <TableCell>$0.24</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell>May 15, 2025</TableCell>
+                            <TableCell>
+                              <div className="font-medium">MSFT</div>
+                              <div className="text-xs text-muted-foreground">Microsoft Corporation</div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                Ex-Dividend
+                              </div>
+                            </TableCell>
+                            <TableCell>$0.75</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell>May 18, 2025</TableCell>
+                            <TableCell>
+                              <div className="font-medium">AAPL</div>
+                              <div className="text-xs text-muted-foreground">Apple Inc.</div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Payment
+                              </div>
+                            </TableCell>
+                            <TableCell>$0.24</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell>May 25, 2025</TableCell>
+                            <TableCell>
+                              <div className="font-medium">JNJ</div>
+                              <div className="text-xs text-muted-foreground">Johnson & Johnson</div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Payment
+                              </div>
+                            </TableCell>
+                            <TableCell>$1.19</TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell>May 28, 2025</TableCell>
+                            <TableCell>
+                              <div className="font-medium">KO</div>
+                              <div className="text-xs text-muted-foreground">Coca-Cola Company</div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                Ex-Dividend
+                              </div>
+                            </TableCell>
+                            <TableCell>$0.46</TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
             
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle>Upcoming Payments</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Symbol</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Amount</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      <TableRow>
-                        <TableCell>May 18, 2025</TableCell>
-                        <TableCell>AAPL</TableCell>
-                        <TableCell>Payment</TableCell>
-                        <TableCell>$12.48</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell>May 25, 2025</TableCell>
-                        <TableCell>JNJ</TableCell>
-                        <TableCell>Payment</TableCell>
-                        <TableCell>$28.56</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell>June 10, 2025</TableCell>
-                        <TableCell>MSFT</TableCell>
-                        <TableCell>Payment</TableCell>
-                        <TableCell>$24.00</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell>June 15, 2025</TableCell>
-                        <TableCell>KO</TableCell>
-                        <TableCell>Payment</TableCell>
-                        <TableCell>$27.60</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell>June 28, 2025</TableCell>
-                        <TableCell>PEP</TableCell>
-                        <TableCell>Payment</TableCell>
-                        <TableCell>$27.94</TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle>Monthly Dividend Summary</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={[
+                      { month: 'May', exDividends: 3, payments: 2, totalAmount: 63.84 },
+                      { month: 'Jun', exDividends: 2, payments: 3, totalAmount: 79.54 },
+                      { month: 'Jul', exDividends: 4, payments: 2, totalAmount: 52.28 },
+                      { month: 'Aug', exDividends: 2, payments: 4, totalAmount: 84.72 }
+                    ]}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" />
+                      <YAxis yAxisId="left" orientation="left" />
+                      <YAxis yAxisId="right" orientation="right" domain={[0, 'dataMax + 20']} />
+                      <Tooltip />
+                      <Legend />
+                      <Bar yAxisId="left" dataKey="exDividends" name="Ex-Dividends" fill="#8884d8" />
+                      <Bar yAxisId="left" dataKey="payments" name="Payments" fill="#82ca9d" />
+                      <Bar yAxisId="right" dataKey="totalAmount" name="Total ($)" fill="#ffc658" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle>Upcoming Dividend Income</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Month</TableHead>
+                          <TableHead>Amount</TableHead>
+                          <TableHead>Events</TableHead>
+                          <TableHead>YoY Change</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        <TableRow>
+                          <TableCell>May 2025</TableCell>
+                          <TableCell>$68.48</TableCell>
+                          <TableCell>5</TableCell>
+                          <TableCell className="text-finance-green">+8.2%</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell>June 2025</TableCell>
+                          <TableCell>$85.54</TableCell>
+                          <TableCell>4</TableCell>
+                          <TableCell className="text-finance-green">+12.5%</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell>July 2025</TableCell>
+                          <TableCell>$54.28</TableCell>
+                          <TableCell>3</TableCell>
+                          <TableCell className="text-finance-green">+5.8%</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell>August 2025</TableCell>
+                          <TableCell>$84.72</TableCell>
+                          <TableCell>6</TableCell>
+                          <TableCell className="text-finance-green">+7.4%</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <div className="flex justify-center mt-4">
+                    <Button variant="outline" size="sm" className="text-xs">
+                      Export Calendar (.ics)
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </div>

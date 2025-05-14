@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import StatCard from "../StatCard";
 import { Shield, Calendar, TrendingUp, Percent } from "lucide-react";
+import { format } from "date-fns";
 
 const DividendTracking = () => {
   const { user } = useAuth();
@@ -55,6 +56,20 @@ const DividendTracking = () => {
     { month: "Nov", income: 268.21 },
     { month: "Dec", income: 273.92 }
   ];
+
+  // Group dividends by month for calendar view
+  const calendarData = upcomingDividends.reduce<{[key: string]: {count: number, amount: number}}>((acc, dividend) => {
+    const month = format(new Date(dividend.exDate), 'MMM');
+    
+    if (!acc[month]) {
+      acc[month] = { count: 0, amount: 0 };
+    }
+    
+    acc[month].count += 1;
+    acc[month].amount += dividend.amount;
+    
+    return acc;
+  }, {});
 
   if (loading) {
     return (
@@ -133,6 +148,25 @@ const DividendTracking = () => {
                     </TableBody>
                   </Table>
                 </div>
+
+                {/* New: Calendar preview */}
+                <div className="mt-4">
+                  <h3 className="text-sm font-medium mb-2">Dividends This Quarter</h3>
+                  <div className="flex gap-2">
+                    {Object.entries(calendarData).map(([month, data]) => (
+                      <div key={month} className="flex-1 bg-muted rounded-md p-3 text-center">
+                        <div className="text-lg font-medium">{month}</div>
+                        <div className="text-sm text-muted-foreground">{data.count} dividends</div>
+                        <div className="text-lg font-bold mt-1">${data.amount.toFixed(2)}</div>
+                      </div>
+                    ))}
+                    {Object.keys(calendarData).length === 0 && (
+                      <div className="flex-1 bg-muted rounded-md p-3 text-center">
+                        <div className="text-sm text-muted-foreground">No upcoming dividends</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </TabsContent>
               
               <TabsContent value="monthly" className="space-y-4">
@@ -147,6 +181,30 @@ const DividendTracking = () => {
                 </ResponsiveContainer>
                 <div className="text-center text-sm text-muted-foreground">
                   Projected annual dividend income: ${portfolio.annualIncome.toFixed(2)}
+                </div>
+
+                {/* New: Monthly contribution breakdown */}
+                <div className="mt-4">
+                  <h3 className="text-sm font-medium mb-2">Top Contributing Months</h3>
+                  <div className="space-y-2">
+                    {monthlyData
+                      .sort((a, b) => b.income - a.income)
+                      .slice(0, 3)
+                      .map((month, index) => (
+                        <div key={index} className="flex justify-between items-center">
+                          <div className="flex items-center">
+                            <div className="h-3 w-3 rounded-full bg-blue-500 mr-2"></div>
+                            <span>{month.month}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">${month.income.toFixed(2)}</span>
+                            <span className="text-xs text-muted-foreground">
+                              ({((month.income / portfolio.annualIncome) * 100).toFixed(1)}%)
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
                 </div>
               </TabsContent>
               
@@ -175,6 +233,39 @@ const DividendTracking = () => {
                 </div>
                 <div className="text-sm text-center text-muted-foreground mt-4">
                   Your dividend portfolio has an average safety score of 92/100, indicating reliable income streams.
+                </div>
+
+                {/* New: Safety score explanation */}
+                <div className="bg-muted rounded-lg p-4 mt-4">
+                  <h3 className="font-medium mb-2">Understanding Dividend Safety</h3>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    A dividend safety score above 80 indicates the company is likely to maintain or increase its dividend during economic downturns.
+                  </p>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Safe (80-100)</span>
+                      <span className="font-medium">85% of your portfolio</span>
+                    </div>
+                    <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
+                      <div className="h-full bg-green-500 rounded-full" style={{ width: '85%' }}></div>
+                    </div>
+                    
+                    <div className="flex justify-between text-sm">
+                      <span>Borderline (60-79)</span>
+                      <span className="font-medium">12% of your portfolio</span>
+                    </div>
+                    <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
+                      <div className="h-full bg-yellow-500 rounded-full" style={{ width: '12%' }}></div>
+                    </div>
+                    
+                    <div className="flex justify-between text-sm">
+                      <span>Unsafe (0-59)</span>
+                      <span className="font-medium">3% of your portfolio</span>
+                    </div>
+                    <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
+                      <div className="h-full bg-red-500 rounded-full" style={{ width: '3%' }}></div>
+                    </div>
+                  </div>
                 </div>
               </TabsContent>
             </Tabs>
