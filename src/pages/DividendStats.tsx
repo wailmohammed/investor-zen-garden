@@ -8,6 +8,7 @@ import { DividendOverview } from "@/components/Dividends/DividendOverview";
 import { DividendGrowth } from "@/components/Dividends/DividendGrowth";
 import { DividendScores } from "@/components/Dividends/DividendScores";
 import { DividendReport } from "@/components/Dividends/DividendReport";
+import { DividendPerformanceTable } from "@/components/Dividends/DividendPerformanceTable";
 
 const DividendStats = () => {
   const { defaultCurrency } = useAuth();
@@ -27,8 +28,9 @@ const DividendStats = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="performance">Performance</TabsTrigger>
             <TabsTrigger value="growth">Growth Analysis</TabsTrigger>
             <TabsTrigger value="scores">Safety Scores</TabsTrigger>
             <TabsTrigger value="report">Performance Report</TabsTrigger>
@@ -36,6 +38,17 @@ const DividendStats = () => {
           
           <TabsContent value="overview" className="space-y-6">
             <DividendOverview />
+          </TabsContent>
+          
+          <TabsContent value="performance" className="space-y-6">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle>Dividend Portfolio Performance</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DividendPerformanceTable />
+              </CardContent>
+            </Card>
           </TabsContent>
           
           <TabsContent value="growth" className="space-y-6">

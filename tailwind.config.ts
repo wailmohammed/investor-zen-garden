@@ -1,4 +1,3 @@
-
 import type { Config } from "tailwindcss";
 
 export default {
@@ -65,13 +64,10 @@ export default {
 				},
 				// Investment platform specific colors
 				finance: {
-					'blue': '#0F52BA',
-					'teal': '#14B8A6',
-					'green': '#10B981',
-					'red': '#ef4444',
-					'yellow': '#eab308',
-					'gray': '#64748b',
-					'light-blue': '#3b82f6',
+					green: "#16a34a",
+					red: "#dc2626",
+					blue: "#2563eb",
+					yellow: "#ca8a04",
 				}
 			},
 			borderRadius: {
