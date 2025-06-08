@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
-import { BarChart as BarChartIcon, ArrowRight, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { BarChart as BarChartIcon, ArrowRight, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Calendar } from "@/components/ui/calendar";
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay } from "date-fns";
@@ -47,12 +47,18 @@ const sectorAllocation = [
   { name: 'Energy', value: 7 }
 ];
 
+// Enhanced upcoming dividends with more detailed data
 const upcomingDividends = [
-  { symbol: 'AAPL', name: 'Apple Inc.', exDate: '2025-05-09', payDate: '2025-05-18', amount: 0.24, yield: 0.51 },
-  { symbol: 'MSFT', name: 'Microsoft Corporation', exDate: '2025-05-15', payDate: '2025-06-10', amount: 0.75, yield: 0.82 },
-  { symbol: 'KO', name: 'Coca-Cola Company', exDate: '2025-05-28', payDate: '2025-06-15', amount: 0.46, yield: 3.0 },
-  { symbol: 'PEP', name: 'PepsiCo Inc.', exDate: '2025-06-05', payDate: '2025-06-28', amount: 1.27, yield: 2.9 },
-  { symbol: 'T', name: 'AT&T Inc.', exDate: '2025-06-08', payDate: '2025-07-01', amount: 0.28, yield: 6.2 }
+  { symbol: 'AAPL', name: 'Apple Inc.', exDate: '2025-05-15', payDate: '2025-05-22', amount: 0.24, yield: 0.49, shares: 10 },
+  { symbol: 'MSFT', name: 'Microsoft Corporation', exDate: '2025-05-20', payDate: '2025-06-10', amount: 0.75, yield: 0.82, shares: 8 },
+  { symbol: 'KO', name: 'Coca-Cola Company', exDate: '2025-05-28', payDate: '2025-06-15', amount: 0.46, yield: 3.0, shares: 15 },
+  { symbol: 'PEP', name: 'PepsiCo Inc.', exDate: '2025-06-05', payDate: '2025-06-28', amount: 1.27, yield: 2.9, shares: 5 },
+  { symbol: 'JNJ', name: 'Johnson & Johnson', exDate: '2025-06-08', payDate: '2025-07-01', amount: 1.19, yield: 3.1, shares: 12 },
+  { symbol: 'PG', name: 'Procter & Gamble Co', exDate: '2025-06-12', payDate: '2025-07-15', amount: 0.93, yield: 2.4, shares: 8 },
+  { symbol: 'ABBV', name: 'AbbVie Inc.', exDate: '2025-06-15', payDate: '2025-07-18', amount: 1.41, yield: 3.7, shares: 6 },
+  { symbol: 'VZ', name: 'Verizon Communications', exDate: '2025-06-18', payDate: '2025-07-22', amount: 0.67, yield: 6.8, shares: 20 },
+  { symbol: 'HD', name: 'Home Depot Inc', exDate: '2025-06-22', payDate: '2025-07-25', amount: 2.09, yield: 2.3, shares: 3 },
+  { symbol: 'MMM', name: '3M Company', exDate: '2025-06-25', payDate: '2025-07-28', amount: 1.51, yield: 5.8, shares: 7 }
 ];
 
 const holdings = [
@@ -77,32 +83,42 @@ const Dividends = () => {
   const [calendarView, setCalendarView] = useState<'month' | 'list'>('month');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   
-  // Create dividend event data for the calendar
-  const dividendEvents = upcomingDividends.reduce((acc: Record<string, any[]>, div) => {
-    const date = div.exDate.split('-').join('/');
-    if (!acc[date]) {
-      acc[date] = [];
-    }
-    acc[date].push({
-      symbol: div.symbol,
-      name: div.name,
-      amount: div.amount,
-      type: 'ex-dividend'
+  // Enhanced calendar data with daily totals
+  const createCalendarData = () => {
+    const calendarDividends: Record<string, { dividends: any[], total: number }> = {};
+    
+    upcomingDividends.forEach(div => {
+      const exDate = div.exDate;
+      const payDate = div.payDate;
+      const totalAmount = div.amount * div.shares;
+      
+      // Ex-dividend events
+      if (!calendarDividends[exDate]) {
+        calendarDividends[exDate] = { dividends: [], total: 0 };
+      }
+      calendarDividends[exDate].dividends.push({
+        ...div,
+        type: 'ex-dividend',
+        totalAmount
+      });
+      calendarDividends[exDate].total += totalAmount;
+      
+      // Payment events
+      if (!calendarDividends[payDate]) {
+        calendarDividends[payDate] = { dividends: [], total: 0 };
+      }
+      calendarDividends[payDate].dividends.push({
+        ...div,
+        type: 'payment',
+        totalAmount
+      });
+      calendarDividends[payDate].total += totalAmount;
     });
     
-    const payDate = div.payDate.split('-').join('/');
-    if (!acc[payDate]) {
-      acc[payDate] = [];
-    }
-    acc[payDate].push({
-      symbol: div.symbol,
-      name: div.name, 
-      amount: div.amount,
-      type: 'payment'
-    });
-    
-    return acc;
-  }, {});
+    return calendarDividends;
+  };
+
+  const calendarData = createCalendarData();
 
   const handlePreviousMonth = () => {
     setSelectedMonth(subMonths(selectedMonth, 1));
@@ -116,15 +132,22 @@ const Dividends = () => {
     setSelectedDate(date);
   };
   
-  // Convert dates to the format used in dividendEvents
   const getFormattedDate = (date: Date) => {
-    return format(date, 'yyyy/MM/dd');
+    return format(date, 'yyyy-MM-dd');
   };
 
-  // Get events for the selected date
   const selectedDateEvents = selectedDate 
-    ? dividendEvents[getFormattedDate(selectedDate)] || [] 
+    ? calendarData[getFormattedDate(selectedDate)]?.dividends || [] 
     : [];
+
+  // Calculate enhanced portfolio stats
+  const annualIncome = 3249.86;
+  const monthlyIncome = annualIncome / 12;
+  const dailyIncome = annualIncome / 365;
+  const portfolioYield = 6.76;
+  const yetToReceive = upcomingDividends
+    .filter(div => new Date(div.exDate) >= new Date())
+    .reduce((sum, div) => sum + (div.amount * div.shares), 0);
   
   return (
     <DashboardLayout>
@@ -268,7 +291,7 @@ const Dividends = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {upcomingDividends.map((dividend, i) => (
+                        {upcomingDividends.slice(0, 5).map((dividend, i) => (
                           <TableRow key={i}>
                             <TableCell>
                               <div className="font-medium">{dividend.symbol}</div>
@@ -462,10 +485,38 @@ const Dividends = () => {
                     >
                       List View
                     </Button>
+                    <Button variant="outline" size="sm">
+                      <Download className="h-4 w-4 mr-2" />
+                      Export
+                    </Button>
                   </div>
                 </div>
               </CardHeader>
               <CardContent>
+                {/* Enhanced Portfolio Summary Stats */}
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6 p-4 bg-muted rounded-lg">
+                  <div className="text-center">
+                    <div className="text-sm text-muted-foreground">Annual income</div>
+                    <div className="text-xl font-bold">${annualIncome.toFixed(2)}</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-sm text-muted-foreground">Monthly</div>
+                    <div className="text-xl font-bold">${monthlyIncome.toFixed(2)}</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-sm text-muted-foreground">Daily</div>
+                    <div className="text-xl font-bold">${dailyIncome.toFixed(2)}</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-sm text-muted-foreground">Yield</div>
+                    <div className="text-xl font-bold">{portfolioYield.toFixed(2)}%</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-sm text-muted-foreground">Yet to receive</div>
+                    <div className="text-xl font-bold text-finance-green">${yetToReceive.toFixed(2)}</div>
+                  </div>
+                </div>
+
                 {calendarView === 'month' ? (
                   <div className="space-y-4">
                     <div className="flex flex-col space-y-4">
@@ -489,22 +540,56 @@ const Dividends = () => {
                             onSelect={handleDateSelect}
                             month={selectedMonth}
                             className="rounded-md border"
+                            components={{
+                              DayContent: ({ date }) => {
+                                const dateKey = getFormattedDate(date);
+                                const dayData = calendarData[dateKey];
+                                const isToday = isSameDay(date, new Date());
+                                
+                                return (
+                                  <div className="relative w-full h-full">
+                                    <div className={`text-sm ${isToday ? 'font-bold' : ''}`}>
+                                      {date.getDate()}
+                                    </div>
+                                    {dayData && dayData.total > 0 && (
+                                      <div className="absolute top-6 left-0 right-0">
+                                        <div className="text-xs font-semibold text-finance-green">
+                                          +${dayData.total.toFixed(2)}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {dayData.dividends.length} events
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              }
+                            }}
                           />
                         </div>
                         
                         <div className="bg-muted p-4 rounded-lg">
-                          <h3 className="font-medium mb-2">{selectedDate ? format(selectedDate, 'MMMM d, yyyy') : 'Select a date'}</h3>
+                          <h3 className="font-medium mb-2">
+                            {selectedDate ? format(selectedDate, 'MMMM d, yyyy') : 'Select a date'}
+                          </h3>
                           {selectedDateEvents.length > 0 ? (
-                            <div className="space-y-3">
+                            <div className="space-y-3 max-h-96 overflow-y-auto">
                               {selectedDateEvents.map((event, i) => (
-                                <div key={i} className={`p-3 rounded-md ${event.type === 'ex-dividend' ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-200'} border`}>
-                                  <div className="flex justify-between">
-                                    <div>
-                                      <div className="font-medium">{event.symbol}</div>
+                                <div key={i} className={`p-3 rounded-md border ${
+                                  event.type === 'ex-dividend' 
+                                    ? 'bg-blue-50 border-blue-200' 
+                                    : 'bg-green-50 border-green-200'
+                                }`}>
+                                  <div className="flex justify-between items-start">
+                                    <div className="flex-1">
+                                      <div className="font-medium text-sm">{event.symbol}</div>
                                       <div className="text-xs text-muted-foreground">{event.name}</div>
+                                      <div className="text-xs mt-1">
+                                        ${event.amount.toFixed(4)} × {event.shares} shares • {event.yield.toFixed(2)}%
+                                      </div>
                                     </div>
                                     <div className="text-right">
-                                      <div className="font-medium">${event.amount.toFixed(2)}</div>
+                                      <div className="font-medium">${event.totalAmount.toFixed(2)}</div>
                                       <div className="text-xs text-muted-foreground">
                                         {event.type === 'ex-dividend' ? 'Ex-Dividend' : 'Payment'}
                                       </div>
@@ -545,75 +630,59 @@ const Dividends = () => {
                             <TableHead>Date</TableHead>
                             <TableHead>Stock</TableHead>
                             <TableHead>Event Type</TableHead>
-                            <TableHead>Amount</TableHead>
+                            <TableHead>Per Share</TableHead>
+                            <TableHead>Shares</TableHead>
+                            <TableHead>Total Amount</TableHead>
+                            <TableHead>Yield</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          <TableRow>
-                            <TableCell>May 9, 2025</TableCell>
-                            <TableCell>
-                              <div className="font-medium">AAPL</div>
-                              <div className="text-xs text-muted-foreground">Apple Inc.</div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                Ex-Dividend
-                              </div>
-                            </TableCell>
-                            <TableCell>$0.24</TableCell>
-                          </TableRow>
-                          <TableRow>
-                            <TableCell>May 15, 2025</TableCell>
-                            <TableCell>
-                              <div className="font-medium">MSFT</div>
-                              <div className="text-xs text-muted-foreground">Microsoft Corporation</div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                Ex-Dividend
-                              </div>
-                            </TableCell>
-                            <TableCell>$0.75</TableCell>
-                          </TableRow>
-                          <TableRow>
-                            <TableCell>May 18, 2025</TableCell>
-                            <TableCell>
-                              <div className="font-medium">AAPL</div>
-                              <div className="text-xs text-muted-foreground">Apple Inc.</div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                Payment
-                              </div>
-                            </TableCell>
-                            <TableCell>$0.24</TableCell>
-                          </TableRow>
-                          <TableRow>
-                            <TableCell>May 25, 2025</TableCell>
-                            <TableCell>
-                              <div className="font-medium">JNJ</div>
-                              <div className="text-xs text-muted-foreground">Johnson & Johnson</div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                Payment
-                              </div>
-                            </TableCell>
-                            <TableCell>$1.19</TableCell>
-                          </TableRow>
-                          <TableRow>
-                            <TableCell>May 28, 2025</TableCell>
-                            <TableCell>
-                              <div className="font-medium">KO</div>
-                              <div className="text-xs text-muted-foreground">Coca-Cola Company</div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                Ex-Dividend
-                              </div>
-                            </TableCell>
-                            <TableCell>$0.46</TableCell>
-                          </TableRow>
+                          {upcomingDividends.flatMap(div => [
+                            {
+                              date: div.exDate,
+                              symbol: div.symbol,
+                              name: div.name,
+                              type: 'ex-dividend',
+                              amount: div.amount,
+                              shares: div.shares,
+                              total: div.amount * div.shares,
+                              yield: div.yield
+                            },
+                            {
+                              date: div.payDate,
+                              symbol: div.symbol,
+                              name: div.name,
+                              type: 'payment',
+                              amount: div.amount,
+                              shares: div.shares,
+                              total: div.amount * div.shares,
+                              yield: div.yield
+                            }
+                          ])
+                          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                          .slice(0, 20)
+                          .map((event, i) => (
+                            <TableRow key={i}>
+                              <TableCell>{format(new Date(event.date), 'MMM d, yyyy')}</TableCell>
+                              <TableCell>
+                                <div className="font-medium">{event.symbol}</div>
+                                <div className="text-xs text-muted-foreground">{event.name}</div>
+                              </TableCell>
+                              <TableCell>
+                                <div className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                  event.type === 'ex-dividend' 
+                                    ? 'bg-blue-100 text-blue-800' 
+                                    : 'bg-green-100 text-green-800'
+                                }`}>
+                                  {event.type === 'ex-dividend' ? 'Ex-Dividend' : 'Payment'}
+                                </div>
+                              </TableCell>
+                              <TableCell>${event.amount.toFixed(4)}</TableCell>
+                              <TableCell>{event.shares}</TableCell>
+                              <TableCell className="font-medium">${event.total.toFixed(2)}</TableCell>
+                              <TableCell>{event.yield.toFixed(2)}%</TableCell>
+                            </TableRow>
+                          ))}
                         </TableBody>
                       </Table>
                     </div>
