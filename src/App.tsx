@@ -93,9 +93,9 @@ const AppRoutes = () => {
       <Route 
         path="/admin" 
         element={
-          <ProtectedRoute>
+          <AdminRoute>
             <Admin />
-          </ProtectedRoute>
+          </AdminRoute>
         } 
       />
       <Route 
@@ -125,9 +125,9 @@ const AppRoutes = () => {
       <Route
         path="/tasks" 
         element={
-          <ProtectedRoute>
+          <AdminRoute>
             <Tasks />
-          </ProtectedRoute>
+          </AdminRoute>
         } 
       />
       <Route

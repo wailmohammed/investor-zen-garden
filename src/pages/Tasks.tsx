@@ -20,7 +20,7 @@ interface ScheduledTask {
 }
 
 const Tasks = () => {
-  const { user, isAdmin } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [tasks, setTasks] = useState<ScheduledTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,21 +53,10 @@ const Tasks = () => {
       }
     };
     
-    if (isAdmin) {
-      fetchTasks();
-    }
-  }, [isAdmin, toast]);
+    fetchTasks();
+  }, [toast]);
 
   const handleCreateTask = async () => {
-    if (!isAdmin) {
-      toast({
-        title: "Permission denied",
-        description: "Only administrators can create scheduled tasks.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
     if (!taskName.trim()) {
       toast({
         title: "Invalid input",
@@ -137,15 +126,6 @@ const Tasks = () => {
   };
 
   const handleRunTasksManually = async () => {
-    if (!isAdmin) {
-      toast({
-        title: "Permission denied",
-        description: "Only administrators can run tasks manually.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
     try {
       const { data, error } = await supabase.functions.invoke('run-scheduled-task');
       
@@ -174,23 +154,6 @@ const Tasks = () => {
       });
     }
   };
-
-  if (!isAdmin) {
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-full">
-          <Card className="w-full max-w-md">
-            <CardHeader>
-              <CardTitle>Access Denied</CardTitle>
-              <CardDescription>
-                Only administrators can access the scheduled tasks management page.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </div>
-      </DashboardLayout>
-    );
-  }
 
   return (
     <DashboardLayout>
