@@ -19,11 +19,13 @@ interface Broker {
   description: string;
   logo: string;
   status: BrokerStatus;
+  apiKeyLabel?: string;
+  apiKeyPlaceholder?: string;
 }
 
 type ApiFormValues = {
   apiKey: string;
-  apiSecret: string;
+  apiSecret?: string;
 };
 
 const BrokerIntegration = () => {
@@ -34,6 +36,8 @@ const BrokerIntegration = () => {
       description: "Connect to your Trading 212 account",
       logo: "/trading212-logo.svg",
       status: "not_connected",
+      apiKeyLabel: "API Key",
+      apiKeyPlaceholder: "Enter your Trading 212 API key (e.g., 23133911ZdtQFaMJJAFxzcvWszstEmEAtfvTF)"
     },
     {
       id: "binance",
@@ -41,6 +45,8 @@ const BrokerIntegration = () => {
       description: "Connect to your Binance account",
       logo: "/binance-logo.svg",
       status: "not_connected",
+      apiKeyLabel: "API Key",
+      apiKeyPlaceholder: "Enter your Binance API key"
     },
     {
       id: "etoro",
@@ -48,6 +54,8 @@ const BrokerIntegration = () => {
       description: "Connect to your eToro account",
       logo: "/etoro-logo.svg",
       status: "not_connected",
+      apiKeyLabel: "Username",
+      apiKeyPlaceholder: "Enter your eToro username"
     },
     {
       id: "interactive_brokers",
@@ -55,8 +63,12 @@ const BrokerIntegration = () => {
       description: "Connect to your Interactive Brokers account",
       logo: "/interactive-brokers-logo.svg",
       status: "not_connected",
+      apiKeyLabel: "Username",
+      apiKeyPlaceholder: "Enter your IB username"
     }
   ]);
+
+  const [selectedBroker, setSelectedBroker] = useState<string>("");
 
   const form = useForm<ApiFormValues>({
     defaultValues: {
@@ -65,10 +77,47 @@ const BrokerIntegration = () => {
     },
   });
 
-  const onSubmit = (values: ApiFormValues) => {
-    console.log(values);
-    toast.success("API credentials saved. Connecting to broker...");
-    // In a real app, this would connect to the broker API
+  const onSubmit = async (values: ApiFormValues) => {
+    if (!selectedBroker) {
+      toast.error("Please select a broker first");
+      return;
+    }
+
+    console.log("Connecting to broker:", selectedBroker, "with credentials:", values);
+    
+    // Simulate API connection
+    try {
+      // Show loading state
+      toast.loading("Connecting to broker...");
+      
+      // Simulate connection delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Update broker status
+      setBrokers(prev => 
+        prev.map(broker => 
+          broker.id === selectedBroker 
+            ? { ...broker, status: "connected" as BrokerStatus }
+            : broker
+        )
+      );
+      
+      toast.success(`Successfully connected to ${brokers.find(b => b.id === selectedBroker)?.name}!`);
+      
+      // Clear form
+      form.reset();
+      setSelectedBroker("");
+      
+    } catch (error) {
+      setBrokers(prev => 
+        prev.map(broker => 
+          broker.id === selectedBroker 
+            ? { ...broker, status: "error" as BrokerStatus }
+            : broker
+        )
+      );
+      toast.error("Failed to connect to broker. Please check your credentials.");
+    }
   };
 
   const handleFileUpload = (file: File) => {
@@ -82,13 +131,8 @@ const BrokerIntegration = () => {
   };
 
   const handleBrokerConnect = (brokerId: string) => {
-    setBrokers(prev => 
-      prev.map(broker => 
-        broker.id === brokerId 
-          ? { ...broker, status: "connected" as BrokerStatus }
-          : broker
-      )
-    );
+    setSelectedBroker(brokerId);
+    toast.info(`Please enter your ${brokers.find(b => b.id === brokerId)?.name} credentials below`);
   };
 
   const handleBrokerDisconnect = (brokerId: string) => {
@@ -100,6 +144,8 @@ const BrokerIntegration = () => {
       )
     );
   };
+
+  const selectedBrokerData = brokers.find(b => b.id === selectedBroker);
 
   return (
     <DashboardLayout>
@@ -136,56 +182,89 @@ const BrokerIntegration = () => {
               ))}
             </div>
             
-            <Card className="mt-6">
-              <CardHeader>
-                <CardTitle>API Configuration</CardTitle>
-                <CardDescription>
-                  Enter your API credentials for your selected broker
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Form {...form}>
-                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="apiKey"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>API Key</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Enter your API key" {...field} />
-                          </FormControl>
-                          <FormDescription>
-                            You can find this in your broker's API settings
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
+            {selectedBroker && (
+              <Card className="mt-6">
+                <CardHeader>
+                  <CardTitle>Connect to {selectedBrokerData?.name}</CardTitle>
+                  <CardDescription>
+                    Enter your {selectedBrokerData?.name} credentials to connect your account
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                      <FormField
+                        control={form.control}
+                        name="apiKey"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{selectedBrokerData?.apiKeyLabel || "API Key"}</FormLabel>
+                            <FormControl>
+                              <Input 
+                                placeholder={selectedBrokerData?.apiKeyPlaceholder || "Enter your credentials"} 
+                                {...field} 
+                              />
+                            </FormControl>
+                            <FormDescription>
+                              {selectedBroker === 'trading212' && (
+                                <>You can find your API key in Trading 212 under Settings → API</>
+                              )}
+                              {selectedBroker === 'binance' && (
+                                <>You can find this in your Binance account under API Management</>
+                              )}
+                              {selectedBroker === 'etoro' && (
+                                <>Your eToro username for account connection</>
+                              )}
+                              {selectedBroker === 'interactive_brokers' && (
+                                <>Your Interactive Brokers username</>
+                              )}
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      {(selectedBroker === 'binance' || selectedBroker === 'trading212') && (
+                        <FormField
+                          control={form.control}
+                          name="apiSecret"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>API Secret</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  type="password" 
+                                  placeholder="Enter your API secret" 
+                                  {...field} 
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                Keep this secret safe - it provides access to your account
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
                       )}
-                    />
-                    
-                    <FormField
-                      control={form.control}
-                      name="apiSecret"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>API Secret</FormLabel>
-                          <FormControl>
-                            <Input 
-                              type="password" 
-                              placeholder="Enter your API secret" 
-                              {...field} 
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <Button type="submit">Connect</Button>
-                  </form>
-                </Form>
-              </CardContent>
-            </Card>
+                      
+                      <div className="flex gap-2">
+                        <Button type="submit">Connect to {selectedBrokerData?.name}</Button>
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          onClick={() => {
+                            setSelectedBroker("");
+                            form.reset();
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </form>
+                  </Form>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
           
           <TabsContent value="csv">

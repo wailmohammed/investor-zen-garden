@@ -48,8 +48,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         try {
           const parsedUser = JSON.parse(storedUser);
           setUser(parsedUser);
-          setIsAdmin(parsedUser.email?.includes('admin') || false);
-          console.log("Mock admin status:", parsedUser.email?.includes('admin') || false);
+          
+          // Check if user email is admin email
+          const adminEmails = ['wailafmohammed@gmail.com', 'admin@example.com'];
+          const userIsAdmin = adminEmails.includes(parsedUser.email);
+          setIsAdmin(userIsAdmin);
+          console.log("Mock admin status for", parsedUser.email, ":", userIsAdmin);
+          
           setUniqueId(generateUniqueId(parsedUser.id));
           const storedCurrency = localStorage.getItem('mockDefaultCurrency') || 'USD';
           setDefaultCurrency(storedCurrency);
@@ -75,7 +80,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           // Defer fetching profile info to prevent potential deadlocks
           setTimeout(() => {
             checkAdminStatus(session.user.id, session.user).then(isAdmin => {
-              console.log("Admin status check result:", isAdmin);
+              console.log("Admin status check result for", session.user.email, ":", isAdmin);
               setIsAdmin(isAdmin);
             });
             
@@ -100,7 +105,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (session?.user) {
         setUniqueId(generateUniqueId(session.user.id));
         checkAdminStatus(session.user.id, session.user).then(isAdmin => {
-          console.log("Initial admin status check result:", isAdmin);
+          console.log("Initial admin status check result for", session.user.email, ":", isAdmin);
           setIsAdmin(isAdmin);
         });
         fetchDefaultCurrency(session.user.id).then(currency => {
