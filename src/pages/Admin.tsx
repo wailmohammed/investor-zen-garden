@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { ChartLine, Settings, Users, Info, DollarSign } from "lucide-react";
 import SubscriptionPriceEditor from "@/components/admin/SubscriptionPriceEditor";
+import UserManagement from "@/components/admin/UserManagement";
+import SystemAnalytics from "@/components/admin/SystemAnalytics";
 
 const Admin = () => {
   const { isAdmin, user } = useAuth();
@@ -159,25 +161,10 @@ const Admin = () => {
                 </Button>
               </CardContent>
             </Card>
-
-            {/* Additional admin settings cards would go here */}
           </TabsContent>
           
           <TabsContent value="users" className="space-y-4 mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>User Management</CardTitle>
-                <CardDescription>
-                  View and manage user accounts
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {/* User management UI would go here */}
-                <p className="text-muted-foreground py-8 text-center">
-                  User management functionality coming soon
-                </p>
-              </CardContent>
-            </Card>
+            <UserManagement />
           </TabsContent>
           
           <TabsContent value="analytics" className="space-y-4 mt-6">
@@ -185,14 +172,11 @@ const Admin = () => {
               <CardHeader>
                 <CardTitle>System Analytics</CardTitle>
                 <CardDescription>
-                  View system performance metrics
+                  View system performance metrics and user analytics
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {/* Analytics UI would go here */}
-                <p className="text-muted-foreground py-8 text-center">
-                  Analytics dashboard coming soon
-                </p>
+                <SystemAnalytics />
               </CardContent>
             </Card>
           </TabsContent>
