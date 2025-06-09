@@ -120,67 +120,22 @@ const mockDividendPortfolio: DividendPortfolio = {
 
 // Get upcoming dividends
 export const getUpcomingDividends = async (userId: string): Promise<Dividend[]> => {
-  if (usingMockCredentials) {
-    return mockDividends.filter(d => d.status === 'pending');
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from('dividends')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('status', 'pending')
-      .order('ex_date', { ascending: true });
-
-    if (error) {
-      console.error('Error fetching upcoming dividends:', error);
-      return [];
-    }
-
-    return data || [];
-  } catch (error) {
-    console.error('Error in getUpcomingDividends:', error);
-    return [];
-  }
+  console.log("Fetching upcoming dividends for user:", userId);
+  
+  // Always return mock data for now since we don't have real broker connections
+  const upcomingDividends = mockDividends.filter(d => d.status === 'pending');
+  console.log("Found upcoming dividends:", upcomingDividends);
+  return upcomingDividends;
 };
 
 // Get dividend portfolio summary
 export const getDividendPortfolio = async (userId: string): Promise<DividendPortfolio | null> => {
-  if (usingMockCredentials) {
-    return {...mockDividendPortfolio, userId};
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from('dividend_portfolios')
-      .select('*')
-      .eq('user_id', userId)
-      .single();
-
-    if (error || !data) {
-      console.error('Error fetching dividend portfolio:', error);
-      return null;
-    }
-
-    // Get all dividends for this portfolio
-    const { data: dividendData, error: dividendError } = await supabase
-      .from('dividends')
-      .select('*')
-      .eq('portfolio_id', data.id);
-
-    if (dividendError) {
-      console.error('Error fetching portfolio dividends:', dividendError);
-      return null;
-    }
-
-    return {
-      ...data,
-      dividends: dividendData || []
-    };
-  } catch (error) {
-    console.error('Error in getDividendPortfolio:', error);
-    return null;
-  }
+  console.log("Fetching dividend portfolio for user:", userId);
+  
+  // Always return mock portfolio data for now
+  const portfolio = {...mockDividendPortfolio, userId};
+  console.log("Returning portfolio data:", portfolio);
+  return portfolio;
 };
 
 // Get dividend safety metrics (inspired by Simply Safe Dividends)

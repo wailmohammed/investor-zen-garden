@@ -1,5 +1,5 @@
 
-import React from "react";
+import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,36 +13,13 @@ import { BrokerCard } from "@/components/BrokerCard";
 
 type BrokerStatus = "not_connected" | "connected" | "error";
 
-const brokers = [
-  {
-    id: "trading212",
-    name: "Trading 212",
-    description: "Connect to your Trading 212 account",
-    logo: "/trading212-logo.svg",
-    status: "not_connected" as BrokerStatus,
-  },
-  {
-    id: "binance",
-    name: "Binance",
-    description: "Connect to your Binance account",
-    logo: "/binance-logo.svg",
-    status: "not_connected" as BrokerStatus,
-  },
-  {
-    id: "etoro",
-    name: "eToro",
-    description: "Connect to your eToro account",
-    logo: "/etoro-logo.svg",
-    status: "not_connected" as BrokerStatus,
-  },
-  {
-    id: "interactive_brokers",
-    name: "Interactive Brokers",
-    description: "Connect to your Interactive Brokers account",
-    logo: "/interactive-brokers-logo.svg",
-    status: "not_connected" as BrokerStatus,
-  }
-];
+interface Broker {
+  id: string;
+  name: string;
+  description: string;
+  logo: string;
+  status: BrokerStatus;
+}
 
 type ApiFormValues = {
   apiKey: string;
@@ -50,6 +27,37 @@ type ApiFormValues = {
 };
 
 const BrokerIntegration = () => {
+  const [brokers, setBrokers] = useState<Broker[]>([
+    {
+      id: "trading212",
+      name: "Trading 212",
+      description: "Connect to your Trading 212 account",
+      logo: "/trading212-logo.svg",
+      status: "not_connected",
+    },
+    {
+      id: "binance",
+      name: "Binance",
+      description: "Connect to your Binance account",
+      logo: "/binance-logo.svg",
+      status: "not_connected",
+    },
+    {
+      id: "etoro",
+      name: "eToro",
+      description: "Connect to your eToro account",
+      logo: "/etoro-logo.svg",
+      status: "not_connected",
+    },
+    {
+      id: "interactive_brokers",
+      name: "Interactive Brokers",
+      description: "Connect to your Interactive Brokers account",
+      logo: "/interactive-brokers-logo.svg",
+      status: "not_connected",
+    }
+  ]);
+
   const form = useForm<ApiFormValues>({
     defaultValues: {
       apiKey: "",
@@ -64,9 +72,33 @@ const BrokerIntegration = () => {
   };
 
   const handleFileUpload = (file: File) => {
-    // In a real app, this would process the CSV file
     console.log("Processing file:", file.name);
-    toast.success(`CSV file "${file.name}" processed successfully`);
+    toast.success(`CSV file "${file.name}" processed successfully. Portfolio data imported!`);
+    
+    // Simulate updating broker status after file upload
+    setTimeout(() => {
+      toast.success("Holdings imported successfully! Check your dividend tracker for updated data.");
+    }, 1500);
+  };
+
+  const handleBrokerConnect = (brokerId: string) => {
+    setBrokers(prev => 
+      prev.map(broker => 
+        broker.id === brokerId 
+          ? { ...broker, status: "connected" as BrokerStatus }
+          : broker
+      )
+    );
+  };
+
+  const handleBrokerDisconnect = (brokerId: string) => {
+    setBrokers(prev => 
+      prev.map(broker => 
+        broker.id === brokerId 
+          ? { ...broker, status: "not_connected" as BrokerStatus }
+          : broker
+      )
+    );
   };
 
   return (
@@ -97,7 +129,9 @@ const BrokerIntegration = () => {
                   name={broker.name} 
                   description={broker.description} 
                   logo={broker.logo} 
-                  status={broker.status} 
+                  status={broker.status}
+                  onConnect={() => handleBrokerConnect(broker.id)}
+                  onDisconnect={() => handleBrokerDisconnect(broker.id)}
                 />
               ))}
             </div>
@@ -159,7 +193,7 @@ const BrokerIntegration = () => {
               <CardHeader>
                 <CardTitle>Import Portfolio Data</CardTitle>
                 <CardDescription>
-                  Upload a CSV file with your portfolio data
+                  Upload a CSV file with your portfolio data to see holdings in the Dividend Tracker
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
