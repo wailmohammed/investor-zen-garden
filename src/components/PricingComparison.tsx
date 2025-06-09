@@ -1,4 +1,3 @@
-
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Check, Minus, Info } from "lucide-react";
 import { 
@@ -46,7 +45,7 @@ const PricingComparison = () => {
           <FeatureRow 
             title="Number of portfolios" 
             free="1" 
-            premium="5" 
+            premium="10" 
             professional="Unlimited" 
           />
           
@@ -60,7 +59,7 @@ const PricingComparison = () => {
           <FeatureRow 
             title="Watchlists limit" 
             free="1" 
-            premium="5" 
+            premium="10" 
             professional="20" 
           />
           

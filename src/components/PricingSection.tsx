@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Check } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -37,10 +36,12 @@ const PricingSection = () => {
       price: '$19',
       description: 'Advanced tools for active investors',
       features: [
+        'Up to 10 portfolios',
         'Unlimited investment tracking',
         'Advanced analytics and reports',
         'Real-time data updates',
         'Dividend tracking and forecasting',
+        'Custom watchlists',
         'Tax optimization suggestions',
         'Priority email & chat support',
       ],
@@ -53,8 +54,8 @@ const PricingSection = () => {
       description: 'For serious investors and professionals',
       features: [
         'All Premium features',
+        'Unlimited portfolios',
         'API access',
-        'Custom watchlists',
         'Advanced screening tools',
         'Portfolio risk analysis',
         'Priority phone support',
