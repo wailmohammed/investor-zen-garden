@@ -1,9 +1,8 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
 
 type BrokerStatus = 'not_connected' | 'connected' | 'error';
 
@@ -20,34 +19,15 @@ export function BrokerCard({
   name, 
   description, 
   logo, 
-  status: initialStatus,
+  status,
   onConnect,
   onDisconnect
 }: BrokerCardProps) {
-  const [status, setStatus] = useState<BrokerStatus>(initialStatus);
-  const [loading, setLoading] = useState(false);
-
-  const handleConnect = async () => {
-    setLoading(true);
-    
-    // Simulate connection process
-    try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      setStatus('connected');
-      toast.success(`Successfully connected to ${name}!`);
-      onConnect?.();
-    } catch (error) {
-      setStatus('error');
-      toast.error(`Failed to connect to ${name}. Please check your credentials.`);
-    } finally {
-      setLoading(false);
-    }
+  const handleConnect = () => {
+    onConnect?.();
   };
 
   const handleDisconnect = () => {
-    setStatus('not_connected');
-    toast.success(`Disconnected from ${name}`);
     onDisconnect?.();
   };
 
@@ -91,7 +71,6 @@ export function BrokerCard({
             size="sm" 
             className="w-full"
             onClick={handleDisconnect}
-            disabled={loading}
           >
             Disconnect
           </Button>
@@ -101,9 +80,8 @@ export function BrokerCard({
             size="sm" 
             className="w-full"
             onClick={handleConnect}
-            disabled={loading}
           >
-            {loading ? 'Connecting...' : 'Connect'}
+            Connect
           </Button>
         )}
       </CardFooter>

@@ -28,6 +28,40 @@ type ApiFormValues = {
   apiSecret?: string;
 };
 
+// Trading 212 API validation function
+const validateTrading212ApiKey = (apiKey: string): boolean => {
+  // Trading 212 API keys are typically 40-50 characters long and contain letters and numbers
+  const trading212Pattern = /^[A-Za-z0-9]{30,60}$/;
+  return trading212Pattern.test(apiKey);
+};
+
+// Simulate Trading 212 API connection
+const testTrading212Connection = async (apiKey: string): Promise<{ success: boolean; error?: string }> => {
+  console.log("Testing Trading 212 connection with API key:", apiKey.substring(0, 10) + "...");
+  
+  // Validate API key format first
+  if (!validateTrading212ApiKey(apiKey)) {
+    return { 
+      success: false, 
+      error: "Invalid Trading 212 API key format. Please check your API key." 
+    };
+  }
+  
+  // Simulate API call delay
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  
+  // For demo purposes, we'll simulate success if the API key looks valid
+  // In a real implementation, this would make an actual API call to Trading 212
+  if (apiKey.length >= 30) {
+    return { success: true };
+  } else {
+    return { 
+      success: false, 
+      error: "API key authentication failed. Please verify your Trading 212 API key." 
+    };
+  }
+};
+
 const BrokerIntegration = () => {
   const [brokers, setBrokers] = useState<Broker[]>([
     {
@@ -69,6 +103,7 @@ const BrokerIntegration = () => {
   ]);
 
   const [selectedBroker, setSelectedBroker] = useState<string>("");
+  const [isConnecting, setIsConnecting] = useState<boolean>(false);
 
   const form = useForm<ApiFormValues>({
     defaultValues: {
@@ -84,31 +119,52 @@ const BrokerIntegration = () => {
     }
 
     console.log("Connecting to broker:", selectedBroker, "with credentials:", values);
+    setIsConnecting(true);
     
-    // Simulate API connection
     try {
       // Show loading state
       toast.loading("Connecting to broker...");
       
-      // Simulate connection delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      let connectionResult = { success: true, error: undefined };
       
-      // Update broker status
-      setBrokers(prev => 
-        prev.map(broker => 
-          broker.id === selectedBroker 
-            ? { ...broker, status: "connected" as BrokerStatus }
-            : broker
-        )
-      );
+      // Special handling for Trading 212
+      if (selectedBroker === 'trading212') {
+        connectionResult = await testTrading212Connection(values.apiKey);
+      } else {
+        // Simulate connection for other brokers
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
       
-      toast.success(`Successfully connected to ${brokers.find(b => b.id === selectedBroker)?.name}!`);
-      
-      // Clear form
-      form.reset();
-      setSelectedBroker("");
+      if (connectionResult.success) {
+        // Update broker status to connected
+        setBrokers(prev => 
+          prev.map(broker => 
+            broker.id === selectedBroker 
+              ? { ...broker, status: "connected" as BrokerStatus }
+              : broker
+          )
+        );
+        
+        toast.success(`Successfully connected to ${brokers.find(b => b.id === selectedBroker)?.name}!`);
+        
+        // Clear form and reset selection
+        form.reset();
+        setSelectedBroker("");
+      } else {
+        // Update broker status to error
+        setBrokers(prev => 
+          prev.map(broker => 
+            broker.id === selectedBroker 
+              ? { ...broker, status: "error" as BrokerStatus }
+              : broker
+          )
+        );
+        
+        toast.error(connectionResult.error || "Failed to connect to broker. Please check your credentials.");
+      }
       
     } catch (error) {
+      console.error("Connection error:", error);
       setBrokers(prev => 
         prev.map(broker => 
           broker.id === selectedBroker 
@@ -117,6 +173,8 @@ const BrokerIntegration = () => {
         )
       );
       toast.error("Failed to connect to broker. Please check your credentials.");
+    } finally {
+      setIsConnecting(false);
     }
   };
 
@@ -132,7 +190,8 @@ const BrokerIntegration = () => {
 
   const handleBrokerConnect = (brokerId: string) => {
     setSelectedBroker(brokerId);
-    toast.info(`Please enter your ${brokers.find(b => b.id === brokerId)?.name} credentials below`);
+    const broker = brokers.find(b => b.id === brokerId);
+    toast.info(`Please enter your ${broker?.name} credentials below`);
   };
 
   const handleBrokerDisconnect = (brokerId: string) => {
@@ -143,6 +202,9 @@ const BrokerIntegration = () => {
           : broker
       )
     );
+    
+    const broker = brokers.find(b => b.id === brokerId);
+    toast.success(`Disconnected from ${broker?.name}`);
   };
 
   const selectedBrokerData = brokers.find(b => b.id === selectedBroker);
@@ -196,6 +258,13 @@ const BrokerIntegration = () => {
                       <FormField
                         control={form.control}
                         name="apiKey"
+                        rules={{
+                          required: `${selectedBrokerData?.apiKeyLabel || "API Key"} is required`,
+                          ...(selectedBroker === 'trading212' && {
+                            validate: (value) => 
+                              validateTrading212ApiKey(value) || "Invalid Trading 212 API key format"
+                          })
+                        }}
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>{selectedBrokerData?.apiKeyLabel || "API Key"}</FormLabel>
@@ -207,7 +276,7 @@ const BrokerIntegration = () => {
                             </FormControl>
                             <FormDescription>
                               {selectedBroker === 'trading212' && (
-                                <>You can find your API key in Trading 212 under Settings → API</>
+                                <>You can find your API key in Trading 212 under Settings → API. It should be around 30-60 characters long.</>
                               )}
                               {selectedBroker === 'binance' && (
                                 <>You can find this in your Binance account under API Management</>
@@ -230,7 +299,7 @@ const BrokerIntegration = () => {
                           name="apiSecret"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>API Secret</FormLabel>
+                              <FormLabel>API Secret {selectedBroker === 'trading212' ? '(Optional)' : ''}</FormLabel>
                               <FormControl>
                                 <Input 
                                   type="password" 
@@ -239,7 +308,10 @@ const BrokerIntegration = () => {
                                 />
                               </FormControl>
                               <FormDescription>
-                                Keep this secret safe - it provides access to your account
+                                {selectedBroker === 'trading212' 
+                                  ? "Trading 212 typically doesn't require an API secret for read-only access"
+                                  : "Keep this secret safe - it provides access to your account"
+                                }
                               </FormDescription>
                               <FormMessage />
                             </FormItem>
@@ -248,7 +320,9 @@ const BrokerIntegration = () => {
                       )}
                       
                       <div className="flex gap-2">
-                        <Button type="submit">Connect to {selectedBrokerData?.name}</Button>
+                        <Button type="submit" disabled={isConnecting}>
+                          {isConnecting ? "Connecting..." : `Connect to ${selectedBrokerData?.name}`}
+                        </Button>
                         <Button 
                           type="button" 
                           variant="outline" 
@@ -256,6 +330,7 @@ const BrokerIntegration = () => {
                             setSelectedBroker("");
                             form.reset();
                           }}
+                          disabled={isConnecting}
                         >
                           Cancel
                         </Button>
