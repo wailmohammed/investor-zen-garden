@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -22,6 +21,7 @@ import Settings from "./pages/Settings";
 import Support from "./pages/Support";
 import AdminWallets from "./pages/AdminWallets";
 import Pricing from "./pages/Pricing";
+import Portfolio from "./pages/Portfolio";
 
 const queryClient = new QueryClient();
 
@@ -87,6 +87,14 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/portfolio" 
+        element={
+          <ProtectedRoute>
+            <Portfolio />
           </ProtectedRoute>
         } 
       />

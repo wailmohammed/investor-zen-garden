@@ -1,4 +1,3 @@
-
 import DashboardLayout from "@/components/DashboardLayout";
 import PortfolioSummary from "@/components/Dashboard/PortfolioSummary";
 import TopHoldings from "@/components/Dashboard/TopHoldings";
@@ -18,18 +17,17 @@ const Dashboard = () => {
           <p className="text-muted-foreground">Overview of your portfolio and market insights</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <PortfolioSummary />
-          <TopHoldings />
           <AssetAllocation />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-1">
+            <TopHoldings />
+          </div>
           <div className="lg:col-span-2">
             <PerformanceChart />
-          </div>
-          <div>
-            <RecentActivity />
           </div>
         </div>
 

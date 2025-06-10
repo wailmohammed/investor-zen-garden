@@ -4,12 +4,12 @@ import StatCard from "../StatCard";
 
 const PortfolioSummary = () => {
   return (
-    <Card>
+    <Card className="w-full">
       <CardHeader className="pb-2">
         <CardTitle>Portfolio Summary</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4">
           <StatCard 
             label="Total Value" 
             value="$254,872.65" 

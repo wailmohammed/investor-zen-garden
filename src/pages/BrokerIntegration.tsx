@@ -61,6 +61,47 @@ const testTrading212Connection = async (apiKey: string): Promise<{ success: bool
   }
 };
 
+// Binance API validation function
+const validateBinanceApiKey = (apiKey: string): boolean => {
+  // Binance API keys are typically 64 characters long and contain letters and numbers
+  const binancePattern = /^[A-Za-z0-9]{64}$/;
+  return binancePattern.test(apiKey);
+};
+
+// Simulate Binance API connection
+const testBinanceConnection = async (apiKey: string, apiSecret: string): Promise<{ success: boolean; error: string }> => {
+  console.log("Testing Binance connection with API key:", apiKey.substring(0, 10) + "...");
+  
+  // Validate API key format first
+  if (!validateBinanceApiKey(apiKey)) {
+    return { 
+      success: false, 
+      error: "Invalid Binance API key format. API key should be 64 characters long." 
+    };
+  }
+  
+  // Check if API secret is provided (required for Binance)
+  if (!apiSecret || apiSecret.length < 32) {
+    return { 
+      success: false, 
+      error: "API secret is required for Binance and should be at least 32 characters long." 
+    };
+  }
+  
+  // Simulate API call delay
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  
+  // For demo purposes, we'll simulate success if both keys look valid
+  if (apiKey.length === 64 && apiSecret.length >= 32) {
+    return { success: true, error: "" };
+  } else {
+    return { 
+      success: false, 
+      error: "API key or secret authentication failed. Please verify your Binance credentials." 
+    };
+  }
+};
+
 const BrokerIntegration = () => {
   const [brokers, setBrokers] = useState<Broker[]>([
     {
@@ -126,9 +167,11 @@ const BrokerIntegration = () => {
       
       let connectionResult = { success: true, error: "" };
       
-      // Special handling for Trading 212
+      // Special handling for different brokers
       if (selectedBroker === 'trading212') {
         connectionResult = await testTrading212Connection(values.apiKey);
+      } else if (selectedBroker === 'binance') {
+        connectionResult = await testBinanceConnection(values.apiKey, values.apiSecret || "");
       } else {
         // Simulate connection for other brokers
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -262,6 +305,10 @@ const BrokerIntegration = () => {
                           ...(selectedBroker === 'trading212' && {
                             validate: (value: string) => 
                               validateTrading212ApiKey(value) || "Invalid Trading 212 API key format"
+                          }),
+                          ...(selectedBroker === 'binance' && {
+                            validate: (value: string) => 
+                              validateBinanceApiKey(value) || "Invalid Binance API key format (should be 64 characters)"
                           })
                         }}
                         render={({ field }) => (
@@ -278,7 +325,7 @@ const BrokerIntegration = () => {
                                 <>You can find your API key in Trading 212 under Settings → API. It should be around 30-60 characters long.</>
                               )}
                               {selectedBroker === 'binance' && (
-                                <>You can find this in your Binance account under API Management</>
+                                <>You can find this in your Binance account under API Management. It should be exactly 64 characters long.</>
                               )}
                               {selectedBroker === 'etoro' && (
                                 <>Your eToro username for account connection</>
@@ -296,9 +343,18 @@ const BrokerIntegration = () => {
                         <FormField
                           control={form.control}
                           name="apiSecret"
+                          rules={{
+                            ...(selectedBroker === 'binance' && {
+                              required: "API Secret is required for Binance",
+                              minLength: {
+                                value: 32,
+                                message: "API Secret should be at least 32 characters long"
+                              }
+                            })
+                          }}
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>API Secret {selectedBroker === 'trading212' ? '(Optional)' : ''}</FormLabel>
+                              <FormLabel>API Secret {selectedBroker === 'trading212' ? '(Optional)' : '*'}</FormLabel>
                               <FormControl>
                                 <Input 
                                   type="password" 
@@ -309,7 +365,7 @@ const BrokerIntegration = () => {
                               <FormDescription>
                                 {selectedBroker === 'trading212' 
                                   ? "Trading 212 typically doesn't require an API secret for read-only access"
-                                  : "Keep this secret safe - it provides access to your account"
+                                  : "Keep this secret safe - it provides access to your account. Required for Binance."
                                 }
                               </FormDescription>
                               <FormMessage />
