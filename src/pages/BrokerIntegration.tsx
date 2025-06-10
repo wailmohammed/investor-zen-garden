@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -35,8 +34,8 @@ const validateTrading212ApiKey = (apiKey: string): boolean => {
   return trading212Pattern.test(apiKey);
 };
 
-// Simulate Trading 212 API connection
-const testTrading212Connection = async (apiKey: string): Promise<{ success: boolean; error?: string }> => {
+// Simulate Trading 212 API connection - Fixed return type
+const testTrading212Connection = async (apiKey: string): Promise<{ success: boolean; error: string }> => {
   console.log("Testing Trading 212 connection with API key:", apiKey.substring(0, 10) + "...");
   
   // Validate API key format first
@@ -53,7 +52,7 @@ const testTrading212Connection = async (apiKey: string): Promise<{ success: bool
   // For demo purposes, we'll simulate success if the API key looks valid
   // In a real implementation, this would make an actual API call to Trading 212
   if (apiKey.length >= 30) {
-    return { success: true };
+    return { success: true, error: "" };
   } else {
     return { 
       success: false, 
@@ -125,7 +124,7 @@ const BrokerIntegration = () => {
       // Show loading state
       toast.loading("Connecting to broker...");
       
-      let connectionResult = { success: true, error: undefined };
+      let connectionResult = { success: true, error: "" };
       
       // Special handling for Trading 212
       if (selectedBroker === 'trading212') {
@@ -261,7 +260,7 @@ const BrokerIntegration = () => {
                         rules={{
                           required: `${selectedBrokerData?.apiKeyLabel || "API Key"} is required`,
                           ...(selectedBroker === 'trading212' && {
-                            validate: (value) => 
+                            validate: (value: string) => 
                               validateTrading212ApiKey(value) || "Invalid Trading 212 API key format"
                           })
                         }}
