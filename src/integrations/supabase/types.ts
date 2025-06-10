@@ -212,6 +212,7 @@ export type Database = {
           portfolio_limit: number
           updated_at: string
           user_id: string
+          watchlist_limit: number
         }
         Insert: {
           created_at?: string
@@ -220,12 +221,41 @@ export type Database = {
           portfolio_limit?: number
           updated_at?: string
           user_id: string
+          watchlist_limit?: number
         }
         Update: {
           created_at?: string
           id?: string
           plan?: string
           portfolio_limit?: number
+          updated_at?: string
+          user_id?: string
+          watchlist_limit?: number
+        }
+        Relationships: []
+      }
+      watchlists: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
           updated_at?: string
           user_id?: string
         }

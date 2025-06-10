@@ -1,434 +1,323 @@
-import React, { useState } from "react";
-import { useForm } from "react-hook-form";
-import DashboardLayout from "@/components/DashboardLayout";
+import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
-import { FileUpload } from "@/components/FileUpload";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import DashboardLayout from "@/components/DashboardLayout";
 import { BrokerCard } from "@/components/BrokerCard";
-
-type BrokerStatus = "not_connected" | "connected" | "error";
-
-interface Broker {
-  id: string;
-  name: string;
-  description: string;
-  logo: string;
-  status: BrokerStatus;
-  apiKeyLabel?: string;
-  apiKeyPlaceholder?: string;
-}
-
-type ApiFormValues = {
-  apiKey: string;
-  apiSecret?: string;
-};
-
-// Trading 212 API validation function
-const validateTrading212ApiKey = (apiKey: string): boolean => {
-  // Trading 212 API keys are typically 40-50 characters long and contain letters and numbers
-  const trading212Pattern = /^[A-Za-z0-9]{30,60}$/;
-  return trading212Pattern.test(apiKey);
-};
-
-// Simulate Trading 212 API connection - Fixed return type
-const testTrading212Connection = async (apiKey: string): Promise<{ success: boolean; error: string }> => {
-  console.log("Testing Trading 212 connection with API key:", apiKey.substring(0, 10) + "...");
-  
-  // Validate API key format first
-  if (!validateTrading212ApiKey(apiKey)) {
-    return { 
-      success: false, 
-      error: "Invalid Trading 212 API key format. Please check your API key." 
-    };
-  }
-  
-  // Simulate API call delay
-  await new Promise(resolve => setTimeout(resolve, 2000));
-  
-  // For demo purposes, we'll simulate success if the API key looks valid
-  // In a real implementation, this would make an actual API call to Trading 212
-  if (apiKey.length >= 30) {
-    return { success: true, error: "" };
-  } else {
-    return { 
-      success: false, 
-      error: "API key authentication failed. Please verify your Trading 212 API key." 
-    };
-  }
-};
-
-// Binance API validation function
-const validateBinanceApiKey = (apiKey: string): boolean => {
-  // Binance API keys are typically 64 characters long and contain letters and numbers
-  const binancePattern = /^[A-Za-z0-9]{64}$/;
-  return binancePattern.test(apiKey);
-};
-
-// Simulate Binance API connection
-const testBinanceConnection = async (apiKey: string, apiSecret: string): Promise<{ success: boolean; error: string }> => {
-  console.log("Testing Binance connection with API key:", apiKey.substring(0, 10) + "...");
-  
-  // Validate API key format first
-  if (!validateBinanceApiKey(apiKey)) {
-    return { 
-      success: false, 
-      error: "Invalid Binance API key format. API key should be 64 characters long." 
-    };
-  }
-  
-  // Check if API secret is provided (required for Binance)
-  if (!apiSecret || apiSecret.length < 32) {
-    return { 
-      success: false, 
-      error: "API secret is required for Binance and should be at least 32 characters long." 
-    };
-  }
-  
-  // Simulate API call delay
-  await new Promise(resolve => setTimeout(resolve, 2000));
-  
-  // For demo purposes, we'll simulate success if both keys look valid
-  if (apiKey.length === 64 && apiSecret.length >= 32) {
-    return { success: true, error: "" };
-  } else {
-    return { 
-      success: false, 
-      error: "API key or secret authentication failed. Please verify your Binance credentials." 
-    };
-  }
-};
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 
 const BrokerIntegration = () => {
-  const [brokers, setBrokers] = useState<Broker[]>([
-    {
-      id: "trading212",
-      name: "Trading 212",
-      description: "Connect to your Trading 212 account",
-      logo: "/trading212-logo.svg",
-      status: "not_connected",
-      apiKeyLabel: "API Key",
-      apiKeyPlaceholder: "Enter your Trading 212 API key (e.g., 23133911ZdtQFaMJJAFxzcvWszstEmEAtfvTF)"
-    },
-    {
-      id: "binance",
-      name: "Binance",
-      description: "Connect to your Binance account",
-      logo: "/binance-logo.svg",
-      status: "not_connected",
-      apiKeyLabel: "API Key",
-      apiKeyPlaceholder: "Enter your Binance API key"
-    },
-    {
-      id: "etoro",
-      name: "eToro",
-      description: "Connect to your eToro account",
-      logo: "/etoro-logo.svg",
-      status: "not_connected",
-      apiKeyLabel: "Username",
-      apiKeyPlaceholder: "Enter your eToro username"
-    },
-    {
-      id: "interactive_brokers",
-      name: "Interactive Brokers",
-      description: "Connect to your Interactive Brokers account",
-      logo: "/interactive-brokers-logo.svg",
-      status: "not_connected",
-      apiKeyLabel: "Username",
-      apiKeyPlaceholder: "Enter your IB username"
-    }
-  ]);
+  const { toast } = useToast();
+  const [binanceApiKey, setBinanceApiKey] = useState("");
+  const [binanceSecretKey, setBinanceSecretKey] = useState("");
+  const [trading212ApiKey, setTrading212ApiKey] = useState("");
+  const [binanceConnected, setBinanceConnected] = useState(false);
+  const [trading212Connected, setTrading212Connected] = useState(false);
+  const [isBinanceDialogOpen, setIsBinanceDialogOpen] = useState(false);
+  const [isTrading212DialogOpen, setIsTrading212DialogOpen] = useState(false);
 
-  const [selectedBroker, setSelectedBroker] = useState<string>("");
-  const [isConnecting, setIsConnecting] = useState<boolean>(false);
-
-  const form = useForm<ApiFormValues>({
-    defaultValues: {
-      apiKey: "",
-      apiSecret: "",
-    },
-  });
-
-  const onSubmit = async (values: ApiFormValues) => {
-    if (!selectedBroker) {
-      toast.error("Please select a broker first");
+  const validateBinanceAPI = async () => {
+    if (!binanceApiKey.trim() || !binanceSecretKey.trim()) {
+      toast({
+        title: "Missing credentials",
+        description: "Please provide both API key and secret key.",
+        variant: "destructive",
+      });
       return;
     }
 
-    console.log("Connecting to broker:", selectedBroker, "with credentials:", values);
-    setIsConnecting(true);
-    
     try {
-      // Show loading state
-      toast.loading("Connecting to broker...");
-      
-      let connectionResult = { success: true, error: "" };
-      
-      // Special handling for different brokers
-      if (selectedBroker === 'trading212') {
-        connectionResult = await testTrading212Connection(values.apiKey);
-      } else if (selectedBroker === 'binance') {
-        connectionResult = await testBinanceConnection(values.apiKey, values.apiSecret || "");
+      // Simulate API validation - in real implementation, you'd validate with Binance API
+      // For demo purposes, we'll just check if the keys are not empty
+      if (binanceApiKey.length > 10 && binanceSecretKey.length > 10) {
+        setBinanceConnected(true);
+        setIsBinanceDialogOpen(false);
+        toast({
+          title: "Binance Connected",
+          description: "Successfully connected to Binance API.",
+        });
+        
+        // Store in localStorage for demo (in production, store securely)
+        localStorage.setItem('binance_api_key', binanceApiKey);
+        localStorage.setItem('binance_secret_key', binanceSecretKey);
       } else {
-        // Simulate connection for other brokers
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        throw new Error("Invalid API credentials");
       }
-      
-      if (connectionResult.success) {
-        // Update broker status to connected
-        setBrokers(prev => 
-          prev.map(broker => 
-            broker.id === selectedBroker 
-              ? { ...broker, status: "connected" as BrokerStatus }
-              : broker
-          )
-        );
-        
-        toast.success(`Successfully connected to ${brokers.find(b => b.id === selectedBroker)?.name}!`);
-        
-        // Clear form and reset selection
-        form.reset();
-        setSelectedBroker("");
-      } else {
-        // Update broker status to error
-        setBrokers(prev => 
-          prev.map(broker => 
-            broker.id === selectedBroker 
-              ? { ...broker, status: "error" as BrokerStatus }
-              : broker
-          )
-        );
-        
-        toast.error(connectionResult.error || "Failed to connect to broker. Please check your credentials.");
-      }
-      
     } catch (error) {
-      console.error("Connection error:", error);
-      setBrokers(prev => 
-        prev.map(broker => 
-          broker.id === selectedBroker 
-            ? { ...broker, status: "error" as BrokerStatus }
-            : broker
-        )
-      );
-      toast.error("Failed to connect to broker. Please check your credentials.");
-    } finally {
-      setIsConnecting(false);
+      toast({
+        title: "Connection failed",
+        description: "Failed to connect to Binance API. Please check your credentials.",
+        variant: "destructive",
+      });
     }
   };
 
-  const handleFileUpload = (file: File) => {
-    console.log("Processing file:", file.name);
-    toast.success(`CSV file "${file.name}" processed successfully. Portfolio data imported!`);
-    
-    // Simulate updating broker status after file upload
-    setTimeout(() => {
-      toast.success("Holdings imported successfully! Check your dividend tracker for updated data.");
-    }, 1500);
+  const validateTrading212API = async () => {
+    if (!trading212ApiKey.trim()) {
+      toast({
+        title: "Missing API key",
+        description: "Please provide your Trading212 API key.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Simulate API validation - in real implementation, you'd validate with Trading212 API
+      if (trading212ApiKey.length > 10) {
+        setTrading212Connected(true);
+        setIsTrading212DialogOpen(false);
+        toast({
+          title: "Trading212 Connected",
+          description: "Successfully connected to Trading212 API.",
+        });
+        
+        // Store in localStorage for demo (in production, store securely)
+        localStorage.setItem('trading212_api_key', trading212ApiKey);
+      } else {
+        throw new Error("Invalid API key");
+      }
+    } catch (error) {
+      toast({
+        title: "Connection failed",
+        description: "Failed to connect to Trading212 API. Please check your API key.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleBrokerConnect = (brokerId: string) => {
-    setSelectedBroker(brokerId);
-    const broker = brokers.find(b => b.id === brokerId);
-    toast.info(`Please enter your ${broker?.name} credentials below`);
+  const disconnectBinance = () => {
+    setBinanceConnected(false);
+    setBinanceApiKey("");
+    setBinanceSecretKey("");
+    localStorage.removeItem('binance_api_key');
+    localStorage.removeItem('binance_secret_key');
+    toast({
+      title: "Disconnected",
+      description: "Successfully disconnected from Binance.",
+    });
   };
 
-  const handleBrokerDisconnect = (brokerId: string) => {
-    setBrokers(prev => 
-      prev.map(broker => 
-        broker.id === brokerId 
-          ? { ...broker, status: "not_connected" as BrokerStatus }
-          : broker
-      )
-    );
-    
-    const broker = brokers.find(b => b.id === brokerId);
-    toast.success(`Disconnected from ${broker?.name}`);
+  const disconnectTrading212 = () => {
+    setTrading212Connected(false);
+    setTrading212ApiKey("");
+    localStorage.removeItem('trading212_api_key');
+    toast({
+      title: "Disconnected",
+      description: "Successfully disconnected from Trading212.",
+    });
   };
-
-  const selectedBrokerData = brokers.find(b => b.id === selectedBroker);
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold">Data Integration</h1>
-          <p className="text-muted-foreground">
-            Connect to your brokers or import data from CSV files
-          </p>
+          <h1 className="text-3xl font-bold">Broker Integration</h1>
+          <p className="text-muted-foreground">Connect your brokerage accounts to sync your portfolio data</p>
         </div>
 
-        <Tabs defaultValue="brokers" className="w-full">
-          <TabsList>
-            <TabsTrigger value="brokers">Broker APIs</TabsTrigger>
-            <TabsTrigger value="csv">CSV Import</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="brokers" className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Connect to your brokerage accounts to automatically sync your portfolio data.
-            </p>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {brokers.map((broker) => (
-                <BrokerCard 
-                  key={broker.id} 
-                  name={broker.name} 
-                  description={broker.description} 
-                  logo={broker.logo} 
-                  status={broker.status}
-                  onConnect={() => handleBrokerConnect(broker.id)}
-                  onDisconnect={() => handleBrokerDisconnect(broker.id)}
-                />
-              ))}
-            </div>
-            
-            {selectedBroker && (
-              <Card className="mt-6">
-                <CardHeader>
-                  <CardTitle>Connect to {selectedBrokerData?.name}</CardTitle>
-                  <CardDescription>
-                    Enter your {selectedBrokerData?.name} credentials to connect your account
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                      <FormField
-                        control={form.control}
-                        name="apiKey"
-                        rules={{
-                          required: `${selectedBrokerData?.apiKeyLabel || "API Key"} is required`,
-                          ...(selectedBroker === 'trading212' && {
-                            validate: (value: string) => 
-                              validateTrading212ApiKey(value) || "Invalid Trading 212 API key format"
-                          }),
-                          ...(selectedBroker === 'binance' && {
-                            validate: (value: string) => 
-                              validateBinanceApiKey(value) || "Invalid Binance API key format (should be 64 characters)"
-                          })
-                        }}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>{selectedBrokerData?.apiKeyLabel || "API Key"}</FormLabel>
-                            <FormControl>
-                              <Input 
-                                placeholder={selectedBrokerData?.apiKeyPlaceholder || "Enter your credentials"} 
-                                {...field} 
-                              />
-                            </FormControl>
-                            <FormDescription>
-                              {selectedBroker === 'trading212' && (
-                                <>You can find your API key in Trading 212 under Settings → API. It should be around 30-60 characters long.</>
-                              )}
-                              {selectedBroker === 'binance' && (
-                                <>You can find this in your Binance account under API Management. It should be exactly 64 characters long.</>
-                              )}
-                              {selectedBroker === 'etoro' && (
-                                <>Your eToro username for account connection</>
-                              )}
-                              {selectedBroker === 'interactive_brokers' && (
-                                <>Your Interactive Brokers username</>
-                              )}
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      
-                      {(selectedBroker === 'binance' || selectedBroker === 'trading212') && (
-                        <FormField
-                          control={form.control}
-                          name="apiSecret"
-                          rules={{
-                            ...(selectedBroker === 'binance' && {
-                              required: "API Secret is required for Binance",
-                              minLength: {
-                                value: 32,
-                                message: "API Secret should be at least 32 characters long"
-                              }
-                            })
-                          }}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>API Secret {selectedBroker === 'trading212' ? '(Optional)' : '*'}</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  type="password" 
-                                  placeholder="Enter your API secret" 
-                                  {...field} 
-                                />
-                              </FormControl>
-                              <FormDescription>
-                                {selectedBroker === 'trading212' 
-                                  ? "Trading 212 typically doesn't require an API secret for read-only access"
-                                  : "Keep this secret safe - it provides access to your account. Required for Binance."
-                                }
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      )}
-                      
-                      <div className="flex gap-2">
-                        <Button type="submit" disabled={isConnecting}>
-                          {isConnecting ? "Connecting..." : `Connect to ${selectedBrokerData?.name}`}
-                        </Button>
-                        <Button 
-                          type="button" 
-                          variant="outline" 
-                          onClick={() => {
-                            setSelectedBroker("");
-                            form.reset();
-                          }}
-                          disabled={isConnecting}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    </form>
-                  </Form>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-          
-          <TabsContent value="csv">
-            <Card>
-              <CardHeader>
-                <CardTitle>Import Portfolio Data</CardTitle>
-                <CardDescription>
-                  Upload a CSV file with your portfolio data to see holdings in the Dividend Tracker
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Upload a CSV file with your transactions or holdings. The file should include columns for symbol, shares, purchase price, and date.
-                </p>
-                
-                <FileUpload 
-                  accept=".csv" 
-                  onFileUpload={handleFileUpload} 
-                  description="Drag and drop a CSV file here, or click to select a file" 
-                />
-                
-                <div className="text-sm text-muted-foreground mt-4">
-                  <h4 className="font-medium mb-2">Supported CSV formats:</h4>
-                  <ul className="list-disc pl-5 space-y-1">
-                    <li>Trading 212 exports</li>
-                    <li>Binance transaction history</li>
-                    <li>Interactive Brokers activity reports</li>
-                    <li>Standard format (Symbol, Shares, Price, Date)</li>
-                  </ul>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Binance Card */}
+          <Card className="overflow-hidden border">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <div className="flex items-center space-x-2">
+                <div className="w-10 h-10 rounded flex items-center justify-center bg-gray-100">
+                  <img 
+                    src="/binance-logo.svg" 
+                    alt="Binance logo" 
+                    className="w-6 h-6"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = "/placeholder.svg";
+                      (e.target as HTMLImageElement).onerror = null;
+                    }}
+                  />
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                <div>
+                  <CardTitle className="text-lg">Binance</CardTitle>
+                  {binanceConnected && (
+                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                      Connected
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <CardDescription className="text-sm">
+                Connect to Binance to sync your cryptocurrency portfolio and trading data.
+              </CardDescription>
+            </CardContent>
+            <div className="border-t bg-gray-50 p-4">
+              {binanceConnected ? (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full"
+                  onClick={disconnectBinance}
+                >
+                  Disconnect
+                </Button>
+              ) : (
+                <Dialog open={isBinanceDialogOpen} onOpenChange={setIsBinanceDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="w-full">
+                      Connect
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Connect Binance Account</DialogTitle>
+                      <DialogDescription>
+                        Enter your Binance API credentials to connect your account.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="binance-api-key">API Key</Label>
+                        <Input
+                          id="binance-api-key"
+                          type="password"
+                          placeholder="Your Binance API Key"
+                          value={binanceApiKey}
+                          onChange={(e) => setBinanceApiKey(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="binance-secret-key">Secret Key</Label>
+                        <Input
+                          id="binance-secret-key"
+                          type="password"
+                          placeholder="Your Binance Secret Key"
+                          value={binanceSecretKey}
+                          onChange={(e) => setBinanceSecretKey(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setIsBinanceDialogOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button onClick={validateBinanceAPI}>
+                        Connect
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
+            </div>
+          </Card>
+
+          {/* Trading212 Card */}
+          <Card className="overflow-hidden border">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <div className="flex items-center space-x-2">
+                <div className="w-10 h-10 rounded flex items-center justify-center bg-gray-100">
+                  <img 
+                    src="/trading212-logo.svg" 
+                    alt="Trading212 logo" 
+                    className="w-6 h-6"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = "/placeholder.svg";
+                      (e.target as HTMLImageElement).onerror = null;
+                    }}
+                  />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">Trading212</CardTitle>
+                  {trading212Connected && (
+                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                      Connected
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <CardDescription className="text-sm">
+                Connect to Trading212 to sync your stock and ETF portfolio data.
+              </CardDescription>
+            </CardContent>
+            <div className="border-t bg-gray-50 p-4">
+              {trading212Connected ? (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full"
+                  onClick={disconnectTrading212}
+                >
+                  Disconnect
+                </Button>
+              ) : (
+                <Dialog open={isTrading212DialogOpen} onOpenChange={setIsTrading212DialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="w-full">
+                      Connect
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Connect Trading212 Account</DialogTitle>
+                      <DialogDescription>
+                        Enter your Trading212 API key to connect your account.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="trading212-api-key">API Key</Label>
+                        <Input
+                          id="trading212-api-key"
+                          type="password"
+                          placeholder="Your Trading212 API Key"
+                          value={trading212ApiKey}
+                          onChange={(e) => setTrading212ApiKey(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setIsTrading212DialogOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button onClick={validateTrading212API}>
+                        Connect
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
+            </div>
+          </Card>
+
+          {/* Other brokers can be added here */}
+          <BrokerCard
+            name="Interactive Brokers"
+            description="Professional trading platform with global market access."
+            logo="/interactive-brokers-logo.svg"
+            status="not_connected"
+          />
+
+          <BrokerCard
+            name="eToro"
+            description="Social trading platform with copy trading features."
+            logo="/etoro-logo.svg"
+            status="not_connected"
+          />
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>API Security Notice</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Your API keys are stored securely and are only used to fetch your portfolio data. 
+              We recommend using read-only API keys with limited permissions for enhanced security. 
+              You can disconnect your accounts at any time.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </DashboardLayout>
   );
