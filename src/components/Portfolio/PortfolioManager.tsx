@@ -1,239 +1,252 @@
 import { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
-import { Plus, Edit, Trash2, PieChart } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Trash2, Plus, Edit2, Check, X } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
-interface Portfolio {
-  id: string;
-  name: string;
-  description?: string;
-  is_default: boolean;
-  created_at: string;
+interface PortfolioManagerProps {
+  csvData?: any[];
 }
 
-interface UserSubscription {
-  plan: string;
-  portfolio_limit: number;
-}
-
-const PortfolioManager = () => {
-  const { user, isAdmin } = useAuth();
+const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
+  const { user } = useAuth();
   const { toast } = useToast();
-  const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
-  const [subscription, setSubscription] = useState<UserSubscription | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editingPortfolio, setEditingPortfolio] = useState<Portfolio | null>(null);
-  const [newPortfolioName, setNewPortfolioName] = useState("");
-  const [newPortfolioDescription, setNewPortfolioDescription] = useState("");
+  const queryClient = useQueryClient();
+  const [newPortfolio, setNewPortfolio] = useState({ name: "", description: "" });
+  const [editingPortfolio, setEditingPortfolio] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState({ name: "", description: "" });
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      fetchPortfolios();
-      fetchSubscription();
-    }
-  }, [user]);
+  // Fetch user subscription
+  const { data: subscription } = useQuery({
+    queryKey: ['user-subscription', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const { data, error } = await supabase
+        .from('user_subscriptions')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
 
-  const fetchPortfolios = async () => {
-    try {
+  // Fetch portfolios
+  const { data: portfolios, isLoading } = useQuery({
+    queryKey: ['portfolios', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
       const { data, error } = await supabase
         .from('portfolios')
         .select('*')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user?.id,
+  });
 
-      if (error) {
-        console.error("Error fetching portfolios:", error);
-        return;
+  // Create portfolio mutation
+  const createPortfolioMutation = useMutation({
+    mutationFn: async (portfolio: { name: string; description: string }) => {
+      if (!user?.id) throw new Error('User not authenticated');
+      
+      // Check subscription limits
+      const currentCount = portfolios?.length || 0;
+      const limit = subscription?.portfolio_limit || 1;
+      
+      if (currentCount >= limit) {
+        throw new Error(`You can only create ${limit} portfolio(s) with your current plan`);
       }
 
-      setPortfolios(data || []);
-    } catch (error) {
-      console.error("Error fetching portfolios:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchSubscription = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('user_subscriptions')
-        .select('plan, portfolio_limit')
-        .eq('user_id', user?.id)
-        .single();
-
-      if (error) {
-        console.error("Error fetching subscription:", error);
-        // Set default for demo
-        setSubscription({ plan: isAdmin ? 'Professional' : 'Free', portfolio_limit: isAdmin ? 999 : 1 });
-        return;
-      }
-
-      setSubscription(data);
-    } catch (error) {
-      console.error("Error fetching subscription:", error);
-      setSubscription({ plan: isAdmin ? 'Professional' : 'Free', portfolio_limit: isAdmin ? 999 : 1 });
-    }
-  };
-
-  const createPortfolio = async () => {
-    if (!user || !newPortfolioName.trim()) return;
-
-    if (portfolios.length >= (subscription?.portfolio_limit || 1)) {
-      toast({
-        title: "Portfolio limit reached",
-        description: `Your ${subscription?.plan} plan allows ${subscription?.portfolio_limit} portfolio(s). Upgrade to create more.`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
       const { data, error } = await supabase
         .from('portfolios')
-        .insert({
-          user_id: user.id,
-          name: newPortfolioName.trim(),
-          description: newPortfolioDescription.trim() || null,
-          is_default: portfolios.length === 0
-        })
+        .insert([
+          {
+            user_id: user.id,
+            name: portfolio.name,
+            description: portfolio.description,
+          },
+        ])
         .select()
         .single();
 
       if (error) throw error;
-
-      setPortfolios(prev => [data, ...prev]);
-      setNewPortfolioName("");
-      setNewPortfolioDescription("");
-      setIsCreateOpen(false);
-
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['portfolios'] });
+      setNewPortfolio({ name: "", description: "" });
+      setIsCreateDialogOpen(false);
       toast({
         title: "Portfolio created",
-        description: `"${data.name}" has been created successfully.`,
+        description: "Your portfolio has been created successfully.",
       });
-    } catch (error: any) {
+    },
+    onError: (error) => {
       toast({
-        title: "Failed to create portfolio",
+        title: "Error",
         description: error.message,
         variant: "destructive",
       });
-    }
-  };
+    },
+  });
 
-  const updatePortfolio = async () => {
-    if (!editingPortfolio || !newPortfolioName.trim()) return;
-
-    try {
+  // Update portfolio mutation
+  const updatePortfolioMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: { name: string; description: string } }) => {
       const { data, error } = await supabase
         .from('portfolios')
-        .update({
-          name: newPortfolioName.trim(),
-          description: newPortfolioDescription.trim() || null,
-        })
-        .eq('id', editingPortfolio.id)
+        .update(updates)
+        .eq('id', id)
         .select()
         .single();
 
       if (error) throw error;
-
-      setPortfolios(prev => prev.map(p => p.id === data.id ? data : p));
-      setIsEditOpen(false);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['portfolios'] });
       setEditingPortfolio(null);
-      setNewPortfolioName("");
-      setNewPortfolioDescription("");
-
       toast({
         title: "Portfolio updated",
-        description: `"${data.name}" has been updated successfully.`,
+        description: "Your portfolio has been updated successfully.",
       });
-    } catch (error: any) {
+    },
+    onError: (error) => {
       toast({
-        title: "Failed to update portfolio",
+        title: "Error",
         description: error.message,
         variant: "destructive",
       });
-    }
-  };
+    },
+  });
 
-  const deletePortfolio = async (portfolio: Portfolio) => {
-    if (portfolio.is_default) {
-      toast({
-        title: "Cannot delete default portfolio",
-        description: "You cannot delete your default portfolio.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
+  // Delete portfolio mutation
+  const deletePortfolioMutation = useMutation({
+    mutationFn: async (portfolioId: string) => {
       const { error } = await supabase
         .from('portfolios')
         .delete()
-        .eq('id', portfolio.id);
+        .eq('id', portfolioId);
 
       if (error) throw error;
-
-      setPortfolios(prev => prev.filter(p => p.id !== portfolio.id));
-
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['portfolios'] });
       toast({
         title: "Portfolio deleted",
-        description: `"${portfolio.name}" has been deleted.`,
+        description: "Your portfolio has been deleted successfully.",
       });
-    } catch (error: any) {
+    },
+    onError: (error) => {
       toast({
-        title: "Failed to delete portfolio",
+        title: "Error",
         description: error.message,
         variant: "destructive",
       });
+    },
+  });
+
+  const handleCreatePortfolio = () => {
+    if (!newPortfolio.name.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a portfolio name.",
+        variant: "destructive",
+      });
+      return;
+    }
+    createPortfolioMutation.mutate(newPortfolio);
+  };
+
+  const handleCreateFromCSV = () => {
+    if (csvData.length === 0) {
+      toast({
+        title: "Error",
+        description: "No CSV data available. Please import data first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const portfolioName = `Imported Portfolio ${new Date().toLocaleDateString()}`;
+    createPortfolioMutation.mutate({
+      name: portfolioName,
+      description: `Portfolio created from CSV with ${csvData.length} items`,
+    });
+  };
+
+  const startEditing = (portfolio: any) => {
+    setEditingPortfolio(portfolio.id);
+    setEditValues({ name: portfolio.name, description: portfolio.description || "" });
+  };
+
+  const handleUpdatePortfolio = (portfolioId: string) => {
+    if (!editValues.name.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a portfolio name.",
+        variant: "destructive",
+      });
+      return;
+    }
+    updatePortfolioMutation.mutate({ id: portfolioId, updates: editValues });
+  };
+
+  const handleDeletePortfolio = (portfolioId: string) => {
+    if (confirm("Are you sure you want to delete this portfolio?")) {
+      deletePortfolioMutation.mutate(portfolioId);
     }
   };
 
-  const openEditDialog = (portfolio: Portfolio) => {
-    setEditingPortfolio(portfolio);
-    setNewPortfolioName(portfolio.name);
-    setNewPortfolioDescription(portfolio.description || "");
-    setIsEditOpen(true);
-  };
-
-  if (loading) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="text-center">Loading portfolios...</div>
-        </CardContent>
-      </Card>
-    );
+  if (isLoading) {
+    return <div>Loading portfolios...</div>;
   }
 
-  const canCreateMore = portfolios.length < (subscription?.portfolio_limit || 1);
+  const currentCount = portfolios?.length || 0;
+  const limit = subscription?.portfolio_limit || 1;
+  const canCreateMore = currentCount < limit;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <PieChart className="w-5 h-5" />
-          Portfolio Manager
-        </CardTitle>
+        <CardTitle>Portfolio Management</CardTitle>
         <CardDescription>
-          Manage your investment portfolios • {subscription?.plan} Plan ({portfolios.length}/{subscription?.portfolio_limit || 1} portfolios)
+          Manage your investment portfolios ({currentCount}/{limit} used)
+          {csvData.length > 0 && (
+            <span className="block mt-1 text-primary">
+              {csvData.length} items ready to import from CSV
+            </span>
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex justify-between items-center">
-          <h3 className="text-lg font-medium">Your Portfolios</h3>
-          
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <div className="flex gap-2">
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
-              <Button disabled={!canCreateMore}>
-                <Plus className="w-4 h-4 mr-2" />
+              <Button disabled={!canCreateMore} className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
                 Create Portfolio
               </Button>
             </DialogTrigger>
@@ -241,128 +254,135 @@ const PortfolioManager = () => {
               <DialogHeader>
                 <DialogTitle>Create New Portfolio</DialogTitle>
                 <DialogDescription>
-                  Create a new portfolio to organize your investments.
+                  Add a new portfolio to track your investments.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="portfolio-name">Portfolio Name</Label>
+                  <Label htmlFor="name">Portfolio Name</Label>
                   <Input
-                    id="portfolio-name"
-                    placeholder="e.g., Growth Stocks, Retirement Fund"
-                    value={newPortfolioName}
-                    onChange={(e) => setNewPortfolioName(e.target.value)}
+                    id="name"
+                    value={newPortfolio.name}
+                    onChange={(e) => setNewPortfolio({ ...newPortfolio, name: e.target.value })}
+                    placeholder="My Investment Portfolio"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="portfolio-description">Description (Optional)</Label>
-                  <Input
-                    id="portfolio-description"
-                    placeholder="Brief description of this portfolio"
-                    value={newPortfolioDescription}
-                    onChange={(e) => setNewPortfolioDescription(e.target.value)}
+                  <Label htmlFor="description">Description (Optional)</Label>
+                  <Textarea
+                    id="description"
+                    value={newPortfolio.description}
+                    onChange={(e) => setNewPortfolio({ ...newPortfolio, description: e.target.value })}
+                    placeholder="Description of your portfolio..."
+                    rows={3}
                   />
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
+                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={createPortfolio} disabled={!newPortfolioName.trim()}>
-                  Create Portfolio
+                <Button onClick={handleCreatePortfolio} disabled={createPortfolioMutation.isPending}>
+                  {createPortfolioMutation.isPending ? "Creating..." : "Create Portfolio"}
                 </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
+
+          {csvData.length > 0 && canCreateMore && (
+            <Button 
+              variant="outline" 
+              onClick={handleCreateFromCSV}
+              disabled={createPortfolioMutation.isPending}
+            >
+              Create from CSV ({csvData.length} items)
+            </Button>
+          )}
         </div>
 
         {!canCreateMore && (
-          <div className="text-sm text-muted-foreground bg-muted p-3 rounded-lg">
-            You've reached your portfolio limit. Upgrade to Professional to create unlimited portfolios.
-          </div>
+          <p className="text-sm text-muted-foreground">
+            You've reached your portfolio limit. Upgrade your plan to create more portfolios.
+          </p>
         )}
 
-        <div className="grid gap-4">
-          {portfolios.map((portfolio) => (
-            <div key={portfolio.id} className="border rounded-lg p-4 flex justify-between items-center">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h4 className="font-medium">{portfolio.name}</h4>
-                  {portfolio.is_default && (
-                    <Badge variant="secondary">Default</Badge>
-                  )}
+        <div className="space-y-2">
+          {portfolios?.map((portfolio) => (
+            <div key={portfolio.id} className="flex items-center justify-between p-3 border rounded-lg">
+              {editingPortfolio === portfolio.id ? (
+                <div className="flex-1 space-y-2 mr-4">
+                  <Input
+                    value={editValues.name}
+                    onChange={(e) => setEditValues({ ...editValues, name: e.target.value })}
+                    placeholder="Portfolio name"
+                  />
+                  <Textarea
+                    value={editValues.description}
+                    onChange={(e) => setEditValues({ ...editValues, description: e.target.value })}
+                    placeholder="Portfolio description"
+                    rows={2}
+                  />
                 </div>
-                {portfolio.description && (
-                  <p className="text-sm text-muted-foreground">{portfolio.description}</p>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  Created {new Date(portfolio.created_at).toLocaleDateString()}
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => openEditDialog(portfolio)}
-                >
-                  <Edit className="w-3 h-3" />
-                </Button>
-                {!portfolio.is_default && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => deletePortfolio(portfolio)}
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
+              ) : (
+                <div className="flex-1">
+                  <h3 className="font-medium">{portfolio.name}</h3>
+                  {portfolio.description && (
+                    <p className="text-sm text-muted-foreground">{portfolio.description}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Created: {new Date(portfolio.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+              )}
+              
+              <div className="flex items-center gap-2">
+                {editingPortfolio === portfolio.id ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleUpdatePortfolio(portfolio.id)}
+                      disabled={updatePortfolioMutation.isPending}
+                    >
+                      <Check className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setEditingPortfolio(null)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => startEditing(portfolio)}
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleDeletePortfolio(portfolio.id)}
+                      disabled={deletePortfolioMutation.isPending}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </>
                 )}
               </div>
             </div>
           ))}
-
-          {portfolios.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              No portfolios yet. Create your first portfolio to get started!
-            </div>
-          )}
         </div>
 
-        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Edit Portfolio</DialogTitle>
-              <DialogDescription>
-                Update your portfolio name and description.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="edit-portfolio-name">Portfolio Name</Label>
-                <Input
-                  id="edit-portfolio-name"
-                  value={newPortfolioName}
-                  onChange={(e) => setNewPortfolioName(e.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit-portfolio-description">Description (Optional)</Label>
-                <Input
-                  id="edit-portfolio-description"
-                  value={newPortfolioDescription}
-                  onChange={(e) => setNewPortfolioDescription(e.target.value)}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsEditOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={updatePortfolio} disabled={!newPortfolioName.trim()}>
-                Update Portfolio
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {portfolios?.length === 0 && (
+          <p className="text-center text-muted-foreground py-8">
+            No portfolios yet. Create your first portfolio to get started!
+          </p>
+        )}
       </CardContent>
     </Card>
   );
