@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -70,7 +69,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             email_change_sent_at: null,
             new_phone: null,
             phone_confirmed_at: null,
-            email_change_confirm_status: 0,
             banned_until: null,
             identities: []
           };
@@ -129,7 +127,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           email_change_sent_at: null,
           new_phone: null,
           phone_confirmed_at: null,
-          email_change_confirm_status: 0,
           banned_until: null,
           identities: []
         };
