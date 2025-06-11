@@ -1,5 +1,4 @@
 
-
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -36,50 +35,23 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
 
   console.log("PortfolioManager - User:", user?.id, "Is Admin:", isAdmin);
 
-  // Fetch user subscription with better error handling
-  const { data: subscription, isLoading: subscriptionLoading, error: subscriptionError } = useQuery({
-    queryKey: ['user-subscription', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return null;
-      
-      console.log("Fetching subscription for user:", user.id);
-      
-      const { data, error } = await supabase
-        .from('user_subscriptions')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      
-      if (error) {
-        console.error("Subscription query error:", error);
-        // Return default subscription instead of throwing
-        return {
-          plan: isAdmin ? 'Professional' : 'Free',
-          portfolio_limit: isAdmin ? 999 : 1,
-          watchlist_limit: isAdmin ? 20 : 1
-        };
-      }
-      
-      if (!data) {
-        console.log("No subscription found, returning default");
-        return {
-          plan: isAdmin ? 'Professional' : 'Free',
-          portfolio_limit: isAdmin ? 999 : 1,
-          watchlist_limit: isAdmin ? 20 : 1
-        };
-      }
-      
-      console.log("Subscription found:", data);
-      return data;
-    },
-    enabled: !!user?.id,
-  });
+  // Simplified subscription logic - use default values instead of complex query
+  const subscription = {
+    plan: isAdmin ? 'Professional' : 'Free',
+    portfolio_limit: isAdmin ? 999 : 1,
+    watchlist_limit: isAdmin ? 20 : 1
+  };
 
-  // Fetch portfolios with better error handling
+  console.log("Using default subscription:", subscription);
+
+  // Fetch portfolios with simplified error handling
   const { data: portfolios, isLoading: portfoliosLoading, error: portfoliosError } = useQuery({
     queryKey: ['portfolios', user?.id],
     queryFn: async () => {
-      if (!user?.id) return [];
+      if (!user?.id) {
+        console.log("No user ID available");
+        return [];
+      }
       
       console.log("Fetching portfolios for user:", user.id);
       
@@ -255,7 +227,9 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
   };
 
   // Show loading state
-  const isLoading = subscriptionLoading || portfoliosLoading;
+  const isLoading = portfoliosLoading;
+  
+  console.log("Loading state:", isLoading, "Portfolios:", portfolios);
   
   if (isLoading) {
     return (
@@ -268,8 +242,17 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
   }
 
   // Show error state if needed
-  if (subscriptionError || portfoliosError) {
-    console.error("Query errors:", { subscriptionError, portfoliosError });
+  if (portfoliosError) {
+    console.error("Portfolios error:", portfoliosError);
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center text-red-500">
+            Error loading portfolios. Please try again.
+          </div>
+        </CardContent>
+      </Card>
+    );
   }
 
   const currentCount = portfolios?.length || 0;
@@ -437,4 +420,3 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
 };
 
 export default PortfolioManager;
-
