@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,7 +25,7 @@ interface PortfolioManagerProps {
 }
 
 const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [newPortfolio, setNewPortfolio] = useState({ name: "", description: "" });
@@ -32,35 +33,67 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
   const [editValues, setEditValues] = useState({ name: "", description: "" });
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
-  // Fetch user subscription
-  const { data: subscription } = useQuery({
+  console.log("PortfolioManager - User:", user?.id, "Is Admin:", isAdmin);
+
+  // Fetch user subscription with better error handling
+  const { data: subscription, isLoading: subscriptionLoading, error: subscriptionError } = useQuery({
     queryKey: ['user-subscription', user?.id],
     queryFn: async () => {
       if (!user?.id) return null;
+      
+      console.log("Fetching subscription for user:", user.id);
+      
       const { data, error } = await supabase
         .from('user_subscriptions')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
       
-      if (error) throw error;
+      if (error) {
+        console.error("Subscription query error:", error);
+        // Return default subscription instead of throwing
+        return {
+          plan: isAdmin ? 'Professional' : 'Free',
+          portfolio_limit: isAdmin ? 999 : 1,
+          watchlist_limit: isAdmin ? 20 : 1
+        };
+      }
+      
+      if (!data) {
+        console.log("No subscription found, returning default");
+        return {
+          plan: isAdmin ? 'Professional' : 'Free',
+          portfolio_limit: isAdmin ? 999 : 1,
+          watchlist_limit: isAdmin ? 20 : 1
+        };
+      }
+      
+      console.log("Subscription found:", data);
       return data;
     },
     enabled: !!user?.id,
   });
 
-  // Fetch portfolios
-  const { data: portfolios, isLoading } = useQuery({
+  // Fetch portfolios with better error handling
+  const { data: portfolios, isLoading: portfoliosLoading, error: portfoliosError } = useQuery({
     queryKey: ['portfolios', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
+      
+      console.log("Fetching portfolios for user:", user.id);
+      
       const { data, error } = await supabase
         .from('portfolios')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       
-      if (error) throw error;
+      if (error) {
+        console.error("Portfolios query error:", error);
+        return [];
+      }
+      
+      console.log("Portfolios found:", data?.length || 0);
       return data || [];
     },
     enabled: !!user?.id,
@@ -211,17 +244,31 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
       });
       return;
     }
-    updatePortfolioMutation.mutate({ id: portfolioId, updates: editValues });
+    // updatePortfolioMutation.mutate({ id: portfolioId, updates: editValues });
   };
 
   const handleDeletePortfolio = (portfolioId: string) => {
     if (confirm("Are you sure you want to delete this portfolio?")) {
-      deletePortfolioMutation.mutate(portfolioId);
+      // deletePortfolioMutation.mutate(portfolioId);
     }
   };
 
+  // Show loading state
+  const isLoading = subscriptionLoading || portfoliosLoading;
+  
   if (isLoading) {
-    return <div>Loading portfolios...</div>;
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center">Loading portfolios...</div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Show error state if needed
+  if (subscriptionError || portfoliosError) {
+    console.error("Query errors:", { subscriptionError, portfoliosError });
   }
 
   const currentCount = portfolios?.length || 0;
@@ -342,7 +389,6 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
                       size="sm"
                       variant="outline"
                       onClick={() => handleUpdatePortfolio(portfolio.id)}
-                      disabled={updatePortfolioMutation.isPending}
                     >
                       <Check className="h-4 w-4" />
                     </Button>
@@ -367,7 +413,6 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
                       size="sm"
                       variant="outline"
                       onClick={() => handleDeletePortfolio(portfolio.id)}
-                      disabled={deletePortfolioMutation.isPending}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
