@@ -1,4 +1,5 @@
 
+
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -244,12 +245,12 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
       });
       return;
     }
-    // updatePortfolioMutation.mutate({ id: portfolioId, updates: editValues });
+    updatePortfolioMutation.mutate({ id: portfolioId, updates: editValues });
   };
 
   const handleDeletePortfolio = (portfolioId: string) => {
     if (confirm("Are you sure you want to delete this portfolio?")) {
-      // deletePortfolioMutation.mutate(portfolioId);
+      deletePortfolioMutation.mutate(portfolioId);
     }
   };
 
@@ -389,6 +390,7 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
                       size="sm"
                       variant="outline"
                       onClick={() => handleUpdatePortfolio(portfolio.id)}
+                      disabled={updatePortfolioMutation.isPending}
                     >
                       <Check className="h-4 w-4" />
                     </Button>
@@ -413,6 +415,7 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
                       size="sm"
                       variant="outline"
                       onClick={() => handleDeletePortfolio(portfolio.id)}
+                      disabled={deletePortfolioMutation.isPending}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -434,3 +437,4 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
 };
 
 export default PortfolioManager;
+
