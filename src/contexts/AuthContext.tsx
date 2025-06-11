@@ -69,7 +69,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             email_change_sent_at: null,
             new_phone: null,
             phone_confirmed_at: null,
-            banned_until: null,
             identities: []
           };
 
@@ -127,7 +126,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           email_change_sent_at: null,
           new_phone: null,
           phone_confirmed_at: null,
-          banned_until: null,
           identities: []
         };
 
