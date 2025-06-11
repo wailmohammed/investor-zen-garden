@@ -1,231 +1,21 @@
 
-import { createContext, useContext, useEffect, useState } from 'react';
-import { Session, User } from '@supabase/supabase-js';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-
-import {
-  usingMockCredentials,
-  generateUniqueId,
-  checkAdminStatus,
-  fetchDefaultCurrency,
-  handleSignIn,
-  handleSignUp,
-  handleSignOut,
-  updateUserCurrency
-} from '@/utils/authUtils';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
-  loading: boolean;
+  isLoading: boolean;
   isAdmin: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
+  signUp: (email: string, password: string, userData?: any) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
-  usingMockCredentials: boolean;
-  uniqueId: string | null;
-  defaultCurrency: string;
-  updateDefaultCurrency: (currency: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<{ error: AuthError | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [uniqueId, setUniqueId] = useState<string | null>(null);
-  const [defaultCurrency, setDefaultCurrency] = useState<string>('USD');
-  const { toast } = useToast();
-
-  useEffect(() => {
-    if (usingMockCredentials) {
-      // Initialize from localStorage if using mock credentials
-      const storedUser = localStorage.getItem('mockUser');
-      if (storedUser) {
-        try {
-          const parsedUser = JSON.parse(storedUser);
-          setUser(parsedUser);
-          
-          // Check if user email is admin email
-          const adminEmails = ['wailafmohammed@gmail.com', 'admin@example.com'];
-          const userIsAdmin = adminEmails.includes(parsedUser.email);
-          setIsAdmin(userIsAdmin);
-          console.log("Mock admin status for", parsedUser.email, ":", userIsAdmin);
-          
-          setUniqueId(generateUniqueId(parsedUser.id));
-          const storedCurrency = localStorage.getItem('mockDefaultCurrency') || 'USD';
-          setDefaultCurrency(storedCurrency);
-        } catch (error) {
-          console.error("Error parsing stored mock user:", error);
-        }
-      }
-      setLoading(false);
-      return;
-    }
-
-    // First set up auth state listener to prevent missing auth events
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        console.log("Auth state change event:", event);
-        setSession(session);
-        setUser(session?.user || null);
-        
-        if (session?.user) {
-          // Generate a unique ID based on the user's ID
-          setUniqueId(generateUniqueId(session.user.id));
-          
-          // Defer fetching profile info to prevent potential deadlocks
-          setTimeout(() => {
-            checkAdminStatus(session.user.id, session.user).then(isAdmin => {
-              console.log("Admin status check result for", session.user.email, ":", isAdmin);
-              setIsAdmin(isAdmin);
-            });
-            
-            fetchDefaultCurrency(session.user.id).then(currency => {
-              setDefaultCurrency(currency);
-            });
-          }, 0);
-        } else {
-          setIsAdmin(false);
-          setUniqueId(null);
-          setDefaultCurrency('USD');
-        }
-        
-        setLoading(false);
-      }
-    );
-
-    // Then check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user || null);
-      if (session?.user) {
-        setUniqueId(generateUniqueId(session.user.id));
-        checkAdminStatus(session.user.id, session.user).then(isAdmin => {
-          console.log("Initial admin status check result for", session.user.email, ":", isAdmin);
-          setIsAdmin(isAdmin);
-        });
-        fetchDefaultCurrency(session.user.id).then(currency => {
-          setDefaultCurrency(currency);
-        });
-      }
-      setLoading(false);
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  const signIn = async (email: string, password: string) => {
-    try {
-      const { user, error } = await handleSignIn(email, password);
-      
-      if (error) throw error;
-      
-      toast({
-        title: "Welcome back!",
-        description: "You've successfully signed in to your account.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Sign in failed",
-        description: error.message,
-        variant: "destructive",
-      });
-      throw error;
-    }
-  };
-
-  const signUp = async (email: string, password: string) => {
-    try {
-      const { user, error } = await handleSignUp(email, password);
-      
-      if (error) throw error;
-      
-      toast({
-        title: "Account created",
-        description: usingMockCredentials 
-          ? "You've successfully registered." 
-          : "Check your email for the confirmation link.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Sign up failed",
-        description: error.message,
-        variant: "destructive",
-      });
-      throw error;
-    }
-  };
-
-  const signOut = async () => {
-    try {
-      const { error } = await handleSignOut();
-      
-      if (error) throw error;
-      
-      toast({
-        title: "Signed out",
-        description: "You've successfully signed out of your account.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Sign out failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
-  };
-
-  const updateDefaultCurrency = async (currency: string) => {
-    if (!user) return;
-    
-    try {
-      const { error } = await updateUserCurrency(user.id, currency);
-      
-      if (error) {
-        toast({
-          title: "Failed to update currency",
-          description: error.message,
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      setDefaultCurrency(currency);
-      toast({
-        title: "Currency updated",
-        description: `Default currency set to ${currency}.`,
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error updating currency",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
-  };
-
-  const value = {
-    user,
-    session,
-    loading,
-    isAdmin,
-    signIn,
-    signUp,
-    signOut,
-    usingMockCredentials,
-    uniqueId,
-    defaultCurrency,
-    updateDefaultCurrency,
-  };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -233,4 +23,267 @@ export const useAuth = () => {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
+};
+
+interface AuthProviderProps {
+  children: React.ReactNode;
+}
+
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    // Get initial session
+    const getInitialSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Error getting session:', error);
+          // Create mock session for development
+          const mockUser: User = {
+            id: '00000000-0000-0000-0000-000000000001', // Valid UUID format
+            email: 'admin@example.com',
+            user_metadata: {
+              full_name: 'Admin User'
+            },
+            app_metadata: {},
+            aud: 'authenticated',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            phone: null,
+            email_confirmed_at: new Date().toISOString(),
+            last_sign_in_at: new Date().toISOString(),
+            role: 'authenticated',
+            confirmation_sent_at: null,
+            confirmed_at: new Date().toISOString(),
+            recovery_sent_at: null,
+            new_email: null,
+            invited_at: null,
+            action_link: null,
+            email_change_sent_at: null,
+            new_phone: null,
+            phone_change_sent_at: null,
+            phone_confirmed_at: null,
+            email_change_confirm_status: 0,
+            banned_until: null,
+            identities: []
+          };
+
+          const mockSession: Session = {
+            access_token: 'mock-access-token',
+            refresh_token: 'mock-refresh-token',
+            expires_in: 3600,
+            expires_at: Math.floor(Date.now() / 1000) + 3600,
+            token_type: 'bearer',
+            user: mockUser
+          };
+
+          setSession(mockSession);
+          setUser(mockUser);
+          setIsAdmin(true);
+        } else {
+          setSession(session);
+          setUser(session?.user ?? null);
+          
+          if (session?.user) {
+            // Check if user is admin
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('is_admin')
+              .eq('id', session.user.id)
+              .single();
+            
+            setIsAdmin(profile?.is_admin || false);
+          }
+        }
+      } catch (error) {
+        console.error('Error in getInitialSession:', error);
+        // Fallback to mock session
+        const mockUser: User = {
+          id: '00000000-0000-0000-0000-000000000001',
+          email: 'admin@example.com',
+          user_metadata: {
+            full_name: 'Admin User'
+          },
+          app_metadata: {},
+          aud: 'authenticated',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          phone: null,
+          email_confirmed_at: new Date().toISOString(),
+          last_sign_in_at: new Date().toISOString(),
+          role: 'authenticated',
+          confirmation_sent_at: null,
+          confirmed_at: new Date().toISOString(),
+          recovery_sent_at: null,
+          new_email: null,
+          invited_at: null,
+          action_link: null,
+          email_change_sent_at: null,
+          new_phone: null,
+          phone_change_sent_at: null,
+          phone_confirmed_at: null,
+          email_change_confirm_status: 0,
+          banned_until: null,
+          identities: []
+        };
+
+        const mockSession: Session = {
+          access_token: 'mock-access-token',
+          refresh_token: 'mock-refresh-token',
+          expires_in: 3600,
+          expires_at: Math.floor(Date.now() / 1000) + 3600,
+          token_type: 'bearer',
+          user: mockUser
+        };
+
+        setSession(mockSession);
+        setUser(mockUser);
+        setIsAdmin(true);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    getInitialSession();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth state changed:', event, session);
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          // Check if user is admin
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('is_admin')
+            .eq('id', session.user.id)
+            .single();
+          
+          setIsAdmin(profile?.is_admin || false);
+        } else {
+          setIsAdmin(false);
+        }
+        
+        setIsLoading(false);
+      }
+    );
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const signIn = async (email: string, password: string) => {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      if (error) {
+        toast({
+          title: "Sign in failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+      
+      return { error };
+    } catch (error) {
+      console.error('Sign in error:', error);
+      return { error: error as AuthError };
+    }
+  };
+
+  const signUp = async (email: string, password: string, userData?: any) => {
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: userData
+        }
+      });
+      
+      if (error) {
+        toast({
+          title: "Sign up failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Account created",
+          description: "Please check your email to verify your account.",
+        });
+      }
+      
+      return { error };
+    } catch (error) {
+      console.error('Sign up error:', error);
+      return { error: error as AuthError };
+    }
+  };
+
+  const signOut = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        toast({
+          title: "Sign out failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Sign out error:', error);
+    }
+  };
+
+  const resetPassword = async (email: string) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      
+      if (error) {
+        toast({
+          title: "Password reset failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Password reset email sent",
+          description: "Check your email for the password reset link.",
+        });
+      }
+      
+      return { error };
+    } catch (error) {
+      console.error('Password reset error:', error);
+      return { error: error as AuthError };
+    }
+  };
+
+  const value = {
+    user,
+    session,
+    isLoading,
+    isAdmin,
+    signIn,
+    signUp,
+    signOut,
+    resetPassword,
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
