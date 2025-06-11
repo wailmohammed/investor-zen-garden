@@ -9,6 +9,7 @@ interface AuthContextType {
   session: Session | null;
   isLoading: boolean;
   isAdmin: boolean;
+  defaultCurrency: string;
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signUp: (email: string, password: string, userData?: any) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
@@ -34,6 +35,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [defaultCurrency, setDefaultCurrency] = useState('USD');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -46,7 +48,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           console.error('Error getting session:', error);
           // Create mock session for development
           const mockUser: User = {
-            id: '00000000-0000-0000-0000-000000000001', // Valid UUID format
+            id: 'bea0cf67-91f8-4871-ac62-de5eb6f1e06f',
             email: 'admin@example.com',
             user_metadata: {
               full_name: 'Admin User'
@@ -67,7 +69,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             action_link: null,
             email_change_sent_at: null,
             new_phone: null,
-            phone_change_sent_at: null,
             phone_confirmed_at: null,
             email_change_confirm_status: 0,
             banned_until: null,
@@ -94,18 +95,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             // Check if user is admin
             const { data: profile } = await supabase
               .from('profiles')
-              .select('is_admin')
+              .select('is_admin, default_currency')
               .eq('id', session.user.id)
               .single();
             
             setIsAdmin(profile?.is_admin || false);
+            setDefaultCurrency(profile?.default_currency || 'USD');
           }
         }
       } catch (error) {
         console.error('Error in getInitialSession:', error);
         // Fallback to mock session
         const mockUser: User = {
-          id: '00000000-0000-0000-0000-000000000001',
+          id: 'bea0cf67-91f8-4871-ac62-de5eb6f1e06f',
           email: 'admin@example.com',
           user_metadata: {
             full_name: 'Admin User'
@@ -126,7 +128,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           action_link: null,
           email_change_sent_at: null,
           new_phone: null,
-          phone_change_sent_at: null,
           phone_confirmed_at: null,
           email_change_confirm_status: 0,
           banned_until: null,
@@ -163,13 +164,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           // Check if user is admin
           const { data: profile } = await supabase
             .from('profiles')
-            .select('is_admin')
+            .select('is_admin, default_currency')
             .eq('id', session.user.id)
             .single();
           
           setIsAdmin(profile?.is_admin || false);
+          setDefaultCurrency(profile?.default_currency || 'USD');
         } else {
           setIsAdmin(false);
+          setDefaultCurrency('USD');
         }
         
         setIsLoading(false);
@@ -275,6 +278,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     session,
     isLoading,
     isAdmin,
+    defaultCurrency,
     signIn,
     signUp,
     signOut,

@@ -49,9 +49,9 @@ const App = () => (
 const AppRoutes = () => {
   // Protected route component
   const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-    const { user, loading } = useAuth();
+    const { user, isLoading } = useAuth();
     
-    if (loading) {
+    if (isLoading) {
       return <div className="flex h-screen items-center justify-center">Loading...</div>;
     }
     
@@ -59,11 +59,11 @@ const AppRoutes = () => {
   };
 
   const AdminRoute = ({ children }: { children: React.ReactNode }) => {
-    const { user, loading, isAdmin } = useAuth();
+    const { user, isLoading, isAdmin } = useAuth();
     
-    console.log("AdminRoute check - User:", user?.email, "IsAdmin:", isAdmin, "Loading:", loading);
+    console.log("AdminRoute check - User:", user?.email, "IsAdmin:", isAdmin, "Loading:", isLoading);
     
-    if (loading) {
+    if (isLoading) {
       return <div className="flex h-screen items-center justify-center">Loading...</div>;
     }
     
