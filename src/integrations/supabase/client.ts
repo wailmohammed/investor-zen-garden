@@ -1,15 +1,13 @@
-
 import { createClient } from '@supabase/supabase-js';
 
 // Check for environment variables and use mock values for development
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://example.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.mock-key';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://tngtalojrxengqqrkcwl.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRuZ3RhbG9qcnhlbmdxcXJrY3dsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY2MDY5NDIsImV4cCI6MjA2MjE4Mjk0Mn0.diBCjpGx-zU5Sj-gQP0AmZUeqPBxkLXTOIR_ecesqks';
 
 // Log a warning if using mock values
 if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
   console.warn(
-    "Warning: Using mock Supabase credentials. To use real Supabase integration, set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables. " +
-    "You can find these in your Supabase project settings under API."
+    "Warning: Using project Supabase credentials. This is normal for Lovable projects."
   );
 }
 

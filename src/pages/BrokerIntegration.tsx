@@ -1,16 +1,22 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import DashboardLayout from "@/components/DashboardLayout";
 import { BrokerCard } from "@/components/BrokerCard";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const BrokerIntegration = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const [portfolios, setPortfolios] = useState<any[]>([]);
+  const [selectedPortfolio, setSelectedPortfolio] = useState<string>("");
   const [binanceApiKey, setBinanceApiKey] = useState("");
   const [binanceSecretKey, setBinanceSecretKey] = useState("");
   const [trading212ApiKey, setTrading212ApiKey] = useState("");
@@ -18,6 +24,34 @@ const BrokerIntegration = () => {
   const [trading212Connected, setTrading212Connected] = useState(false);
   const [isBinanceDialogOpen, setIsBinanceDialogOpen] = useState(false);
   const [isTrading212DialogOpen, setIsTrading212DialogOpen] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      fetchPortfolios();
+    }
+  }, [user]);
+
+  const fetchPortfolios = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('portfolios')
+        .select('*')
+        .eq('user_id', user?.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error("Error fetching portfolios:", error);
+        return;
+      }
+
+      setPortfolios(data || []);
+      if (data && data.length > 0 && !selectedPortfolio) {
+        setSelectedPortfolio(data[0].id);
+      }
+    } catch (error) {
+      console.error("Error fetching portfolios:", error);
+    }
+  };
 
   const validateBinanceAPI = async () => {
     if (!binanceApiKey.trim() || !binanceSecretKey.trim()) {
@@ -29,20 +63,29 @@ const BrokerIntegration = () => {
       return;
     }
 
+    if (!selectedPortfolio) {
+      toast({
+        title: "No portfolio selected",
+        description: "Please select a portfolio to sync data to.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       // Simulate API validation - in real implementation, you'd validate with Binance API
-      // For demo purposes, we'll just check if the keys are not empty
       if (binanceApiKey.length > 10 && binanceSecretKey.length > 10) {
         setBinanceConnected(true);
         setIsBinanceDialogOpen(false);
         toast({
           title: "Binance Connected",
-          description: "Successfully connected to Binance API.",
+          description: `Successfully connected to Binance API. Data will sync to selected portfolio.`,
         });
         
         // Store in localStorage for demo (in production, store securely)
         localStorage.setItem('binance_api_key', binanceApiKey);
         localStorage.setItem('binance_secret_key', binanceSecretKey);
+        localStorage.setItem('binance_portfolio_id', selectedPortfolio);
       } else {
         throw new Error("Invalid API credentials");
       }
@@ -65,6 +108,15 @@ const BrokerIntegration = () => {
       return;
     }
 
+    if (!selectedPortfolio) {
+      toast({
+        title: "No portfolio selected",
+        description: "Please select a portfolio to sync data to.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       // Simulate API validation - in real implementation, you'd validate with Trading212 API
       if (trading212ApiKey.length > 10) {
@@ -72,11 +124,12 @@ const BrokerIntegration = () => {
         setIsTrading212DialogOpen(false);
         toast({
           title: "Trading212 Connected",
-          description: "Successfully connected to Trading212 API.",
+          description: `Successfully connected to Trading212 API. Data will sync to selected portfolio.`,
         });
         
         // Store in localStorage for demo (in production, store securely)
         localStorage.setItem('trading212_api_key', trading212ApiKey);
+        localStorage.setItem('trading212_portfolio_id', selectedPortfolio);
       } else {
         throw new Error("Invalid API key");
       }
@@ -95,6 +148,7 @@ const BrokerIntegration = () => {
     setBinanceSecretKey("");
     localStorage.removeItem('binance_api_key');
     localStorage.removeItem('binance_secret_key');
+    localStorage.removeItem('binance_portfolio_id');
     toast({
       title: "Disconnected",
       description: "Successfully disconnected from Binance.",
@@ -105,6 +159,7 @@ const BrokerIntegration = () => {
     setTrading212Connected(false);
     setTrading212ApiKey("");
     localStorage.removeItem('trading212_api_key');
+    localStorage.removeItem('trading212_portfolio_id');
     toast({
       title: "Disconnected",
       description: "Successfully disconnected from Trading212.",
@@ -118,6 +173,51 @@ const BrokerIntegration = () => {
           <h1 className="text-3xl font-bold">Broker Integration</h1>
           <p className="text-muted-foreground">Connect your brokerage accounts to sync your portfolio data</p>
         </div>
+
+        {portfolios.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Portfolio Selection</CardTitle>
+              <CardDescription>
+                Choose which portfolio to sync your broker data to
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <Label htmlFor="portfolio-select">Select Portfolio</Label>
+                <Select value={selectedPortfolio} onValueChange={setSelectedPortfolio}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a portfolio" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {portfolios.map((portfolio) => (
+                      <SelectItem key={portfolio.id} value={portfolio.id}>
+                        {portfolio.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {portfolios.length === 0 && (
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-center text-muted-foreground">
+                You need to create a portfolio first before connecting brokers.
+                <Button 
+                  className="ml-2" 
+                  variant="outline" 
+                  onClick={() => window.location.href = '/portfolio'}
+                >
+                  Create Portfolio
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Binance Card */}
@@ -163,7 +263,7 @@ const BrokerIntegration = () => {
               ) : (
                 <Dialog open={isBinanceDialogOpen} onOpenChange={setIsBinanceDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button variant="outline" size="sm" className="w-full">
+                    <Button variant="outline" size="sm" className="w-full" disabled={!selectedPortfolio}>
                       Connect
                     </Button>
                   </DialogTrigger>
@@ -253,7 +353,7 @@ const BrokerIntegration = () => {
               ) : (
                 <Dialog open={isTrading212DialogOpen} onOpenChange={setIsTrading212DialogOpen}>
                   <DialogTrigger asChild>
-                    <Button variant="outline" size="sm" className="w-full">
+                    <Button variant="outline" size="sm" className="w-full" disabled={!selectedPortfolio}>
                       Connect
                     </Button>
                   </DialogTrigger>
