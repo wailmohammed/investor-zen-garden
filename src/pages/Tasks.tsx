@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -176,16 +177,11 @@ const Tasks = () => {
     console.log("Tasks showing auth loading state");
     return (
       <DashboardLayout>
-        <div className="space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold">Scheduled Tasks</h1>
-            <p className="text-muted-foreground">Loading...</p>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading tasks...</p>
           </div>
-          <Card>
-            <CardContent className="p-6">
-              <div className="text-center">Loading tasks...</div>
-            </CardContent>
-          </Card>
         </div>
       </DashboardLayout>
     );
@@ -271,7 +267,9 @@ const Tasks = () => {
             </CardHeader>
             <CardContent>
               {loading ? (
-                <div className="text-center py-4">Loading tasks...</div>
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                </div>
               ) : tasks.length === 0 ? (
                 <div className="text-center py-4 text-muted-foreground">
                   No scheduled tasks yet

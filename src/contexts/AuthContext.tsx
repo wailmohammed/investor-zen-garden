@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -40,63 +41,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     let isMounted = true;
 
-    const getInitialSession = async () => {
+    const initializeAuth = async () => {
       try {
-        console.log("Getting initial session...");
-        setIsLoading(true);
-
+        console.log("Initializing auth...");
+        
+        // Get initial session
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (!isMounted) return;
 
         if (error) {
           console.error('Error getting session:', error);
-          // Create mock session for development
-          const mockUser: User = {
-            id: 'bea0cf67-91f8-4871-ac62-de5eb6f1e06f',
-            email: 'admin@example.com',
-            user_metadata: {
-              full_name: 'Admin User'
-            },
-            app_metadata: {},
-            aud: 'authenticated',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            phone: null,
-            email_confirmed_at: new Date().toISOString(),
-            last_sign_in_at: new Date().toISOString(),
-            role: 'authenticated',
-            confirmation_sent_at: null,
-            confirmed_at: new Date().toISOString(),
-            recovery_sent_at: null,
-            new_email: null,
-            invited_at: null,
-            action_link: null,
-            email_change_sent_at: null,
-            new_phone: null,
-            phone_confirmed_at: null,
-            identities: []
-          };
-
-          const mockSession: Session = {
-            access_token: 'mock-access-token',
-            refresh_token: 'mock-refresh-token',
-            expires_in: 3600,
-            expires_at: Math.floor(Date.now() / 1000) + 3600,
-            token_type: 'bearer',
-            user: mockUser
-          };
-
-          setSession(mockSession);
-          setUser(mockUser);
-          setIsAdmin(true);
-          console.log("Mock session created");
+          // Don't create mock session, just set to null
+          setSession(null);
+          setUser(null);
         } else {
+          console.log("Session found:", session?.user?.email || 'No session');
           setSession(session);
           setUser(session?.user ?? null);
-          console.log("Real session found:", session?.user?.email);
           
           if (session?.user) {
+            // Fetch profile data
             try {
               const { data: profile } = await supabase
                 .from('profiles')
@@ -118,63 +83,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           }
         }
       } catch (error) {
-        console.error('Error in getInitialSession:', error);
+        console.error('Error in initializeAuth:', error);
         if (isMounted) {
-          // Fallback to mock session
-          const mockUser: User = {
-            id: 'bea0cf67-91f8-4871-ac62-de5eb6f1e06f',
-            email: 'admin@example.com',
-            user_metadata: {
-              full_name: 'Admin User'
-            },
-            app_metadata: {},
-            aud: 'authenticated',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            phone: null,
-            email_confirmed_at: new Date().toISOString(),
-            last_sign_in_at: new Date().toISOString(),
-            role: 'authenticated',
-            confirmation_sent_at: null,
-            confirmed_at: new Date().toISOString(),
-            recovery_sent_at: null,
-            new_email: null,
-            invited_at: null,
-            action_link: null,
-            email_change_sent_at: null,
-            new_phone: null,
-            phone_confirmed_at: null,
-            identities: []
-          };
-
-          const mockSession: Session = {
-            access_token: 'mock-access-token',
-            refresh_token: 'mock-refresh-token',
-            expires_in: 3600,
-            expires_at: Math.floor(Date.now() / 1000) + 3600,
-            token_type: 'bearer',
-            user: mockUser
-          };
-
-          setSession(mockSession);
-          setUser(mockUser);
-          setIsAdmin(true);
-          console.log("Fallback mock session created");
+          setSession(null);
+          setUser(null);
+          setIsAdmin(false);
+          setDefaultCurrency('USD');
         }
       } finally {
         if (isMounted) {
           setIsLoading(false);
-          console.log("Auth loading complete");
+          console.log("Auth initialization complete");
         }
       }
     };
 
-    getInitialSession();
-
-    // Listen for auth changes
+    // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event, session);
+        console.log('Auth state changed:', event);
         if (!isMounted) return;
 
         setSession(session);
@@ -211,6 +138,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       }
     );
+
+    // Initialize auth
+    initializeAuth();
 
     return () => {
       isMounted = false;

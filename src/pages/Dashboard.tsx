@@ -20,16 +20,11 @@ const Dashboard = () => {
     console.log("Dashboard showing loading state");
     return (
       <DashboardLayout>
-        <div className="space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold">Dashboard</h1>
-            <p className="text-muted-foreground">Loading your portfolio...</p>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading your dashboard...</p>
           </div>
-          <Card>
-            <CardContent className="p-6">
-              <div className="text-center">Loading dashboard...</div>
-            </CardContent>
-          </Card>
         </div>
       </DashboardLayout>
     );
