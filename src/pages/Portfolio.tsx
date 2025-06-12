@@ -25,6 +25,7 @@ const Portfolio = () => {
   };
 
   if (isLoading) {
+    console.log("Portfolio showing loading state");
     return (
       <DashboardLayout>
         <div className="space-y-6">
@@ -43,6 +44,7 @@ const Portfolio = () => {
   }
 
   if (!user) {
+    console.log("Portfolio - No user found");
     return (
       <DashboardLayout>
         <div className="space-y-6">
@@ -55,6 +57,7 @@ const Portfolio = () => {
     );
   }
 
+  console.log("Portfolio - Rendering main content for user:", user.email);
   return (
     <DashboardLayout>
       <div className="space-y-6">

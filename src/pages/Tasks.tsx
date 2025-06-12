@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -23,19 +22,18 @@ const Tasks = () => {
   const { user, isLoading } = useAuth();
   const { toast } = useToast();
   const [tasks, setTasks] = useState<ScheduledTask[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [taskName, setTaskName] = useState('');
   const [frequency, setFrequency] = useState('daily');
   const [isCreating, setIsCreating] = useState(false);
 
-  console.log("Tasks page - User:", user?.id, "Auth Loading:", isLoading, "Tasks Loading:", loading);
+  console.log("Tasks page - User:", user?.id, "Auth Loading:", isLoading);
 
-  // Fetch scheduled tasks with timeout protection
+  // Fetch scheduled tasks
   useEffect(() => {
     const fetchTasks = async () => {
-      if (!user?.id) {
-        console.log("No user ID available for tasks");
-        setLoading(false);
+      if (!user?.id || isLoading) {
+        console.log("Skipping tasks fetch - no user or still loading auth");
         return;
       }
 
@@ -43,17 +41,10 @@ const Tasks = () => {
         setLoading(true);
         console.log("Fetching tasks for user:", user.id);
 
-        // Add timeout to prevent hanging
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Request timeout')), 10000);
-        });
-
-        const queryPromise = supabase
+        const { data, error } = await supabase
           .from('scheduled_tasks')
           .select('*')
           .order('next_run', { ascending: true });
-
-        const { data, error } = await Promise.race([queryPromise, timeoutPromise]) as any;
         
         if (error) {
           console.error('Error fetching tasks:', error);
@@ -69,29 +60,19 @@ const Tasks = () => {
         }
       } catch (error: any) {
         console.error('Error fetching tasks:', error.message);
-        if (error.message === 'Request timeout') {
-          toast({
-            title: "Timeout",
-            description: "Loading tasks is taking too long. Please try refreshing.",
-            variant: "destructive",
-          });
-        } else {
-          toast({
-            title: "Error",
-            description: "Failed to load scheduled tasks.",
-            variant: "destructive",
-          });
-        }
+        toast({
+          title: "Error",
+          description: "Failed to load scheduled tasks.",
+          variant: "destructive",
+        });
         setTasks([]);
       } finally {
         setLoading(false);
       }
     };
     
-    if (user?.id) {
+    if (!isLoading && user?.id) {
       fetchTasks();
-    } else if (!isLoading) {
-      setLoading(false);
     }
   }, [user?.id, isLoading, toast]);
 
@@ -192,6 +173,7 @@ const Tasks = () => {
   };
 
   if (isLoading) {
+    console.log("Tasks showing auth loading state");
     return (
       <DashboardLayout>
         <div className="space-y-6">
@@ -210,6 +192,7 @@ const Tasks = () => {
   }
 
   if (!user) {
+    console.log("Tasks - No user found");
     return (
       <DashboardLayout>
         <div className="space-y-6">
@@ -222,6 +205,7 @@ const Tasks = () => {
     );
   }
 
+  console.log("Tasks - Rendering main content for user:", user.email);
   return (
     <DashboardLayout>
       <div className="space-y-6">

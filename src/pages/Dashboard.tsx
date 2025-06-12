@@ -17,6 +17,7 @@ const Dashboard = () => {
   console.log("Dashboard - User:", user?.id, "Loading:", isLoading);
 
   if (isLoading) {
+    console.log("Dashboard showing loading state");
     return (
       <DashboardLayout>
         <div className="space-y-6">
@@ -35,6 +36,7 @@ const Dashboard = () => {
   }
 
   if (!user) {
+    console.log("Dashboard - No user found");
     return (
       <DashboardLayout>
         <div className="space-y-6">
@@ -47,6 +49,7 @@ const Dashboard = () => {
     );
   }
 
+  console.log("Dashboard - Rendering main content for user:", user.email);
   return (
     <DashboardLayout>
       <div className="space-y-6">

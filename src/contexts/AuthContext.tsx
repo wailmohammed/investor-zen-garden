@@ -38,11 +38,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Get initial session
+    let isMounted = true;
+
     const getInitialSession = async () => {
       try {
+        console.log("Getting initial session...");
+        setIsLoading(true);
+
         const { data: { session }, error } = await supabase.auth.getSession();
         
+        if (!isMounted) return;
+
         if (error) {
           console.error('Error getting session:', error);
           // Create mock session for development
@@ -84,65 +90,82 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setSession(mockSession);
           setUser(mockUser);
           setIsAdmin(true);
+          console.log("Mock session created");
         } else {
           setSession(session);
           setUser(session?.user ?? null);
+          console.log("Real session found:", session?.user?.email);
           
           if (session?.user) {
-            // Check if user is admin
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('is_admin, default_currency')
-              .eq('id', session.user.id)
-              .single();
-            
-            setIsAdmin(profile?.is_admin || false);
-            setDefaultCurrency(profile?.default_currency || 'USD');
+            try {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('is_admin, default_currency')
+                .eq('id', session.user.id)
+                .single();
+              
+              if (isMounted) {
+                setIsAdmin(profile?.is_admin || false);
+                setDefaultCurrency(profile?.default_currency || 'USD');
+              }
+            } catch (profileError) {
+              console.error('Error fetching profile:', profileError);
+              if (isMounted) {
+                setIsAdmin(false);
+                setDefaultCurrency('USD');
+              }
+            }
           }
         }
       } catch (error) {
         console.error('Error in getInitialSession:', error);
-        // Fallback to mock session
-        const mockUser: User = {
-          id: 'bea0cf67-91f8-4871-ac62-de5eb6f1e06f',
-          email: 'admin@example.com',
-          user_metadata: {
-            full_name: 'Admin User'
-          },
-          app_metadata: {},
-          aud: 'authenticated',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          phone: null,
-          email_confirmed_at: new Date().toISOString(),
-          last_sign_in_at: new Date().toISOString(),
-          role: 'authenticated',
-          confirmation_sent_at: null,
-          confirmed_at: new Date().toISOString(),
-          recovery_sent_at: null,
-          new_email: null,
-          invited_at: null,
-          action_link: null,
-          email_change_sent_at: null,
-          new_phone: null,
-          phone_confirmed_at: null,
-          identities: []
-        };
+        if (isMounted) {
+          // Fallback to mock session
+          const mockUser: User = {
+            id: 'bea0cf67-91f8-4871-ac62-de5eb6f1e06f',
+            email: 'admin@example.com',
+            user_metadata: {
+              full_name: 'Admin User'
+            },
+            app_metadata: {},
+            aud: 'authenticated',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            phone: null,
+            email_confirmed_at: new Date().toISOString(),
+            last_sign_in_at: new Date().toISOString(),
+            role: 'authenticated',
+            confirmation_sent_at: null,
+            confirmed_at: new Date().toISOString(),
+            recovery_sent_at: null,
+            new_email: null,
+            invited_at: null,
+            action_link: null,
+            email_change_sent_at: null,
+            new_phone: null,
+            phone_confirmed_at: null,
+            identities: []
+          };
 
-        const mockSession: Session = {
-          access_token: 'mock-access-token',
-          refresh_token: 'mock-refresh-token',
-          expires_in: 3600,
-          expires_at: Math.floor(Date.now() / 1000) + 3600,
-          token_type: 'bearer',
-          user: mockUser
-        };
+          const mockSession: Session = {
+            access_token: 'mock-access-token',
+            refresh_token: 'mock-refresh-token',
+            expires_in: 3600,
+            expires_at: Math.floor(Date.now() / 1000) + 3600,
+            token_type: 'bearer',
+            user: mockUser
+          };
 
-        setSession(mockSession);
-        setUser(mockUser);
-        setIsAdmin(true);
+          setSession(mockSession);
+          setUser(mockUser);
+          setIsAdmin(true);
+          console.log("Fallback mock session created");
+        }
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+          console.log("Auth loading complete");
+        }
       }
     };
 
@@ -152,29 +175,47 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event, session);
+        if (!isMounted) return;
+
         setSession(session);
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // Check if user is admin
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('is_admin, default_currency')
-            .eq('id', session.user.id)
-            .single();
-          
-          setIsAdmin(profile?.is_admin || false);
-          setDefaultCurrency(profile?.default_currency || 'USD');
+          try {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('is_admin, default_currency')
+              .eq('id', session.user.id)
+              .single();
+            
+            if (isMounted) {
+              setIsAdmin(profile?.is_admin || false);
+              setDefaultCurrency(profile?.default_currency || 'USD');
+            }
+          } catch (error) {
+            console.error('Error fetching profile on auth change:', error);
+            if (isMounted) {
+              setIsAdmin(false);
+              setDefaultCurrency('USD');
+            }
+          }
         } else {
-          setIsAdmin(false);
-          setDefaultCurrency('USD');
+          if (isMounted) {
+            setIsAdmin(false);
+            setDefaultCurrency('USD');
+          }
         }
         
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
