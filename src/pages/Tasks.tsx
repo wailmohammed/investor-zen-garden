@@ -20,7 +20,7 @@ interface ScheduledTask {
 }
 
 const Tasks = () => {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
   const { toast } = useToast();
   const [tasks, setTasks] = useState<ScheduledTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,33 +28,72 @@ const Tasks = () => {
   const [frequency, setFrequency] = useState('daily');
   const [isCreating, setIsCreating] = useState(false);
 
-  // Fetch scheduled tasks
+  console.log("Tasks page - User:", user?.id, "Auth Loading:", isLoading, "Tasks Loading:", loading);
+
+  // Fetch scheduled tasks with timeout protection
   useEffect(() => {
     const fetchTasks = async () => {
+      if (!user?.id) {
+        console.log("No user ID available for tasks");
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
-        const { data, error } = await supabase
+        console.log("Fetching tasks for user:", user.id);
+
+        // Add timeout to prevent hanging
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Request timeout')), 10000);
+        });
+
+        const queryPromise = supabase
           .from('scheduled_tasks')
           .select('*')
           .order('next_run', { ascending: true });
-          
-        if (error) throw error;
+
+        const { data, error } = await Promise.race([queryPromise, timeoutPromise]) as any;
         
-        setTasks(data || []);
+        if (error) {
+          console.error('Error fetching tasks:', error);
+          toast({
+            title: "Error",
+            description: "Failed to load scheduled tasks.",
+            variant: "destructive",
+          });
+          setTasks([]);
+        } else {
+          console.log("Tasks loaded:", data?.length || 0);
+          setTasks(data || []);
+        }
       } catch (error: any) {
         console.error('Error fetching tasks:', error.message);
-        toast({
-          title: "Error",
-          description: "Failed to load scheduled tasks.",
-          variant: "destructive",
-        });
+        if (error.message === 'Request timeout') {
+          toast({
+            title: "Timeout",
+            description: "Loading tasks is taking too long. Please try refreshing.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Error",
+            description: "Failed to load scheduled tasks.",
+            variant: "destructive",
+          });
+        }
+        setTasks([]);
       } finally {
         setLoading(false);
       }
     };
     
-    fetchTasks();
-  }, [toast]);
+    if (user?.id) {
+      fetchTasks();
+    } else if (!isLoading) {
+      setLoading(false);
+    }
+  }, [user?.id, isLoading, toast]);
 
   const handleCreateTask = async () => {
     if (!taskName.trim()) {
@@ -84,7 +123,6 @@ const Tasks = () => {
         nextRun.setMonth(nextRun.getMonth() + 1);
         break;
       default:
-        // Default to daily
         nextRun.setDate(nextRun.getDate() + 1);
     }
     
@@ -105,12 +143,10 @@ const Tasks = () => {
         description: "The scheduled task has been created successfully.",
       });
       
-      // Add the new task to the list
       if (data && data.length > 0) {
         setTasks(prev => [...prev, data[0]]);
       }
       
-      // Clear the form
       setTaskName('');
       setFrequency('daily');
     } catch (error: any) {
@@ -154,6 +190,37 @@ const Tasks = () => {
       });
     }
   };
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-3xl font-bold">Scheduled Tasks</h1>
+            <p className="text-muted-foreground">Loading...</p>
+          </div>
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-center">Loading tasks...</div>
+            </CardContent>
+          </Card>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!user) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-3xl font-bold">Scheduled Tasks</h1>
+            <p className="text-muted-foreground">Please log in to manage scheduled tasks</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -220,7 +287,7 @@ const Tasks = () => {
             </CardHeader>
             <CardContent>
               {loading ? (
-                <div className="text-center py-4">Loading...</div>
+                <div className="text-center py-4">Loading tasks...</div>
               ) : tasks.length === 0 ? (
                 <div className="text-center py-4 text-muted-foreground">
                   No scheduled tasks yet
