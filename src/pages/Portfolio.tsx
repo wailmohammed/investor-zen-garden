@@ -7,10 +7,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CSVUpload } from "@/components/ui/csv-upload";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Portfolio = () => {
   const [csvData, setCsvData] = useState<any[]>([]);
   const { toast } = useToast();
+  const { user, isLoading } = useAuth();
+
+  console.log("Portfolio page - User:", user?.id, "Loading:", isLoading);
 
   const handleCSVUpload = (data: any[]) => {
     setCsvData(data);
@@ -19,6 +23,37 @@ const Portfolio = () => {
       description: `${data.length} portfolio items ready to import`,
     });
   };
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-3xl font-bold">Portfolio & Watchlist Management</h1>
+            <p className="text-muted-foreground">Loading...</p>
+          </div>
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-center">Loading portfolio data...</div>
+            </CardContent>
+          </Card>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!user) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-3xl font-bold">Portfolio & Watchlist Management</h1>
+            <p className="text-muted-foreground">Please log in to manage your portfolios</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>

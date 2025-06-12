@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -35,17 +34,15 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
 
   console.log("PortfolioManager - User:", user?.id, "Is Admin:", isAdmin);
 
-  // Simplified subscription logic - use default values instead of complex query
+  // Use simple default subscription values
   const subscription = {
     plan: isAdmin ? 'Professional' : 'Free',
     portfolio_limit: isAdmin ? 999 : 1,
     watchlist_limit: isAdmin ? 20 : 1
   };
 
-  console.log("Using default subscription:", subscription);
-
-  // Fetch portfolios with simplified error handling
-  const { data: portfolios, isLoading: portfoliosLoading, error: portfoliosError } = useQuery({
+  // Fetch portfolios with timeout and better error handling
+  const { data: portfolios = [], isLoading, error } = useQuery({
     queryKey: ['portfolios', user?.id],
     queryFn: async () => {
       if (!user?.id) {
@@ -55,22 +52,65 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
       
       console.log("Fetching portfolios for user:", user.id);
       
-      const { data, error } = await supabase
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Request timeout')), 10000);
+      });
+      
+      const queryPromise = supabase
         .from('portfolios')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       
-      if (error) {
-        console.error("Portfolios query error:", error);
+      try {
+        const { data, error } = await Promise.race([queryPromise, timeoutPromise]) as any;
+        
+        if (error) {
+          console.error("Portfolios query error:", error);
+          return [];
+        }
+        
+        console.log("Portfolios found:", data?.length || 0);
+        return data || [];
+      } catch (timeoutError) {
+        console.error("Query timeout:", timeoutError);
         return [];
       }
-      
-      console.log("Portfolios found:", data?.length || 0);
-      return data || [];
     },
     enabled: !!user?.id,
+    retry: 1,
+    staleTime: 30000, // Cache for 30 seconds
   });
+
+  console.log("Portfolio Manager - Loading:", isLoading, "Portfolios:", portfolios?.length, "Error:", error);
+  
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center">Loading portfolios...</div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    console.error("Portfolio Manager error:", error);
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center text-red-500">
+            Error loading portfolios. Please try refreshing the page.
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const currentCount = portfolios?.length || 0;
+  const limit = subscription?.portfolio_limit || 1;
+  const canCreateMore = currentCount < limit;
 
   // Create portfolio mutation
   const createPortfolioMutation = useMutation({
@@ -225,39 +265,6 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
       deletePortfolioMutation.mutate(portfolioId);
     }
   };
-
-  // Show loading state
-  const isLoading = portfoliosLoading;
-  
-  console.log("Loading state:", isLoading, "Portfolios:", portfolios);
-  
-  if (isLoading) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="text-center">Loading portfolios...</div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // Show error state if needed
-  if (portfoliosError) {
-    console.error("Portfolios error:", portfoliosError);
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="text-center text-red-500">
-            Error loading portfolios. Please try again.
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const currentCount = portfolios?.length || 0;
-  const limit = subscription?.portfolio_limit || 1;
-  const canCreateMore = currentCount < limit;
 
   return (
     <Card>
