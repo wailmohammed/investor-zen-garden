@@ -1,4 +1,3 @@
-
 import {
   LayoutDashboard,
   Settings,
@@ -137,6 +136,16 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
                 <WalletCards className="mr-3 h-5 w-5" />
                 Admin Wallets
               </Link>
+
+              <Link
+                to="/tasks"
+                className={`flex items-center rounded-md px-3 py-2 text-gray-600 hover:bg-gray-100 ${
+                  pathname === "/tasks" ? "bg-gray-100 font-medium" : ""
+                }`}
+              >
+                <Calendar className="mr-3 h-5 w-5" />
+                Tasks
+              </Link>
             </>
           )}
 
@@ -158,16 +167,6 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
           >
             <Mail className="mr-3 h-5 w-5" />
             Email Notifications
-          </Link>
-
-          <Link
-            to="/tasks"
-            className={`flex items-center rounded-md px-3 py-2 text-gray-600 hover:bg-gray-100 ${
-              pathname === "/tasks" ? "bg-gray-100 font-medium" : ""
-            }`}
-          >
-            <Calendar className="mr-3 h-5 w-5" />
-            Tasks
           </Link>
 
           <Link
