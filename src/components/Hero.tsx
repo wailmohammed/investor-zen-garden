@@ -1,74 +1,109 @@
 
 import { Button } from "@/components/ui/button";
+import { ArrowRight, TrendingUp, Shield, BarChart3 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Hero = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const handleGetStarted = () => {
+    if (user) {
+      navigate("/dashboard");
+    } else {
+      navigate("/signup");
+    }
+  };
+
+  const handleSeeDemo = () => {
+    if (user) {
+      navigate("/dashboard");
+    } else {
+      // Navigate to demo or login page
+      navigate("/login");
+    }
+  };
+
   return (
-    <div className="bg-gradient-to-br from-gray-50 to-gray-100 py-16 md:py-24">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-          <div className="animate-fade-in">
-            <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-gray-900 mb-6">
-              Smart Investment Analytics for Modern Investors
+    <section className="relative bg-gradient-to-br from-background to-muted py-20 lg:py-32">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+          <div className="text-left">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-foreground leading-tight">
+              Smart Investment
+              <span className="block text-primary">Analytics for</span>
+              <span className="block">Modern Investors</span>
             </h1>
-            <p className="text-lg md:text-xl text-gray-600 mb-8">
-              Make data-driven decisions with our powerful portfolio tracking, analysis tools, and personalized insights.
+            <p className="text-xl text-muted-foreground mt-6 leading-relaxed">
+              Make data-driven decisions with our powerful portfolio tracking, 
+              analysis tools, and personalized insights.
             </p>
-            <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
-              <Button className="bg-finance-blue hover:bg-blue-700 text-white px-6 py-3 text-base">
+            <div className="flex flex-col sm:flex-row gap-4 mt-8">
+              <Button 
+                size="lg" 
+                className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-3"
+                onClick={handleGetStarted}
+              >
                 Get Started Free
+                <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
-              <Button variant="outline" className="px-6 py-3 text-base">
+              <Button 
+                variant="outline" 
+                size="lg" 
+                className="px-8 py-3"
+                onClick={handleSeeDemo}
+              >
                 See Demo
               </Button>
             </div>
-          </div>
-          <div className="hidden md:block">
-            <div className="relative bg-white p-6 rounded-xl shadow-xl">
-              <div className="absolute top-0 right-0 -mt-4 -mr-4 bg-finance-blue text-white rounded-full p-2">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                </svg>
+            <div className="flex items-center gap-8 mt-12">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-primary" />
+                <span className="text-sm text-muted-foreground">Real-time tracking</span>
               </div>
-              <div className="space-y-6">
+              <div className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-primary" />
+                <span className="text-sm text-muted-foreground">Bank-level security</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-primary" />
+                <span className="text-sm text-muted-foreground">Advanced analytics</span>
+              </div>
+            </div>
+          </div>
+          <div className="relative">
+            <div className="bg-card border rounded-xl shadow-2xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">Portfolio Summary</h3>
+                <span className="text-sm text-primary font-medium">View Details</span>
+              </div>
+              <div className="space-y-4">
                 <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <h3 className="font-medium text-gray-900">Portfolio Summary</h3>
-                    <span className="text-sm text-finance-blue">View Details</span>
+                  <div className="text-sm text-muted-foreground">Total Value</div>
+                  <div className="text-2xl font-bold">$254,872.65</div>
+                </div>
+                <div className="flex justify-between">
+                  <div>
+                    <div className="text-sm text-muted-foreground">Today's Change</div>
+                    <div className="text-sm font-medium text-green-600">+$1,243.32 (+0.49%)</div>
                   </div>
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <div className="flex justify-between mb-3">
-                      <span className="text-gray-600">Total Value</span>
-                      <span className="font-semibold">$254,872.65</span>
-                    </div>
-                    <div className="flex justify-between mb-3">
-                      <span className="text-gray-600">Today's Change</span>
-                      <span className="text-finance-green font-medium">+$1,243.32 (+0.49%)</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Total Return</span>
-                      <span className="text-finance-green font-medium">+$45,631.28 (+21.8%)</span>
-                    </div>
+                  <div>
+                    <div className="text-sm text-muted-foreground">Total Return</div>
+                    <div className="text-sm font-medium text-green-600">+$45,631.28 (+21.8%)</div>
                   </div>
                 </div>
-                <div>
-                  <div className="h-40 bg-gray-100 rounded-lg mb-2 flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="text-gray-400">Portfolio Chart</div>
-                    </div>
+                <div className="mt-4 pt-4 border-t">
+                  <div className="text-sm font-medium mb-2">Portfolio Chart</div>
+                  <div className="flex gap-1 h-8">
+                    <div className="bg-primary rounded flex-1"></div>
+                    <div className="bg-primary/70 rounded flex-1"></div>
+                    <div className="bg-primary/40 rounded flex-1"></div>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="bg-gray-100 p-3 rounded">
-                      <div className="text-xs text-gray-500">Stocks</div>
-                      <div className="font-medium">65%</div>
-                    </div>
-                    <div className="bg-gray-100 p-3 rounded">
-                      <div className="text-xs text-gray-500">Bonds</div>
-                      <div className="font-medium">25%</div>
-                    </div>
-                    <div className="bg-gray-100 p-3 rounded">
-                      <div className="text-xs text-gray-500">Cash</div>
-                      <div className="font-medium">10%</div>
-                    </div>
+                  <div className="flex justify-between text-xs text-muted-foreground mt-2">
+                    <span>Stocks</span>
+                    <span>Bonds</span>
+                    <span>Cash</span>
                   </div>
                 </div>
               </div>
@@ -76,7 +111,7 @@ const Hero = () => {
           </div>
         </div>
       </div>
-    </div>
+    </section>
   );
 };
 
