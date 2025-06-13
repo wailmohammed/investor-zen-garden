@@ -63,6 +63,115 @@ export type Database = {
         }
         Relationships: []
       }
+      dividend_settings: {
+        Row: {
+          auto_import_enabled: boolean | null
+          created_at: string
+          default_portfolio_id: string | null
+          id: string
+          notification_enabled: boolean | null
+          preferred_currency: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auto_import_enabled?: boolean | null
+          created_at?: string
+          default_portfolio_id?: string | null
+          id?: string
+          notification_enabled?: boolean | null
+          preferred_currency?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auto_import_enabled?: boolean | null
+          created_at?: string
+          default_portfolio_id?: string | null
+          id?: string
+          notification_enabled?: boolean | null
+          preferred_currency?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dividend_settings_default_portfolio_id_fkey"
+            columns: ["default_portfolio_id"]
+            isOneToOne: false
+            referencedRelation: "portfolios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dividends: {
+        Row: {
+          company_name: string | null
+          created_at: string
+          currency: string
+          dividend_amount: number
+          dividend_type: string
+          ex_dividend_date: string | null
+          id: string
+          notes: string | null
+          payment_date: string
+          portfolio_id: string
+          record_date: string | null
+          shares_owned: number | null
+          symbol: string
+          tax_withheld: number | null
+          total_received: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company_name?: string | null
+          created_at?: string
+          currency?: string
+          dividend_amount: number
+          dividend_type?: string
+          ex_dividend_date?: string | null
+          id?: string
+          notes?: string | null
+          payment_date: string
+          portfolio_id: string
+          record_date?: string | null
+          shares_owned?: number | null
+          symbol: string
+          tax_withheld?: number | null
+          total_received: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company_name?: string | null
+          created_at?: string
+          currency?: string
+          dividend_amount?: number
+          dividend_type?: string
+          ex_dividend_date?: string | null
+          id?: string
+          notes?: string | null
+          payment_date?: string
+          portfolio_id?: string
+          record_date?: string | null
+          shares_owned?: number | null
+          symbol?: string
+          tax_withheld?: number | null
+          total_received?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dividends_portfolio_id_fkey"
+            columns: ["portfolio_id"]
+            isOneToOne: false
+            referencedRelation: "portfolios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_notifications: {
         Row: {
           content: string

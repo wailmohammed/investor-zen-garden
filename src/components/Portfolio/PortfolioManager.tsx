@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2, Plus, Edit2, Check, X } from "lucide-react";
+import { Trash2, Plus, Edit2, Check, X, Star } from "lucide-react";
+import { PortfolioSelector } from "@/components/ui/portfolio-selector";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +33,7 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
   const [editingPortfolio, setEditingPortfolio] = useState<string | null>(null);
   const [editValues, setEditValues] = useState({ name: "", description: "" });
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [importTargetPortfolio, setImportTargetPortfolio] = useState<string>("");
 
   console.log("PortfolioManager - User:", user?.id, "Is Admin:", isAdmin);
 
@@ -77,6 +79,14 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
     staleTime: 30000,
   });
 
+  // Set first portfolio as import target by default
+  useEffect(() => {
+    if (portfolios.length > 0 && !importTargetPortfolio) {
+      const defaultPortfolio = portfolios.find(p => p.is_default) || portfolios[0];
+      setImportTargetPortfolio(defaultPortfolio.id);
+    }
+  }, [portfolios, importTargetPortfolio]);
+
   // Create portfolio mutation
   const createPortfolioMutation = useMutation({
     mutationFn: async (portfolio: { name: string; description: string }) => {
@@ -96,6 +106,7 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
             user_id: user.id,
             name: portfolio.name,
             description: portfolio.description,
+            is_default: portfolios.length === 0, // First portfolio is default
           },
         ])
         .select()
@@ -141,6 +152,42 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
       toast({
         title: "Portfolio updated",
         description: "Your portfolio has been updated successfully.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Set default portfolio mutation
+  const setDefaultMutation = useMutation({
+    mutationFn: async (portfolioId: string) => {
+      // First, unset all defaults
+      await supabase
+        .from('portfolios')
+        .update({ is_default: false })
+        .eq('user_id', user?.id);
+
+      // Then set the new default
+      const { data, error } = await supabase
+        .from('portfolios')
+        .update({ is_default: true })
+        .eq('id', portfolioId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['portfolios'] });
+      toast({
+        title: "Default portfolio updated",
+        description: "This portfolio is now your default.",
       });
     },
     onError: (error) => {
@@ -230,6 +277,15 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
       return;
     }
 
+    if (!importTargetPortfolio) {
+      toast({
+        title: "Error",
+        description: "Please select a target portfolio for import.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const portfolioName = `Imported Portfolio ${new Date().toLocaleDateString()}`;
     createPortfolioMutation.mutate({
       name: portfolioName,
@@ -274,6 +330,16 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {csvData.length > 0 && portfolios.length > 0 && (
+          <PortfolioSelector
+            portfolios={portfolios}
+            value={importTargetPortfolio}
+            onValueChange={setImportTargetPortfolio}
+            label="Target Portfolio for CSV Import"
+            placeholder="Select portfolio for import"
+          />
+        )}
+
         <div className="flex gap-2">
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
@@ -357,7 +423,12 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
                 </div>
               ) : (
                 <div className="flex-1">
-                  <h3 className="font-medium">{portfolio.name}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-medium">{portfolio.name}</h3>
+                    {portfolio.is_default && (
+                      <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                    )}
+                  </div>
                   {portfolio.description && (
                     <p className="text-sm text-muted-foreground">{portfolio.description}</p>
                   )}
@@ -388,6 +459,17 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
                   </>
                 ) : (
                   <>
+                    {!portfolio.is_default && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setDefaultMutation.mutate(portfolio.id)}
+                        disabled={setDefaultMutation.isPending}
+                        title="Set as default portfolio"
+                      >
+                        <Star className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"

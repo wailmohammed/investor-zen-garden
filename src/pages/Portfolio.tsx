@@ -2,6 +2,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import PortfolioManager from "@/components/Portfolio/PortfolioManager";
 import WatchlistManager from "@/components/Portfolio/WatchlistManager";
+import DividendManager from "@/components/Portfolio/DividendManager";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CSVUpload } from "@/components/ui/csv-upload";
@@ -20,7 +21,7 @@ const Portfolio = () => {
     setCsvData(data);
     toast({
       title: "CSV Data Loaded",
-      description: `${data.length} portfolio items ready to import`,
+      description: `${data.length} items ready to import`,
     });
   };
 
@@ -28,19 +29,24 @@ const Portfolio = () => {
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold">Portfolio & Watchlist Management</h1>
-          <p className="text-muted-foreground">Create and manage your investment portfolios and watchlists</p>
+          <h1 className="text-3xl font-bold">Portfolio & Investment Management</h1>
+          <p className="text-muted-foreground">Create and manage your investment portfolios, watchlists, and dividend tracking</p>
         </div>
 
         <Tabs defaultValue="portfolios" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="portfolios">Portfolios</TabsTrigger>
+            <TabsTrigger value="dividends">Dividends</TabsTrigger>
             <TabsTrigger value="watchlists">Watchlists</TabsTrigger>
             <TabsTrigger value="import">Import Data</TabsTrigger>
           </TabsList>
 
           <TabsContent value="portfolios">
             <PortfolioManager csvData={csvData} />
+          </TabsContent>
+
+          <TabsContent value="dividends">
+            <DividendManager csvData={csvData} />
           </TabsContent>
 
           <TabsContent value="watchlists">
@@ -50,9 +56,9 @@ const Portfolio = () => {
           <TabsContent value="import">
             <Card>
               <CardHeader>
-                <CardTitle>Import Portfolio Data</CardTitle>
+                <CardTitle>Import Data</CardTitle>
                 <CardDescription>
-                  Upload a CSV file with your portfolio data. Expected columns: Symbol, Name, Shares, Price, etc.
+                  Upload a CSV file with your portfolio or dividend data. Expected columns: Symbol, Name, Shares, Price, Dividends, etc.
                 </CardDescription>
               </CardHeader>
               <CardContent>
