@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,19 +53,12 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
       
       console.log("Fetching portfolios for user:", user.id);
       
-      // Add timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Request timeout')), 10000);
-      });
-      
-      const queryPromise = supabase
-        .from('portfolios')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-      
       try {
-        const { data, error } = await Promise.race([queryPromise, timeoutPromise]) as any;
+        const { data, error } = await supabase
+          .from('portfolios')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
         
         if (error) {
           console.error("Portfolios query error:", error);
@@ -73,51 +67,21 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
         
         console.log("Portfolios found:", data?.length || 0);
         return data || [];
-      } catch (timeoutError) {
-        console.error("Query timeout:", timeoutError);
+      } catch (queryError) {
+        console.error("Query error:", queryError);
         return [];
       }
     },
     enabled: !!user?.id,
     retry: 1,
-    staleTime: 30000, // Cache for 30 seconds
+    staleTime: 30000,
   });
-
-  console.log("Portfolio Manager - Loading:", isLoading, "Portfolios:", portfolios?.length, "Error:", error);
-  
-  if (isLoading) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="text-center">Loading portfolios...</div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (error) {
-    console.error("Portfolio Manager error:", error);
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="text-center text-red-500">
-            Error loading portfolios. Please try refreshing the page.
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const currentCount = portfolios?.length || 0;
-  const limit = subscription?.portfolio_limit || 1;
-  const canCreateMore = currentCount < limit;
 
   // Create portfolio mutation
   const createPortfolioMutation = useMutation({
     mutationFn: async (portfolio: { name: string; description: string }) => {
       if (!user?.id) throw new Error('User not authenticated');
       
-      // Check subscription limits
       const currentCount = portfolios?.length || 0;
       const limit = subscription?.portfolio_limit || 1;
       
@@ -213,6 +177,36 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
       });
     },
   });
+
+  console.log("Portfolio Manager - Loading:", isLoading, "Portfolios:", portfolios?.length, "Error:", error);
+  
+  // Handle loading and error states AFTER all hooks are called
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center">Loading portfolios...</div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    console.error("Portfolio Manager error:", error);
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center text-red-500">
+            Error loading portfolios. Please try refreshing the page.
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const currentCount = portfolios?.length || 0;
+  const limit = subscription?.portfolio_limit || 1;
+  const canCreateMore = currentCount < limit;
 
   const handleCreatePortfolio = () => {
     if (!newPortfolio.name.trim()) {
