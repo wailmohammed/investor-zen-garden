@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -20,8 +19,7 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 const Login = () => {
   const [loading, setLoading] = useState(false);
-  const { signIn } = useAuth();
-  const { toast } = useToast();
+  const { signIn, user, isLoading } = useAuth();
   const navigate = useNavigate();
 
   const form = useForm<LoginFormValues>({
@@ -32,13 +30,30 @@ const Login = () => {
     },
   });
 
+  // Redirect if already logged in
+  if (user && !isLoading) {
+    navigate('/dashboard');
+    return null;
+  }
+
+  // Show loading spinner while auth is initializing
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
   const onSubmit = async (values: LoginFormValues) => {
     setLoading(true);
     try {
-      await signIn(values.email, values.password);
-      navigate('/dashboard');
+      const { error } = await signIn(values.email, values.password);
+      if (!error) {
+        navigate('/dashboard');
+      }
     } catch (error) {
-      // Error is handled in the auth context
+      console.error('Login error:', error);
     } finally {
       setLoading(false);
     }
