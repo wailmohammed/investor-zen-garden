@@ -12,9 +12,9 @@ import { useAuth } from "@/contexts/AuthContext";
 const Portfolio = () => {
   const [csvData, setCsvData] = useState<any[]>([]);
   const { toast } = useToast();
-  const { user, isLoading } = useAuth();
+  const { user } = useAuth();
 
-  console.log("Portfolio page - User:", user?.id, "Loading:", isLoading);
+  console.log("Portfolio page - User:", user?.email);
 
   const handleCSVUpload = (data: any[]) => {
     setCsvData(data);
@@ -24,35 +24,6 @@ const Portfolio = () => {
     });
   };
 
-  if (isLoading) {
-    console.log("Portfolio showing loading state");
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Loading portfolio data...</p>
-          </div>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  if (!user) {
-    console.log("Portfolio - No user found");
-    return (
-      <DashboardLayout>
-        <div className="space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold">Portfolio & Watchlist Management</h1>
-            <p className="text-muted-foreground">Please log in to manage your portfolios</p>
-          </div>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  console.log("Portfolio - Rendering main content for user:", user.email);
   return (
     <DashboardLayout>
       <div className="space-y-6">

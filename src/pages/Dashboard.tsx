@@ -9,42 +9,12 @@ import MarketOverview from "@/components/Dashboard/MarketOverview";
 import AIChat from "@/components/AIChat";
 import DividendTracking from "@/components/Dashboard/DividendTracking";
 import { useAuth } from "@/contexts/AuthContext";
-import { Card, CardContent } from "@/components/ui/card";
 
 const Dashboard = () => {
-  const { user, isLoading } = useAuth();
+  const { user } = useAuth();
 
-  console.log("Dashboard - User:", user?.id, "Loading:", isLoading);
+  console.log("Dashboard - Rendering for user:", user?.email);
 
-  if (isLoading) {
-    console.log("Dashboard showing loading state");
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Loading your dashboard...</p>
-          </div>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  if (!user) {
-    console.log("Dashboard - No user found");
-    return (
-      <DashboardLayout>
-        <div className="space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold">Dashboard</h1>
-            <p className="text-muted-foreground">Please log in to view your dashboard</p>
-          </div>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  console.log("Dashboard - Rendering main content for user:", user.email);
   return (
     <DashboardLayout>
       <div className="space-y-6">

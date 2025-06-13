@@ -20,7 +20,7 @@ interface ScheduledTask {
 }
 
 const Tasks = () => {
-  const { user, isLoading } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [tasks, setTasks] = useState<ScheduledTask[]>([]);
   const [loading, setLoading] = useState(false);
@@ -28,13 +28,13 @@ const Tasks = () => {
   const [frequency, setFrequency] = useState('daily');
   const [isCreating, setIsCreating] = useState(false);
 
-  console.log("Tasks page - User:", user?.id, "Auth Loading:", isLoading);
+  console.log("Tasks page - User:", user?.email);
 
   // Fetch scheduled tasks
   useEffect(() => {
     const fetchTasks = async () => {
-      if (!user?.id || isLoading) {
-        console.log("Skipping tasks fetch - no user or still loading auth");
+      if (!user?.id) {
+        console.log("No user - skipping tasks fetch");
         return;
       }
 
@@ -72,10 +72,10 @@ const Tasks = () => {
       }
     };
     
-    if (!isLoading && user?.id) {
+    if (user?.id) {
       fetchTasks();
     }
-  }, [user?.id, isLoading, toast]);
+  }, [user?.id, toast]);
 
   const handleCreateTask = async () => {
     if (!taskName.trim()) {
@@ -173,35 +173,6 @@ const Tasks = () => {
     }
   };
 
-  if (isLoading) {
-    console.log("Tasks showing auth loading state");
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Loading tasks...</p>
-          </div>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  if (!user) {
-    console.log("Tasks - No user found");
-    return (
-      <DashboardLayout>
-        <div className="space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold">Scheduled Tasks</h1>
-            <p className="text-muted-foreground">Please log in to manage scheduled tasks</p>
-          </div>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  console.log("Tasks - Rendering main content for user:", user.email);
   return (
     <DashboardLayout>
       <div className="space-y-6">

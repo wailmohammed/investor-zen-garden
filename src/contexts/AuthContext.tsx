@@ -39,117 +39,89 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const { toast } = useToast();
 
   useEffect(() => {
-    let isMounted = true;
-
-    const initializeAuth = async () => {
+    console.log("AuthProvider: Initializing...");
+    
+    // Get initial session
+    const getInitialSession = async () => {
       try {
-        console.log("Initializing auth...");
-        
-        // Get initial session
         const { data: { session }, error } = await supabase.auth.getSession();
         
-        if (!isMounted) return;
-
         if (error) {
           console.error('Error getting session:', error);
-          // Don't create mock session, just set to null
           setSession(null);
           setUser(null);
         } else {
-          console.log("Session found:", session?.user?.email || 'No session');
+          console.log("Initial session:", session?.user?.email || 'No session');
           setSession(session);
           setUser(session?.user ?? null);
           
+          // Fetch profile data if user exists
           if (session?.user) {
-            // Fetch profile data
-            try {
-              const { data: profile } = await supabase
-                .from('profiles')
-                .select('is_admin, default_currency')
-                .eq('id', session.user.id)
-                .single();
-              
-              if (isMounted) {
-                setIsAdmin(profile?.is_admin || false);
-                setDefaultCurrency(profile?.default_currency || 'USD');
-              }
-            } catch (profileError) {
-              console.error('Error fetching profile:', profileError);
-              if (isMounted) {
-                setIsAdmin(false);
-                setDefaultCurrency('USD');
-              }
-            }
+            await fetchUserProfile(session.user.id);
           }
         }
       } catch (error) {
-        console.error('Error in initializeAuth:', error);
-        if (isMounted) {
-          setSession(null);
-          setUser(null);
-          setIsAdmin(false);
-          setDefaultCurrency('USD');
-        }
+        console.error('Error in getInitialSession:', error);
+        setSession(null);
+        setUser(null);
       } finally {
-        if (isMounted) {
-          setIsLoading(false);
-          console.log("Auth initialization complete");
-        }
+        setIsLoading(false);
+        console.log("AuthProvider: Initial loading complete");
       }
     };
 
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event);
-        if (!isMounted) return;
-
+        console.log('Auth state changed:', event, session?.user?.email || 'No user');
+        
         setSession(session);
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          try {
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('is_admin, default_currency')
-              .eq('id', session.user.id)
-              .single();
-            
-            if (isMounted) {
-              setIsAdmin(profile?.is_admin || false);
-              setDefaultCurrency(profile?.default_currency || 'USD');
-            }
-          } catch (error) {
-            console.error('Error fetching profile on auth change:', error);
-            if (isMounted) {
-              setIsAdmin(false);
-              setDefaultCurrency('USD');
-            }
-          }
+          await fetchUserProfile(session.user.id);
         } else {
-          if (isMounted) {
-            setIsAdmin(false);
-            setDefaultCurrency('USD');
-          }
+          setIsAdmin(false);
+          setDefaultCurrency('USD');
         }
         
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        setIsLoading(false);
       }
     );
 
-    // Initialize auth
-    initializeAuth();
+    getInitialSession();
 
     return () => {
-      isMounted = false;
       subscription.unsubscribe();
     };
   }, []);
 
+  const fetchUserProfile = async (userId: string) => {
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('is_admin, default_currency')
+        .eq('id', userId)
+        .single();
+      
+      if (error) {
+        console.error('Error fetching profile:', error);
+        setIsAdmin(false);
+        setDefaultCurrency('USD');
+      } else {
+        setIsAdmin(profile?.is_admin || false);
+        setDefaultCurrency(profile?.default_currency || 'USD');
+      }
+    } catch (error) {
+      console.error('Error in fetchUserProfile:', error);
+      setIsAdmin(false);
+      setDefaultCurrency('USD');
+    }
+  };
+
   const signIn = async (email: string, password: string) => {
     try {
+      setIsLoading(true);
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -172,6 +144,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signUp = async (email: string, password: string, userData?: any) => {
     try {
+      setIsLoading(true);
       const { error } = await supabase.auth.signUp({
         email,
         password,
@@ -202,14 +175,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signOut = async () => {
     try {
+      setIsLoading(true);
+      console.log("Signing out...");
+      
       const { error } = await supabase.auth.signOut();
+      
       if (error) {
+        console.error('Sign out error:', error);
         toast({
           title: "Sign out failed",
           description: error.message,
           variant: "destructive",
         });
       }
+      
+      // Clear state immediately
+      setUser(null);
+      setSession(null);
+      setIsAdmin(false);
+      setDefaultCurrency('USD');
+      
+      // Force reload to clear any cached state
+      window.location.href = '/';
     } catch (error) {
       console.error('Sign out error:', error);
     }

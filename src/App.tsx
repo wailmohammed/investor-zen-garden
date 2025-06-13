@@ -27,7 +27,6 @@ import Portfolio from "./pages/Portfolio";
 
 const queryClient = new QueryClient();
 
-// Protected route component - moved inside the AppRoutes to ensure it's used within AuthProvider
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider defaultTheme="system" storageKey="investorzen-theme">
@@ -44,153 +43,105 @@ const App = () => (
   </QueryClientProvider>
 );
 
-// AppRoutes component that contains all routes
-// Now this is inside AuthProvider so useAuth is available
 const AppRoutes = () => {
-  // Protected route component
-  const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-    const { user, isLoading } = useAuth();
-    
-    if (isLoading) {
-      return <div className="flex h-screen items-center justify-center">Loading...</div>;
-    }
-    
-    return user ? <>{children}</> : <Navigate to="/login" />;
-  };
+  const { user, isLoading, isAdmin } = useAuth();
+  
+  console.log("AppRoutes - User:", user?.email, "Loading:", isLoading, "Admin:", isAdmin);
 
-  const AdminRoute = ({ children }: { children: React.ReactNode }) => {
-    const { user, isLoading, isAdmin } = useAuth();
-    
-    console.log("AdminRoute check - User:", user?.email, "IsAdmin:", isAdmin, "Loading:", isLoading);
-    
-    if (isLoading) {
-      return <div className="flex h-screen items-center justify-center">Loading...</div>;
-    }
-    
-    if (!user) {
-      return <Navigate to="/login" />;
-    }
-    
-    if (!isAdmin) {
-      console.log("Access denied: User is not an admin");
-      return <Navigate to="/dashboard" />;
-    }
-    
-    console.log("Admin access granted");
-    return <>{children}</>;
-  };
+  // Show loading spinner while checking auth
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <Routes>
+      {/* Public routes */}
       <Route path="/" element={<Index />} />
       <Route path="/pricing" element={<Pricing />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<Signup />} />
+      
+      {/* Auth routes - redirect to dashboard if already logged in */}
+      <Route 
+        path="/login" 
+        element={user ? <Navigate to="/dashboard" replace /> : <Login />} 
+      />
+      <Route 
+        path="/signup" 
+        element={user ? <Navigate to="/dashboard" replace /> : <Signup />} 
+      />
+      
+      {/* Protected routes - redirect to login if not authenticated */}
       <Route 
         path="/dashboard" 
-        element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        } 
+        element={user ? <Dashboard /> : <Navigate to="/login" replace />} 
       />
       <Route 
         path="/portfolio" 
-        element={
-          <ProtectedRoute>
-            <Portfolio />
-          </ProtectedRoute>
-        } 
+        element={user ? <Portfolio /> : <Navigate to="/login" replace />} 
       />
+      <Route 
+        path="/payment/crypto" 
+        element={user ? <CryptoPayment /> : <Navigate to="/login" replace />} 
+      />
+      <Route
+        path="/email-notifications" 
+        element={user ? <EmailNotifications /> : <Navigate to="/login" replace />} 
+      />
+      <Route
+        path="/brokers" 
+        element={user ? <BrokerIntegration /> : <Navigate to="/login" replace />} 
+      />
+      <Route
+        path="/dividends" 
+        element={user ? <Dividends /> : <Navigate to="/login" replace />} 
+      />
+      <Route
+        path="/dividend-stats" 
+        element={user ? <DividendStats /> : <Navigate to="/login" replace />} 
+      />
+      <Route
+        path="/profile" 
+        element={user ? <Profile /> : <Navigate to="/login" replace />} 
+      />
+      <Route
+        path="/settings" 
+        element={user ? <Settings /> : <Navigate to="/login" replace />} 
+      />
+      <Route
+        path="/support" 
+        element={user ? <Support /> : <Navigate to="/login" replace />} 
+      />
+      
+      {/* Admin routes - require authentication and admin privileges */}
       <Route 
         path="/admin" 
         element={
-          <AdminRoute>
-            <Admin />
-          </AdminRoute>
+          !user ? <Navigate to="/login" replace /> :
+          !isAdmin ? <Navigate to="/dashboard" replace /> :
+          <Admin />
         } 
       />
       <Route 
         path="/admin/wallets" 
         element={
-          <AdminRoute>
-            <AdminWallets />
-          </AdminRoute>
-        } 
-      />
-      <Route
-        path="/payment/crypto" 
-        element={
-          <ProtectedRoute>
-            <CryptoPayment />
-          </ProtectedRoute>
-        } 
-      />
-      <Route
-        path="/email-notifications" 
-        element={
-          <ProtectedRoute>
-            <EmailNotifications />
-          </ProtectedRoute>
+          !user ? <Navigate to="/login" replace /> :
+          !isAdmin ? <Navigate to="/dashboard" replace /> :
+          <AdminWallets />
         } 
       />
       <Route
         path="/tasks" 
         element={
-          <AdminRoute>
-            <Tasks />
-          </AdminRoute>
+          !user ? <Navigate to="/login" replace /> :
+          !isAdmin ? <Navigate to="/dashboard" replace /> :
+          <Tasks />
         } 
       />
-      <Route
-        path="/brokers" 
-        element={
-          <ProtectedRoute>
-            <BrokerIntegration />
-          </ProtectedRoute>
-        } 
-      />
-      <Route
-        path="/dividends" 
-        element={
-          <ProtectedRoute>
-            <Dividends />
-          </ProtectedRoute>
-        } 
-      />
-      <Route
-        path="/dividend-stats" 
-        element={
-          <ProtectedRoute>
-            <DividendStats />
-          </ProtectedRoute>
-        } 
-      />
-      <Route
-        path="/profile" 
-        element={
-          <ProtectedRoute>
-            <Profile />
-          </ProtectedRoute>
-        } 
-      />
-      <Route
-        path="/settings" 
-        element={
-          <ProtectedRoute>
-            <Settings />
-          </ProtectedRoute>
-        } 
-      />
-      <Route
-        path="/support" 
-        element={
-          <ProtectedRoute>
-            <Support />
-          </ProtectedRoute>
-        } 
-      />
-      {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+      
+      {/* Catch all route */}
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

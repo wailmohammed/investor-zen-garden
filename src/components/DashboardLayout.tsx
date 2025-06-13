@@ -1,3 +1,4 @@
+
 import {
   LayoutDashboard,
   Settings,
@@ -14,7 +15,7 @@ import {
   Briefcase,
   Bookmark
 } from "lucide-react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -29,7 +30,6 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   const { user, signOut, isAdmin } = useAuth();
-  const navigate = useNavigate();
   const location = useLocation();
   const pathname = location.pathname;
   const [isOpen, setIsOpen] = useState(false);
@@ -39,8 +39,8 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   };
 
   const handleLogout = async () => {
+    console.log("Logout clicked");
     await signOut();
-    navigate("/login");
   };
 
   return (
@@ -115,6 +115,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
             Dividend Stats
           </Link>
 
+          {/* Admin routes - only show if user is admin */}
           {isAdmin && (
             <>
               <Link
@@ -194,17 +195,23 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem onClick={() => navigate('/profile')}>
-                <User className="mr-2 h-4 w-4" />
-                <span>Profile</span>
+              <DropdownMenuItem>
+                <Link to="/profile" className="flex items-center w-full">
+                  <User className="mr-2 h-4 w-4" />
+                  <span>Profile</span>
+                </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate('/settings')}>
-                <Settings className="mr-2 h-4 w-4" />
-                <span>Settings</span>
+              <DropdownMenuItem>
+                <Link to="/settings" className="flex items-center w-full">
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Settings</span>
+                </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate('/support')}>
-                <HelpCircle className="mr-2 h-4 w-4" />
-                <span>Support</span>
+              <DropdownMenuItem>
+                <Link to="/support" className="flex items-center w-full">
+                  <HelpCircle className="mr-2 h-4 w-4" />
+                  <span>Support</span>
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout}>
