@@ -39,17 +39,35 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const { toast } = useToast();
 
   useEffect(() => {
-    console.log("AuthProvider: Initializing...");
+    console.log("AuthProvider: Initializing auth...");
     
-    let mounted = true;
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.email || 'No user');
+        
+        setSession(session);
+        setUser(session?.user ?? null);
+        setIsLoading(false);
+        
+        // Set basic defaults without additional queries
+        if (session?.user) {
+          // For now, just set admin status based on email for simplicity
+          const isAdminUser = session.user.email === 'admin@example.com';
+          setIsAdmin(isAdminUser);
+          setDefaultCurrency('USD');
+        } else {
+          setIsAdmin(false);
+          setDefaultCurrency('USD');
+        }
+      }
+    );
 
-    const initializeAuth = async () => {
+    // Get initial session
+    const getInitialSession = async () => {
       try {
-        // Get initial session
         const { data: { session }, error } = await supabase.auth.getSession();
         
-        if (!mounted) return;
-
         if (error) {
           console.error('Error getting session:', error);
         } else {
@@ -57,85 +75,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setSession(session);
           setUser(session?.user ?? null);
           
-          // Fetch profile data if user exists
           if (session?.user) {
-            await fetchUserProfile(session.user.id);
+            const isAdminUser = session.user.email === 'admin@example.com';
+            setIsAdmin(isAdminUser);
+            setDefaultCurrency('USD');
           }
         }
       } catch (error) {
-        console.error('Error in initializeAuth:', error);
+        console.error('Error in getInitialSession:', error);
       } finally {
-        if (mounted) {
-          setIsLoading(false);
-          console.log("AuthProvider: Initial loading complete");
-        }
+        setIsLoading(false);
       }
     };
 
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (!mounted) return;
-        
-        console.log('Auth state changed:', event, session?.user?.email || 'No user');
-        
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        if (session?.user) {
-          // Use setTimeout to avoid blocking the auth state change
-          setTimeout(() => {
-            if (mounted) {
-              fetchUserProfile(session.user.id);
-            }
-          }, 0);
-        } else {
-          setIsAdmin(false);
-          setDefaultCurrency('USD');
-        }
-        
-        if (mounted) {
-          setIsLoading(false);
-        }
-      }
-    );
-
-    initializeAuth();
+    getInitialSession();
 
     return () => {
-      mounted = false;
       subscription.unsubscribe();
     };
-  }, []);
-
-  const fetchUserProfile = async (userId: string) => {
-    try {
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('is_admin, default_currency')
-        .eq('id', userId)
-        .maybeSingle();
-      
-      if (error) {
-        console.error('Error fetching profile:', error);
-        setIsAdmin(false);
-        setDefaultCurrency('USD');
-      } else if (profile) {
-        setIsAdmin(profile.is_admin || false);
-        setDefaultCurrency(profile.default_currency || 'USD');
-      } else {
-        setIsAdmin(false);
-        setDefaultCurrency('USD');
-      }
-    } catch (error) {
-      console.error('Error in fetchUserProfile:', error);
-      setIsAdmin(false);
-      setDefaultCurrency('USD');
-    }
-  };
+  }, []); // Empty dependency array to prevent re-runs
 
   const signIn = async (email: string, password: string) => {
     try {
+      setIsLoading(true);
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -153,11 +115,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (error) {
       console.error('Sign in error:', error);
       return { error: error as AuthError };
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const signUp = async (email: string, password: string, userData?: any) => {
     try {
+      setIsLoading(true);
       const { error } = await supabase.auth.signUp({
         email,
         password,
@@ -184,12 +149,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (error) {
       console.error('Sign up error:', error);
       return { error: error as AuthError };
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const signOut = async () => {
     try {
       console.log("Signing out...");
+      setIsLoading(true);
       
       const { error } = await supabase.auth.signOut();
       
@@ -201,7 +169,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           variant: "destructive",
         });
       } else {
-        // Clear state immediately
         setUser(null);
         setSession(null);
         setIsAdmin(false);
@@ -214,6 +181,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     } catch (error) {
       console.error('Sign out error:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
