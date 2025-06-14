@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowUp, ArrowDown, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 type HoldingData = {
   id: string;
@@ -25,148 +27,106 @@ type HoldingData = {
   irr: number;
 };
 
-const mockHoldings: HoldingData[] = [
-  {
-    id: "1",
-    symbol: "AAPL",
-    name: "Apple Inc.",
-    costBasis: 135.76,
-    currentValue: 142.35,
-    dividendsReceived: 2.45,
-    capitalGain: 6.59,
-    capitalGainPercent: 4.85,
-    realizedPL: 0.00,
-    totalProfit: 9.04,
-    totalProfitPercent: 6.66,
-    dailyChange: 0.74,
-    dailyChangePercent: 0.52,
-    irr: 8.74
-  },
-  {
-    id: "2",
-    symbol: "MSFT",
-    name: "Microsoft Corporation",
-    costBasis: 220.45,
-    currentValue: 245.23,
-    dividendsReceived: 4.12,
-    capitalGain: 24.78,
-    capitalGainPercent: 11.24,
-    realizedPL: 0.00,
-    totalProfit: 28.90,
-    totalProfitPercent: 13.11,
-    dailyChange: 1.32,
-    dailyChangePercent: 0.54,
-    irr: 16.22
-  },
-  {
-    id: "3",
-    symbol: "JNJ",
-    name: "Johnson & Johnson",
-    costBasis: 152.34,
-    currentValue: 157.89,
-    dividendsReceived: 5.86,
-    capitalGain: 5.55,
-    capitalGainPercent: 3.64,
-    realizedPL: 0.00,
-    totalProfit: 11.41,
-    totalProfitPercent: 7.49,
-    dailyChange: -0.43,
-    dailyChangePercent: -0.27,
-    irr: 7.12
-  },
-  {
-    id: "4",
-    symbol: "VZ",
-    name: "Verizon Communications Inc.",
-    costBasis: 54.78,
-    currentValue: 48.32,
-    dividendsReceived: 3.24,
-    capitalGain: -6.46,
-    capitalGainPercent: -11.79,
-    realizedPL: 0.00,
-    totalProfit: -3.22,
-    totalProfitPercent: -5.88,
-    dailyChange: 0.12,
-    dailyChangePercent: 0.25,
-    irr: -3.45
-  },
-  {
-    id: "5",
-    symbol: "KO",
-    name: "Coca-Cola Co",
-    costBasis: 45.32,
-    currentValue: 47.65,
-    dividendsReceived: 2.12,
-    capitalGain: 2.33,
-    capitalGainPercent: 5.14,
-    realizedPL: 0.00,
-    totalProfit: 4.45,
-    totalProfitPercent: 9.82,
-    dailyChange: 0.23,
-    dailyChangePercent: 0.48,
-    irr: 7.23
-  },
-  {
-    id: "6",
-    symbol: "PG",
-    name: "Procter & Gamble Co",
-    costBasis: 132.65,
-    currentValue: 138.42,
-    dividendsReceived: 4.83,
-    capitalGain: 5.77,
-    capitalGainPercent: 4.35,
-    realizedPL: 0.00,
-    totalProfit: 10.60,
-    totalProfitPercent: 7.99,
-    dailyChange: 0.36,
-    dailyChangePercent: 0.26,
-    irr: 8.56
-  },
-  {
-    id: "7",
-    symbol: "SBUX",
-    name: "Starbucks Corporation",
-    costBasis: 87.23,
-    currentValue: 83.56,
-    dividendsReceived: 1.98,
-    capitalGain: -3.67,
-    capitalGainPercent: -4.21,
-    realizedPL: 0.00,
-    totalProfit: -1.69,
-    totalProfitPercent: -1.94,
-    dailyChange: -0.58,
-    dailyChangePercent: -0.69,
-    irr: -1.53
-  },
-  {
-    id: "8",
-    symbol: "O",
-    name: "Realty Income Corporation",
-    costBasis: 68.45,
-    currentValue: 70.32,
-    dividendsReceived: 4.86,
-    capitalGain: 1.87,
-    capitalGainPercent: 2.73,
-    realizedPL: 0.00,
-    totalProfit: 6.73,
-    totalProfitPercent: 9.83,
-    dailyChange: 0.24,
-    dailyChangePercent: 0.34,
-    irr: 9.42
-  }
-];
-
 // Sort types
 type SortField = 'symbol' | 'costBasis' | 'currentValue' | 'dividendsReceived' | 
   'capitalGain' | 'realizedPL' | 'totalProfit' | 'dailyChange' | 'irr';
 type SortDirection = 'asc' | 'desc';
 
 export function DividendPerformanceTable() {
-  const [holdings, setHoldings] = useState<HoldingData[]>(mockHoldings);
+  const { user } = useAuth();
+  const [holdings, setHoldings] = useState<HoldingData[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortField, setSortField] = useState<SortField>('symbol');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [showSold, setShowSold] = useState(false);
+
+  useEffect(() => {
+    fetchRealHoldingsData();
+  }, [user]);
+
+  const fetchRealHoldingsData = async () => {
+    if (!user) return;
+
+    try {
+      setLoading(true);
+      const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
+      
+      if (trading212PortfolioId) {
+        console.log('Fetching real Trading212 dividend performance data');
+        
+        const { data, error } = await supabase.functions.invoke('trading212-sync', {
+          body: { portfolioId: trading212PortfolioId }
+        });
+
+        if (error) {
+          console.error('Error fetching Trading212 data:', error);
+          toast({
+            title: "Error",
+            description: "Failed to fetch Trading212 data",
+            variant: "destructive",
+          });
+          setHoldings([]);
+          return;
+        }
+
+        if (data?.success && data.data.positions) {
+          // Convert Trading212 positions to dividend performance format
+          const realHoldings: HoldingData[] = data.data.positions
+            .filter((position: any) => position.quantity > 0) // Only show positions with shares
+            .map((position: any, index: number) => {
+              const costBasis = (position.averagePrice || 0) * (position.quantity || 0);
+              const currentValue = (position.currentPrice || 0) * (position.quantity || 0);
+              const capitalGain = currentValue - costBasis;
+              const capitalGainPercent = costBasis > 0 ? (capitalGain / costBasis) * 100 : 0;
+              
+              // Calculate dividend data from dividendInfo if available
+              const annualDividends = position.dividendInfo?.annualDividend || 0;
+              const totalProfit = capitalGain + annualDividends;
+              const totalProfitPercent = costBasis > 0 ? (totalProfit / costBasis) * 100 : 0;
+              
+              // Calculate IRR approximation (simplified)
+              const irr = totalProfitPercent; // Simplified IRR calculation
+              
+              return {
+                id: `trading212-${index}`,
+                symbol: position.symbol || 'N/A',
+                name: position.symbol || 'Unknown Company',
+                costBasis: costBasis,
+                currentValue: currentValue,
+                dividendsReceived: annualDividends,
+                capitalGain: capitalGain,
+                capitalGainPercent: capitalGainPercent,
+                realizedPL: 0, // Trading212 API doesn't provide realized P&L
+                totalProfit: totalProfit,
+                totalProfitPercent: totalProfitPercent,
+                dailyChange: position.unrealizedPnL || 0,
+                dailyChangePercent: costBasis > 0 ? ((position.unrealizedPnL || 0) / costBasis) * 100 : 0,
+                irr: irr
+              };
+            });
+          
+          setHoldings(realHoldings);
+          console.log('Real Trading212 dividend performance data loaded:', realHoldings);
+        } else {
+          setHoldings([]);
+        }
+      } else {
+        // No Trading212 connection
+        setHoldings([]);
+      }
+    } catch (error) {
+      console.error('Error fetching holdings:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load holdings data",
+        variant: "destructive",
+      });
+      setHoldings([]);
+    } finally {
+      setLoading(false);
+    }
+  };
   
   // Filter holdings based on search query
   const filteredHoldings = holdings.filter(holding => 
@@ -228,10 +188,22 @@ export function DividendPerformanceTable() {
     dailyChange: 0
   });
 
-  const totalCapitalGainPercent = (totals.capitalGain / totals.costBasis) * 100;
-  const totalProfitPercent = (totals.totalProfit / totals.costBasis) * 100;
-  const totalDailyChangePercent = (totals.dailyChange / totals.currentValue) * 100;
-  const averageIRR = holdings.reduce((sum, holding) => sum + holding.irr, 0) / holdings.length;
+  const totalCapitalGainPercent = totals.costBasis > 0 ? (totals.capitalGain / totals.costBasis) * 100 : 0;
+  const totalProfitPercent = totals.costBasis > 0 ? (totals.totalProfit / totals.costBasis) * 100 : 0;
+  const totalDailyChangePercent = totals.currentValue > 0 ? (totals.dailyChange / totals.currentValue) * 100 : 0;
+  const averageIRR = holdings.length > 0 ? holdings.reduce((sum, holding) => sum + holding.irr, 0) / holdings.length : 0;
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="animate-pulse space-y-3">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-16 bg-muted rounded"></div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -339,118 +311,130 @@ export function DividendPerformanceTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sortedHoldings.map((holding) => (
-              <TableRow key={holding.id}>
-                <TableCell>
-                  <div>
-                    <div className="font-semibold">{holding.symbol}</div>
-                    <div className="text-xs text-muted-foreground">{holding.name}</div>
-                  </div>
-                </TableCell>
-                <TableCell className="text-right">
-                  ${holding.costBasis.toFixed(2)}
-                </TableCell>
-                <TableCell className="text-right">
-                  ${holding.currentValue.toFixed(2)}
-                </TableCell>
-                <TableCell className="text-right">
-                  ${holding.dividendsReceived.toFixed(2)}
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className={cn(
-                    holding.capitalGain >= 0 ? "text-finance-green" : "text-finance-red"
-                  )}>
-                    {holding.capitalGain >= 0 ? "+" : ""}${Math.abs(holding.capitalGain).toFixed(2)}
-                    <div className="text-xs">
-                      {holding.capitalGain >= 0 ? "+" : ""}{holding.capitalGainPercent.toFixed(2)}%
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell className="text-right">
-                  ${holding.realizedPL.toFixed(2)}
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className={cn(
-                    holding.totalProfit >= 0 ? "text-finance-green" : "text-finance-red"
-                  )}>
-                    {holding.totalProfit >= 0 ? "+" : ""}${Math.abs(holding.totalProfit).toFixed(2)}
-                    <div className="text-xs">
-                      {holding.totalProfit >= 0 ? "+" : ""}{holding.totalProfitPercent.toFixed(2)}%
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className={cn(
-                    holding.dailyChange >= 0 ? "text-finance-green" : "text-finance-red"
-                  )}>
-                    {holding.dailyChange >= 0 ? "+" : ""}${Math.abs(holding.dailyChange).toFixed(2)}
-                    <div className="text-xs">
-                      {holding.dailyChange >= 0 ? "+" : ""}{holding.dailyChangePercent.toFixed(2)}%
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell className="text-right">
-                  <Badge variant={holding.irr >= 0 ? "outline" : "destructive"} className={cn(
-                    holding.irr >= 0 ? "bg-green-50 text-green-800" : "",
-                    "font-normal"
-                  )}>
-                    {holding.irr.toFixed(2)}%
-                  </Badge>
+            {sortedHoldings.length > 0 ? (
+              <>
+                {sortedHoldings.map((holding) => (
+                  <TableRow key={holding.id}>
+                    <TableCell>
+                      <div>
+                        <div className="font-semibold">{holding.symbol}</div>
+                        <div className="text-xs text-muted-foreground">{holding.name}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      ${holding.costBasis.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      ${holding.currentValue.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      ${holding.dividendsReceived.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className={cn(
+                        holding.capitalGain >= 0 ? "text-finance-green" : "text-finance-red"
+                      )}>
+                        {holding.capitalGain >= 0 ? "+" : ""}${Math.abs(holding.capitalGain).toFixed(2)}
+                        <div className="text-xs">
+                          {holding.capitalGain >= 0 ? "+" : ""}{holding.capitalGainPercent.toFixed(2)}%
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      ${holding.realizedPL.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className={cn(
+                        holding.totalProfit >= 0 ? "text-finance-green" : "text-finance-red"
+                      )}>
+                        {holding.totalProfit >= 0 ? "+" : ""}${Math.abs(holding.totalProfit).toFixed(2)}
+                        <div className="text-xs">
+                          {holding.totalProfit >= 0 ? "+" : ""}{holding.totalProfitPercent.toFixed(2)}%
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className={cn(
+                        holding.dailyChange >= 0 ? "text-finance-green" : "text-finance-red"
+                      )}>
+                        {holding.dailyChange >= 0 ? "+" : ""}${Math.abs(holding.dailyChange).toFixed(2)}
+                        <div className="text-xs">
+                          {holding.dailyChange >= 0 ? "+" : ""}{holding.dailyChangePercent.toFixed(2)}%
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Badge variant={holding.irr >= 0 ? "outline" : "destructive"} className={cn(
+                        holding.irr >= 0 ? "bg-green-50 text-green-800" : "",
+                        "font-normal"
+                      )}>
+                        {holding.irr.toFixed(2)}%
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {holdings.length > 0 && (
+                  <TableRow className="bg-muted/50 font-medium">
+                    <TableCell>Total</TableCell>
+                    <TableCell className="text-right">${totals.costBasis.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">${totals.currentValue.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">${totals.dividendsReceived.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">
+                      <div className={cn(
+                        totals.capitalGain >= 0 ? "text-finance-green" : "text-finance-red"
+                      )}>
+                        {totals.capitalGain >= 0 ? "+" : ""}${Math.abs(totals.capitalGain).toFixed(2)}
+                        <div className="text-xs">
+                          {totals.capitalGain >= 0 ? "+" : ""}{totalCapitalGainPercent.toFixed(2)}%
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">${totals.realizedPL.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">
+                      <div className={cn(
+                        totals.totalProfit >= 0 ? "text-finance-green" : "text-finance-red"
+                      )}>
+                        {totals.totalProfit >= 0 ? "+" : ""}${Math.abs(totals.totalProfit).toFixed(2)}
+                        <div className="text-xs">
+                          {totals.totalProfit >= 0 ? "+" : ""}{totalProfitPercent.toFixed(2)}%
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className={cn(
+                        totals.dailyChange >= 0 ? "text-finance-green" : "text-finance-red"
+                      )}>
+                        {totals.dailyChange >= 0 ? "+" : ""}${Math.abs(totals.dailyChange).toFixed(2)}
+                        <div className="text-xs">
+                          {totals.dailyChange >= 0 ? "+" : ""}{totalDailyChangePercent.toFixed(2)}%
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Badge variant={averageIRR >= 0 ? "outline" : "destructive"} className={cn(
+                        averageIRR >= 0 ? "bg-green-50 text-green-800" : "",
+                        "font-normal"
+                      )}>
+                        {averageIRR.toFixed(2)}%
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </>
+            ) : (
+              <TableRow>
+                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                  {loading ? "Loading holdings..." : "No holdings found. Connect your Trading212 account to see dividend performance data."}
                 </TableCell>
               </TableRow>
-            ))}
-            <TableRow className="bg-muted/50 font-medium">
-              <TableCell>Total</TableCell>
-              <TableCell className="text-right">${totals.costBasis.toFixed(2)}</TableCell>
-              <TableCell className="text-right">${totals.currentValue.toFixed(2)}</TableCell>
-              <TableCell className="text-right">${totals.dividendsReceived.toFixed(2)}</TableCell>
-              <TableCell className="text-right">
-                <div className={cn(
-                  totals.capitalGain >= 0 ? "text-finance-green" : "text-finance-red"
-                )}>
-                  {totals.capitalGain >= 0 ? "+" : ""}${Math.abs(totals.capitalGain).toFixed(2)}
-                  <div className="text-xs">
-                    {totals.capitalGain >= 0 ? "+" : ""}{totalCapitalGainPercent.toFixed(2)}%
-                  </div>
-                </div>
-              </TableCell>
-              <TableCell className="text-right">${totals.realizedPL.toFixed(2)}</TableCell>
-              <TableCell className="text-right">
-                <div className={cn(
-                  totals.totalProfit >= 0 ? "text-finance-green" : "text-finance-red"
-                )}>
-                  {totals.totalProfit >= 0 ? "+" : ""}${Math.abs(totals.totalProfit).toFixed(2)}
-                  <div className="text-xs">
-                    {totals.totalProfit >= 0 ? "+" : ""}{totalProfitPercent.toFixed(2)}%
-                  </div>
-                </div>
-              </TableCell>
-              <TableCell className="text-right">
-                <div className={cn(
-                  totals.dailyChange >= 0 ? "text-finance-green" : "text-finance-red"
-                )}>
-                  {totals.dailyChange >= 0 ? "+" : ""}${Math.abs(totals.dailyChange).toFixed(2)}
-                  <div className="text-xs">
-                    {totals.dailyChange >= 0 ? "+" : ""}{totalDailyChangePercent.toFixed(2)}%
-                  </div>
-                </div>
-              </TableCell>
-              <TableCell className="text-right">
-                <Badge variant={averageIRR >= 0 ? "outline" : "destructive"} className={cn(
-                  averageIRR >= 0 ? "bg-green-50 text-green-800" : "",
-                  "font-normal"
-                )}>
-                  {averageIRR.toFixed(2)}%
-                </Badge>
-              </TableCell>
-            </TableRow>
+            )}
           </TableBody>
         </Table>
       </div>
       
       <div className="flex justify-between text-sm text-muted-foreground">
         <div>Showing {filteredHoldings.length} of {holdings.length} holdings</div>
-        <div>Data as of May 14, 2025</div>
+        <div>Data from Trading212 - {new Date().toLocaleDateString()}</div>
       </div>
     </div>
   );
