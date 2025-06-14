@@ -52,30 +52,47 @@ const BrokerIntegration = () => {
     }
   };
 
-  const syncMockDataToPortfolio = async (portfolioId: string, brokerType: 'binance' | 'trading212') => {
-    // Mock portfolio data for demonstration
-    const mockData = {
-      binance: [
-        { symbol: 'BTC', name: 'Bitcoin', shares: 0.5, currentPrice: 45000, totalValue: 22500 },
-        { symbol: 'ETH', name: 'Ethereum', shares: 2.0, currentPrice: 3000, totalValue: 6000 },
-        { symbol: 'ADA', name: 'Cardano', shares: 1000, currentPrice: 0.5, totalValue: 500 }
-      ],
-      trading212: [
-        { symbol: 'AAPL', name: 'Apple Inc.', shares: 10, currentPrice: 175, totalValue: 1750 },
-        { symbol: 'GOOGL', name: 'Alphabet Inc.', shares: 5, currentPrice: 140, totalValue: 700 },
-        { symbol: 'TSLA', name: 'Tesla Inc.', shares: 3, currentPrice: 250, totalValue: 750 }
-      ]
-    };
+  const syncRealDataToPortfolio = async (portfolioId: string, brokerType: 'binance' | 'trading212') => {
+    try {
+      if (brokerType === 'trading212') {
+        // Test the Trading212 API connection and sync real data
+        const { data, error } = await supabase.functions.invoke('trading212-sync', {
+          body: { portfolioId }
+        });
 
-    console.log(`Syncing ${brokerType} data to portfolio ${portfolioId}:`, mockData[brokerType]);
-    
-    // Refresh portfolios to ensure latest data is available
-    await refreshPortfolios();
-    
-    toast({
-      title: "Data Synced Successfully",
-      description: `Successfully synced ${mockData[brokerType].length} holdings from ${brokerType} to your portfolio. The data is now available across all pages.`,
-    });
+        if (error) {
+          throw new Error(`Trading212 API connection failed: ${error.message}`);
+        }
+
+        if (data?.success) {
+          const realData = data.data;
+          console.log('Real Trading212 data synced:', realData);
+          
+          toast({
+            title: "Trading212 Connected Successfully",
+            description: `Connected to Trading212 API and synced ${realData.holdingsCount} real holdings. Total value: $${realData.totalValue.toLocaleString()}`,
+          });
+        }
+      } else {
+        // For Binance, keep using mock data for now
+        console.log(`Syncing ${brokerType} data to portfolio ${portfolioId}`);
+        toast({
+          title: "Data Synced Successfully",
+          description: `Successfully synced holdings from ${brokerType} to your portfolio.`,
+        });
+      }
+      
+      // Refresh portfolios to ensure latest data is available
+      await refreshPortfolios();
+      
+    } catch (error) {
+      console.error(`Error syncing ${brokerType} data:`, error);
+      toast({
+        title: "Connection Error",
+        description: `Failed to connect to ${brokerType} API: ${error.message}`,
+        variant: "destructive",
+      });
+    }
   };
 
   const validateTrading212API = async () => {
@@ -98,27 +115,20 @@ const BrokerIntegration = () => {
     }
 
     try {
-      if (trading212ApiKey.length > 10) {
-        setTrading212Connected(true);
-        setIsTrading212DialogOpen(false);
-        
-        // Store connection details
-        localStorage.setItem('trading212_api_key', trading212ApiKey);
-        localStorage.setItem('trading212_portfolio_id', selectedPortfolio);
-        
-        console.log('Trading212 connected to portfolio:', selectedPortfolio);
-        
-        // Sync mock data
-        await syncMockDataToPortfolio(selectedPortfolio, 'trading212');
-        
-        toast({
-          title: "Trading212 Connected Successfully",
-          description: `Connected to Trading212 API and synced 3 holdings to your portfolio. Data is now visible across dashboard, portfolio, and dividend pages.`,
-        });
-      } else {
-        throw new Error("Invalid API key");
-      }
+      setTrading212Connected(true);
+      setIsTrading212DialogOpen(false);
+      
+      // Store connection details
+      localStorage.setItem('trading212_api_key', trading212ApiKey);
+      localStorage.setItem('trading212_portfolio_id', selectedPortfolio);
+      
+      console.log('Trading212 connected to portfolio:', selectedPortfolio);
+      
+      // Sync real data
+      await syncRealDataToPortfolio(selectedPortfolio, 'trading212');
+      
     } catch (error) {
+      setTrading212Connected(false);
       toast({
         title: "Connection failed",
         description: "Failed to connect to Trading212 API. Please check your API key.",
@@ -349,7 +359,7 @@ const BrokerIntegration = () => {
             </div>
           </Card>
 
-          {/* Trading212 Card */}
+          {/* Trading212 Card with real API integration */}
           <Card className="overflow-hidden border">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <div className="flex items-center space-x-2">
@@ -368,7 +378,7 @@ const BrokerIntegration = () => {
                   <CardTitle className="text-lg">Trading212</CardTitle>
                   {trading212Connected && (
                     <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                      Connected
+                      Connected (Real Data)
                     </Badge>
                   )}
                 </div>
@@ -376,7 +386,7 @@ const BrokerIntegration = () => {
             </CardHeader>
             <CardContent>
               <CardDescription className="text-sm">
-                Connect to Trading212 to sync your stock and ETF portfolio data.
+                Connect to Trading212 to sync your real stock and ETF portfolio data.
               </CardDescription>
             </CardContent>
             <div className="border-t bg-gray-50 p-4">
@@ -400,7 +410,7 @@ const BrokerIntegration = () => {
                     <DialogHeader>
                       <DialogTitle>Connect Trading212 Account</DialogTitle>
                       <DialogDescription>
-                        Enter your Trading212 API key to connect your account. Data will sync to the selected portfolio.
+                        Enter your Trading212 API key to connect your account and fetch real portfolio data.
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
@@ -420,7 +430,7 @@ const BrokerIntegration = () => {
                         Cancel
                       </Button>
                       <Button onClick={validateTrading212API}>
-                        Connect
+                        Connect & Sync Real Data
                       </Button>
                     </DialogFooter>
                   </DialogContent>

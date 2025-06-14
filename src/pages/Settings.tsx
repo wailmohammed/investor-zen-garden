@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { supabase } from "@/integrations/supabase/client";
 import { PortfolioSelector } from "@/components/ui/portfolio-selector";
+import ApiKeyManager from "@/components/ApiKeyManager";
 
 interface Portfolio {
   id: string;
@@ -179,6 +179,9 @@ const Settings = () => {
         </div>
 
         <div className="grid grid-cols-1 gap-6">
+          {/* API Key Management Section */}
+          <ApiKeyManager />
+
           <Card>
             <CardHeader>
               <CardTitle>Portfolio Settings</CardTitle>

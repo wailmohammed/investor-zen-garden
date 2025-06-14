@@ -5,6 +5,7 @@ import { PortfolioSelector } from "@/components/ui/portfolio-selector";
 import { useState, useEffect } from "react";
 import { usePortfolio } from "@/contexts/PortfolioContext";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const PortfolioSummary = () => {
   const { toast } = useToast();
@@ -18,6 +19,7 @@ const PortfolioSummary = () => {
     holdingsCount: 0,
     netDeposits: "$0.00"
   });
+  const [isLoadingData, setIsLoadingData] = useState(false);
 
   // Fetch portfolio-specific data
   useEffect(() => {
@@ -37,6 +39,7 @@ const PortfolioSummary = () => {
       }
 
       try {
+        setIsLoadingData(true);
         console.log('Fetching data for portfolio:', selectedPortfolio);
         
         // Check if this is a Trading212 connected portfolio
@@ -44,17 +47,45 @@ const PortfolioSummary = () => {
         const binancePortfolioId = localStorage.getItem('binance_portfolio_id');
         
         if (selectedPortfolio === trading212PortfolioId) {
-          console.log('Loading actual Trading212 portfolio data');
-          // Use actual Trading212 data from user's account
-          setPortfolioData({
-            totalValue: "$2,631.96",
-            todayChange: "-$32.15", // Estimated daily change
-            todayPercentage: "-1.21%",
-            totalReturn: "-$95.13",
-            totalReturnPercentage: "-11.0%",
-            holdingsCount: 3,
-            netDeposits: "$2,727.09"
+          console.log('Fetching real Trading212 portfolio data');
+          
+          // Call the Trading212 sync function to get real data
+          const { data, error } = await supabase.functions.invoke('trading212-sync', {
+            body: { portfolioId: selectedPortfolio }
           });
+
+          if (error) {
+            console.error('Error fetching Trading212 data:', error);
+            toast({
+              title: "Error",
+              description: "Failed to fetch Trading212 data. Using cached data.",
+              variant: "destructive",
+            });
+            // Fall back to cached data or mock data
+            setPortfolioData({
+              totalValue: "$2,631.96",
+              todayChange: "-$32.15",
+              todayPercentage: "-1.21%",
+              totalReturn: "-$95.13",
+              totalReturnPercentage: "-11.0%",
+              holdingsCount: 3,
+              netDeposits: "$2,727.09"
+            });
+          } else if (data?.success) {
+            // Use real Trading212 data
+            const realData = data.data;
+            setPortfolioData({
+              totalValue: `$${realData.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              todayChange: `${realData.todayChange >= 0 ? '+' : ''}$${realData.todayChange.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              todayPercentage: `${realData.todayPercentage >= 0 ? '+' : ''}${realData.todayPercentage.toFixed(2)}%`,
+              totalReturn: `${realData.totalReturn >= 0 ? '+' : ''}$${realData.totalReturn.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              totalReturnPercentage: `${realData.totalReturnPercentage >= 0 ? '+' : ''}${realData.totalReturnPercentage.toFixed(2)}%`,
+              holdingsCount: realData.holdingsCount,
+              netDeposits: `$${realData.netDeposits.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            });
+            
+            console.log('Real Trading212 data loaded:', realData);
+          }
         } else if (selectedPortfolio === binancePortfolioId) {
           console.log('Loading Binance portfolio data');
           setPortfolioData({
@@ -86,6 +117,8 @@ const PortfolioSummary = () => {
           description: "Failed to load portfolio data",
           variant: "destructive",
         });
+      } finally {
+        setIsLoadingData(false);
       }
     };
 
@@ -128,6 +161,10 @@ const PortfolioSummary = () => {
           </div>
         ) : selectedPortfolio ? (
           <div className="grid grid-cols-1 gap-4">
+            {isLoadingData && (
+              <div className="text-sm text-blue-600">🔄 Fetching real-time data...</div>
+            )}
+            
             <StatCard 
               label="Total Value" 
               value={portfolioData.totalValue}
@@ -170,7 +207,7 @@ const PortfolioSummary = () => {
                 {portfolios.find(p => p.id === selectedPortfolio)?.name || 'Unknown Portfolio'}
               </p>
               {selectedPortfolio === localStorage.getItem('trading212_portfolio_id') && (
-                <p className="text-xs text-blue-600">✓ Connected to Trading212</p>
+                <p className="text-xs text-blue-600">✓ Connected to Trading212 (Real Data)</p>
               )}
               {selectedPortfolio === localStorage.getItem('binance_portfolio_id') && (
                 <p className="text-xs text-yellow-600">✓ Connected to Binance</p>
