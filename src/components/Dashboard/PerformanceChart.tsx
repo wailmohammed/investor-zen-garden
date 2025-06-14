@@ -16,6 +16,7 @@ const PerformanceChart = () => {
   const { selectedPortfolio } = usePortfolio();
   const [performanceData, setPerformanceData] = useState<PerformanceData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchPerformance = async () => {
@@ -27,6 +28,7 @@ const PerformanceChart = () => {
 
       try {
         setIsLoading(true);
+        setError(null);
         
         // Check if this is a Trading212 connected portfolio
         const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
@@ -40,70 +42,63 @@ const PerformanceChart = () => {
 
           if (error) {
             console.error('Error fetching Trading212 performance:', error);
+            setError('Failed to fetch performance data');
             setPerformanceData([]);
-          } else if (data?.success) {
+          } else if (!data?.success) {
+            console.error('Trading212 API error:', data?.error);
+            setError(data?.message || 'No performance data available');
+            setPerformanceData([]);
+          } else if (data.data) {
             // Generate performance data based on real portfolio value
-            const currentValue = data.data.totalValue || 15000;
-            const netDeposits = data.data.netDeposits || 13800;
-            const totalReturn = data.data.totalReturn || 1200;
+            const currentValue = data.data.totalValue || 0;
+            const netDeposits = data.data.netDeposits || 0;
+            const totalReturn = data.data.totalReturn || 0;
             
-            // Generate 30 days of historical data
-            const today = new Date();
-            const performanceHistory: PerformanceData[] = [];
-            
-            for (let i = 29; i >= 0; i--) {
-              const date = new Date(today);
-              date.setDate(date.getDate() - i);
+            if (currentValue > 0) {
+              // Generate 30 days of historical data
+              const today = new Date();
+              const performanceHistory: PerformanceData[] = [];
               
-              // Calculate progressive value based on total return
-              const progressRatio = (30 - i) / 30;
-              const historicalReturn = totalReturn * progressRatio;
-              const historicalValue = netDeposits + historicalReturn;
+              for (let i = 29; i >= 0; i--) {
+                const date = new Date(today);
+                date.setDate(date.getDate() - i);
+                
+                // Calculate progressive value based on total return
+                const progressRatio = (30 - i) / 30;
+                const historicalReturn = totalReturn * progressRatio;
+                const historicalValue = netDeposits + historicalReturn;
+                
+                // Add some realistic daily variation
+                const dailyVariation = (Math.random() - 0.5) * currentValue * 0.02;
+                const value = historicalValue + dailyVariation;
+                
+                performanceHistory.push({
+                  date: date.toISOString().split('T')[0],
+                  value: Number(value.toFixed(2))
+                });
+              }
               
-              // Add some realistic daily variation
-              const dailyVariation = (Math.random() - 0.5) * currentValue * 0.02;
-              const value = historicalValue + dailyVariation;
+              // Ensure the last value matches current portfolio value
+              if (performanceHistory.length > 0) {
+                performanceHistory[performanceHistory.length - 1].value = currentValue;
+              }
               
-              performanceHistory.push({
-                date: date.toISOString().split('T')[0],
-                value: Number(value.toFixed(2))
-              });
+              setPerformanceData(performanceHistory);
+            } else {
+              setError('No performance data available');
+              setPerformanceData([]);
             }
-            
-            // Ensure the last value matches current portfolio value
-            if (performanceHistory.length > 0) {
-              performanceHistory[performanceHistory.length - 1].value = currentValue;
-            }
-            
-            setPerformanceData(performanceHistory);
+          } else {
+            setError('No performance data available');
+            setPerformanceData([]);
           }
         } else {
-          // Generate default data for other portfolios
-          const generateMockData = () => {
-            const data: PerformanceData[] = [];
-            const today = new Date();
-            let baseValue = 250000;
-            
-            for (let i = 29; i >= 0; i--) {
-              const date = new Date(today);
-              date.setDate(date.getDate() - i);
-              
-              // Add realistic market movements
-              const change = (Math.random() - 0.5) * 5000;
-              baseValue += change;
-              
-              data.push({
-                date: date.toISOString().split('T')[0],
-                value: Number(baseValue.toFixed(2))
-              });
-            }
-            return data;
-          };
-          
-          setPerformanceData(generateMockData());
+          setError('Connect your Trading212 account to see real performance');
+          setPerformanceData([]);
         }
       } catch (error) {
         console.error('Error fetching performance:', error);
+        setError('Failed to fetch performance data');
         setPerformanceData([]);
       } finally {
         setIsLoading(false);
@@ -134,7 +129,12 @@ const PerformanceChart = () => {
         <CardTitle>Portfolio Performance</CardTitle>
       </CardHeader>
       <CardContent>
-        {performanceData.length === 0 ? (
+        {error ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <p>{error}</p>
+            <p className="text-sm mt-1">Go to Broker Integration to connect your Trading212 account.</p>
+          </div>
+        ) : performanceData.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <p>No performance data available.</p>
             <p className="text-sm mt-1">Connect your Trading212 account to see real performance.</p>

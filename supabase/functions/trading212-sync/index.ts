@@ -46,8 +46,15 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Get Trading212 API key from Supabase secrets or user's stored key
-    const trading212ApiKey = Deno.env.get('TRADING212_API_KEY') || '23133911ZTqHOBsBwckReMYwQgTWukpsBiHZs';
+    // Get Trading212 API key from Supabase secrets
+    const trading212ApiKey = Deno.env.get('TRADING212_API_KEY');
+    
+    if (!trading212ApiKey) {
+      return new Response(
+        JSON.stringify({ error: 'Trading212 API key not configured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
     console.log('Fetching Trading212 data for user:', user.id);
 
@@ -58,9 +65,20 @@ Deno.serve(async (req) => {
       const accountData = await apiClient.fetchAccountData();
       const positions = await apiClient.fetchPositions();
 
+      if (!accountData || !positions || positions.length === 0) {
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'No data available from Trading212 API',
+            message: 'Unable to fetch account data or positions. Please check your Trading212 connection.'
+          }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       // Fetch dividend data for positions and calculate dividend income
       const positionsWithDividends = await Promise.all(
-        positions.slice(0, 10).map(async (position) => {
+        positions.slice(0, 50).map(async (position) => {
           const dividendData = await fetchDividendData(position.ticker);
           const dividendInfo = calculateDividendIncome(position, dividendData);
           
@@ -95,19 +113,14 @@ Deno.serve(async (req) => {
 
     } catch (error) {
       if (error.message === 'RATE_LIMITED') {
-        console.log('Trading212 API rate limit hit, returning realistic mock data');
-        const mockData = Trading212ApiClient.getMockData();
-        
-        // Add dividend metrics to mock data
-        const dividendMetrics = calculateDividendMetrics(mockData.positions);
-        const finalMockData = {
-          ...mockData,
-          dividendMetrics
-        };
-        
+        console.log('Trading212 API rate limit hit - no data available');
         return new Response(
-          JSON.stringify({ success: true, data: finalMockData }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({ 
+            success: false, 
+            error: 'RATE_LIMITED',
+            message: 'Trading212 API rate limit reached. Please try again later.'
+          }),
+          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       
@@ -117,7 +130,11 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Error in trading212-sync function:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        success: false, 
+        error: error.message,
+        message: 'Failed to connect to Trading212. Please check your API configuration.'
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }

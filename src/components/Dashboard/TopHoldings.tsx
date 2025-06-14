@@ -23,6 +23,7 @@ const TopHoldings = () => {
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [allHoldings, setAllHoldings] = useState<Holding[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchHoldings = async () => {
@@ -35,6 +36,7 @@ const TopHoldings = () => {
 
       try {
         setIsLoading(true);
+        setError(null);
         
         // Check if this is a Trading212 connected portfolio
         const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
@@ -48,9 +50,15 @@ const TopHoldings = () => {
 
           if (error) {
             console.error('Error fetching Trading212 holdings:', error);
+            setError('Failed to fetch Trading212 data. Please check your connection.');
             setHoldings([]);
             setAllHoldings([]);
-          } else if (data?.success && data.data.positions) {
+          } else if (!data?.success) {
+            console.error('Trading212 API error:', data?.error);
+            setError(data?.message || 'No data available from Trading212');
+            setHoldings([]);
+            setAllHoldings([]);
+          } else if (data.data.positions && data.data.positions.length > 0) {
             const processedHoldings = data.data.positions.map((position: any) => {
               const marketValue = position.marketValue || (position.quantity * position.currentPrice);
               const unrealizedPnL = position.unrealizedPnL || 0;
@@ -72,14 +80,20 @@ const TopHoldings = () => {
             setAllHoldings(processedHoldings);
             // Show top 5 in the card
             setHoldings(processedHoldings.slice(0, 5));
+          } else {
+            setError('No holdings found in your Trading212 account');
+            setHoldings([]);
+            setAllHoldings([]);
           }
         } else {
-          // No real data available for other portfolios
+          // No Trading212 connection
+          setError('Connect your Trading212 account to see real holdings');
           setHoldings([]);
           setAllHoldings([]);
         }
       } catch (error) {
         console.error('Error fetching holdings:', error);
+        setError('Failed to fetch holdings data');
         setHoldings([]);
         setAllHoldings([]);
       } finally {
@@ -116,7 +130,12 @@ const TopHoldings = () => {
         )}
       </CardHeader>
       <CardContent>
-        {holdings.length === 0 ? (
+        {error ? (
+          <div className="text-center py-4 text-muted-foreground">
+            <p>{error}</p>
+            <p className="text-sm mt-1">Go to Broker Integration to connect your Trading212 account.</p>
+          </div>
+        ) : holdings.length === 0 ? (
           <div className="text-center py-4 text-muted-foreground">
             <p>No holdings data available.</p>
             <p className="text-sm mt-1">Connect your Trading212 account to see real holdings.</p>

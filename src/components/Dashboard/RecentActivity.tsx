@@ -20,6 +20,7 @@ const RecentActivity = () => {
   const { selectedPortfolio } = usePortfolio();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Generate sample activities based on real portfolio data
   const generateActivities = (positions: any[], dividendData: any) => {
@@ -68,6 +69,7 @@ const RecentActivity = () => {
 
       try {
         setIsLoading(true);
+        setError(null);
         
         // Check if this is a Trading212 connected portfolio
         const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
@@ -81,16 +83,26 @@ const RecentActivity = () => {
 
           if (error) {
             console.error('Error fetching Trading212 activity:', error);
+            setError('Failed to fetch activity data');
             setActivities([]);
-          } else if (data?.success && data.data.positions) {
+          } else if (!data?.success) {
+            console.error('Trading212 API error:', data?.error);
+            setError(data?.message || 'No activity data available');
+            setActivities([]);
+          } else if (data.data.positions && data.data.positions.length > 0) {
             const generatedActivities = generateActivities(data.data.positions, data.data);
             setActivities(generatedActivities);
+          } else {
+            setError('No activity found in your Trading212 account');
+            setActivities([]);
           }
         } else {
+          setError('Connect your Trading212 account to see real activity');
           setActivities([]);
         }
       } catch (error) {
         console.error('Error fetching activity:', error);
+        setError('Failed to fetch activity data');
         setActivities([]);
       } finally {
         setIsLoading(false);
@@ -149,7 +161,12 @@ const RecentActivity = () => {
         <CardTitle>Recent Activity</CardTitle>
       </CardHeader>
       <CardContent>
-        {activities.length === 0 ? (
+        {error ? (
+          <div className="text-center py-4 text-muted-foreground">
+            <p>{error}</p>
+            <p className="text-sm mt-1">Go to Broker Integration to connect your Trading212 account.</p>
+          </div>
+        ) : activities.length === 0 ? (
           <div className="text-center py-4 text-muted-foreground">
             <p>No recent activity.</p>
             <p className="text-sm mt-1">Connect your Trading212 account to see real activity.</p>

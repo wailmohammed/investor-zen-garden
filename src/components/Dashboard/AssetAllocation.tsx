@@ -19,6 +19,7 @@ const AssetAllocation = () => {
   const { selectedPortfolio } = usePortfolio();
   const [allocationData, setAllocationData] = useState<AllocationData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchAllocation = async () => {
@@ -30,6 +31,7 @@ const AssetAllocation = () => {
 
       try {
         setIsLoading(true);
+        setError(null);
         
         // Check if this is a Trading212 connected portfolio
         const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
@@ -43,8 +45,13 @@ const AssetAllocation = () => {
 
           if (error) {
             console.error('Error fetching Trading212 allocation:', error);
+            setError('Failed to fetch allocation data');
             setAllocationData([]);
-          } else if (data?.success && data.data.positions) {
+          } else if (!data?.success) {
+            console.error('Trading212 API error:', data?.error);
+            setError(data?.message || 'No allocation data available');
+            setAllocationData([]);
+          } else if (data.data.positions && data.data.positions.length > 0) {
             const positions = data.data.positions;
             
             // Calculate total value from positions
@@ -69,14 +76,20 @@ const AssetAllocation = () => {
               
               setAllocationData(allocation);
             } else {
+              setError('No allocation data available');
               setAllocationData([]);
             }
+          } else {
+            setError('No positions found in your Trading212 account');
+            setAllocationData([]);
           }
         } else {
+          setError('Connect your Trading212 account to see real allocation');
           setAllocationData([]);
         }
       } catch (error) {
         console.error('Error fetching allocation:', error);
+        setError('Failed to fetch allocation data');
         setAllocationData([]);
       } finally {
         setIsLoading(false);
@@ -107,7 +120,12 @@ const AssetAllocation = () => {
         <CardTitle>Asset Allocation</CardTitle>
       </CardHeader>
       <CardContent>
-        {allocationData.length === 0 ? (
+        {error ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <p>{error}</p>
+            <p className="text-sm mt-1">Go to Broker Integration to connect your Trading212 account.</p>
+          </div>
+        ) : allocationData.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <p>No allocation data available.</p>
             <p className="text-sm mt-1">Connect your Trading212 account to see real allocation.</p>
