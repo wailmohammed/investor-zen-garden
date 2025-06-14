@@ -26,52 +26,61 @@ const BrokerIntegration = () => {
   });
 
   const syncRealDataToPortfolio = async (brokerName: string) => {
+    if (!selectedPortfolio) {
+      toast({
+        title: "No Portfolio Selected",
+        description: "Please select a portfolio first from the dashboard.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       setIsConnecting(prev => ({ ...prev, [brokerName]: true }));
       
-      let portfolioData;
-      
       if (brokerName === 'Trading212') {
-        console.log('Syncing real Trading212 data...');
+        console.log('Testing Trading212 connection...');
         
-        // Call the Trading212 sync function to get real data
+        // Call the Trading212 sync function to test the connection
         const { data, error } = await supabase.functions.invoke('trading212-sync', {
           body: { portfolioId: selectedPortfolio }
         });
 
         if (error) {
-          throw new Error(`Failed to fetch Trading212 data: ${error.message}`);
+          console.error('Trading212 connection error:', error);
+          throw new Error(`Failed to connect to Trading212: ${error.message}`);
         }
 
         if (!data?.success) {
-          throw new Error('Failed to get successful response from Trading212 API');
+          console.error('Trading212 API error:', data?.error, data?.message);
+          if (data?.error === 'RATE_LIMITED') {
+            throw new Error('Trading212 API rate limit reached. Please try again in a few minutes.');
+          }
+          throw new Error(data?.message || 'Failed to connect to Trading212 API. Please check your API key.');
         }
 
-        portfolioData = data.data;
-        console.log('Real Trading212 data received:', portfolioData);
+        // Store the successful connection
+        localStorage.setItem('trading212_portfolio_id', selectedPortfolio);
+        localStorage.setItem('trading212_connected', 'true');
+        localStorage.setItem('trading212_data', JSON.stringify(data.data));
+
+        setConnectedBrokers(prev => ({ ...prev, [brokerName]: true }));
+
+        toast({
+          title: "Success!",
+          description: `Trading212 connected successfully. Found ${data.data.holdingsCount} holdings with total value of $${data.data.totalValue.toLocaleString()}.`,
+        });
+
+        console.log('Trading212 connected successfully with real data:', data.data);
       } else {
-        // For other brokers, use mock data for now
-        portfolioData = {
-          totalValue: brokerName === 'Binance' ? 29000 : 15000,
-          positions: brokerName === 'Binance' ? 3 : 5,
-          performance: brokerName === 'Binance' ? 4.5 : 2.1
-        };
+        // For other brokers, show not implemented message
+        toast({
+          title: "Coming Soon",
+          description: `${brokerName} integration is coming soon.`,
+          variant: "destructive",
+        });
       }
-
-      // Store the connection in localStorage
-      localStorage.setItem(`${brokerName.toLowerCase()}_portfolio_id`, selectedPortfolio);
-      localStorage.setItem(`${brokerName.toLowerCase()}_connected`, 'true');
-      localStorage.setItem(`${brokerName.toLowerCase()}_data`, JSON.stringify(portfolioData));
-
-      setConnectedBrokers(prev => ({ ...prev, [brokerName]: true }));
-
-      toast({
-        title: "Success!",
-        description: `${brokerName} account connected successfully`,
-      });
-
-      console.log(`${brokerName} connected with real data:`, portfolioData);
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error connecting ${brokerName}:`, error);
       toast({
         title: "Connection Failed",
@@ -116,13 +125,24 @@ const BrokerIntegration = () => {
                   <CardContent className="flex flex-col items-center justify-center space-y-4">
                     <img src={logo} alt={`${brokerName} Logo`} className="h-12 w-auto object-contain" />
                     {connectedBrokers[brokerName] ? (
-                      <Button variant="destructive" onClick={() => disconnectBroker(brokerName)}>
-                        Disconnect {brokerName}
-                      </Button>
+                      <div className="flex flex-col items-center space-y-2">
+                        <div className="text-sm text-green-600 font-medium">✓ Connected</div>
+                        <Button variant="destructive" onClick={() => disconnectBroker(brokerName)}>
+                          Disconnect {brokerName}
+                        </Button>
+                      </div>
                     ) : (
-                      <Button onClick={() => syncRealDataToPortfolio(brokerName)} disabled={isConnecting[brokerName]}>
+                      <Button 
+                        onClick={() => syncRealDataToPortfolio(brokerName)} 
+                        disabled={isConnecting[brokerName] || !selectedPortfolio}
+                      >
                         {isConnecting[brokerName] ? `Connecting...` : `Connect ${brokerName}`}
                       </Button>
+                    )}
+                    {!selectedPortfolio && (
+                      <p className="text-sm text-muted-foreground text-center">
+                        Please select a portfolio from the dashboard first
+                      </p>
                     )}
                   </CardContent>
                 </Card>
