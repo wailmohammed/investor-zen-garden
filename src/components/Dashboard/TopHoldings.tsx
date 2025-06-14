@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePortfolio } from "@/contexts/PortfolioContext";
 import { supabase } from "@/integrations/supabase/client";
+import ViewAllHoldingsDialog from './ViewAllHoldingsDialog';
 
 interface Holding {
   symbol: string;
@@ -20,12 +21,14 @@ const TopHoldings = () => {
   const { user } = useAuth();
   const { selectedPortfolio } = usePortfolio();
   const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [allHoldings, setAllHoldings] = useState<Holding[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchHoldings = async () => {
       if (!user || !selectedPortfolio) {
         setHoldings([]);
+        setAllHoldings([]);
         setIsLoading(false);
         return;
       }
@@ -46,8 +49,9 @@ const TopHoldings = () => {
           if (error) {
             console.error('Error fetching Trading212 holdings:', error);
             setHoldings([]);
+            setAllHoldings([]);
           } else if (data?.success && data.data.positions) {
-            const realHoldings = data.data.positions.slice(0, 5).map((position: any) => {
+            const processedHoldings = data.data.positions.map((position: any) => {
               const marketValue = position.marketValue || (position.quantity * position.currentPrice);
               const unrealizedPnL = position.unrealizedPnL || 0;
               const changePercent = marketValue > 0 ? (unrealizedPnL / (marketValue - unrealizedPnL)) * 100 : 0;
@@ -64,15 +68,20 @@ const TopHoldings = () => {
               };
             });
             
-            setHoldings(realHoldings);
+            // Store all holdings for the dialog
+            setAllHoldings(processedHoldings);
+            // Show top 5 in the card
+            setHoldings(processedHoldings.slice(0, 5));
           }
         } else {
           // No real data available for other portfolios
           setHoldings([]);
+          setAllHoldings([]);
         }
       } catch (error) {
         console.error('Error fetching holdings:', error);
         setHoldings([]);
+        setAllHoldings([]);
       } finally {
         setIsLoading(false);
       }
@@ -84,7 +93,7 @@ const TopHoldings = () => {
   if (isLoading) {
     return (
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Top Holdings</CardTitle>
         </CardHeader>
         <CardContent>
@@ -100,8 +109,11 @@ const TopHoldings = () => {
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Top Holdings</CardTitle>
+        {allHoldings.length > 0 && (
+          <ViewAllHoldingsDialog holdings={allHoldings} />
+        )}
       </CardHeader>
       <CardContent>
         {holdings.length === 0 ? (
