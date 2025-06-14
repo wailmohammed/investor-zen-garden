@@ -128,10 +128,9 @@ const PerformanceChart = () => {
           }
         }
 
-        // Use demo data as final fallback
-        const demoPerformance = generatePerformanceHistory(254872.65, 209241.37, 45631.28);
-        setPerformanceData(demoPerformance);
-        setDataSource('Demo Data');
+        // No real data available
+        setError('No performance data available');
+        setPerformanceData([]);
         
       } catch (error) {
         console.error('Error fetching performance:', error);
@@ -197,15 +196,10 @@ const PerformanceChart = () => {
         )}
       </CardHeader>
       <CardContent>
-        {error ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <p>{error}</p>
-            <p className="text-sm mt-1">Go to Broker Integration to connect your Trading212 account.</p>
-          </div>
-        ) : performanceData.length === 0 ? (
+        {error || performanceData.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <p>No performance data available.</p>
-            <p className="text-sm mt-1">Connect your Trading212 account or upload CSV data to see performance.</p>
+            <p className="text-sm mt-1">Go to Broker Integration to connect your Trading212 account.</p>
           </div>
         ) : (
           <div className="h-64">

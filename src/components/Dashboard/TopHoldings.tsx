@@ -176,43 +176,10 @@ const TopHoldings = () => {
           }
         }
 
-        // Use demo data as final fallback
-        const demoHoldings = [
-          {
-            symbol: 'AAPL',
-            quantity: 150,
-            averagePrice: 180.50,
-            currentPrice: 195.20,
-            marketValue: 29280,
-            unrealizedPnL: 2205,
-            change: 2205,
-            changePercent: 8.14
-          },
-          {
-            symbol: 'GOOGL',
-            quantity: 50,
-            averagePrice: 125.30,
-            currentPrice: 135.80,
-            marketValue: 6790,
-            unrealizedPnL: 525,
-            change: 525,
-            changePercent: 8.38
-          },
-          {
-            symbol: 'MSFT',
-            quantity: 75,
-            averagePrice: 320.00,
-            currentPrice: 315.50,
-            marketValue: 23662.50,
-            unrealizedPnL: -337.50,
-            change: -337.50,
-            changePercent: -1.41
-          }
-        ];
-        
-        setAllHoldings(demoHoldings);
-        setHoldings(demoHoldings.slice(0, 5));
-        setDataSource('Demo Data');
+        // No real data available
+        setError('No holdings found in your Trading212 account');
+        setHoldings([]);
+        setAllHoldings([]);
         
       } catch (error) {
         console.error('Error fetching holdings:', error);
@@ -256,15 +223,10 @@ const TopHoldings = () => {
         )}
       </CardHeader>
       <CardContent>
-        {error ? (
+        {error || holdings.length === 0 ? (
           <div className="text-center py-4 text-muted-foreground">
-            <p>{error}</p>
+            <p>No holdings found in your Trading212 account.</p>
             <p className="text-sm mt-1">Go to Broker Integration to connect your Trading212 account.</p>
-          </div>
-        ) : holdings.length === 0 ? (
-          <div className="text-center py-4 text-muted-foreground">
-            <p>No holdings data available.</p>
-            <p className="text-sm mt-1">Connect your Trading212 account or upload CSV data to see holdings.</p>
           </div>
         ) : (
           <div className="space-y-4">

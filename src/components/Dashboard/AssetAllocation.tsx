@@ -173,17 +173,9 @@ const AssetAllocation = () => {
           }
         }
 
-        // Use demo data as final fallback
-        const demoAllocation = [
-          { name: 'AAPL', value: 45000, percentage: 35.2 },
-          { name: 'GOOGL', value: 32000, percentage: 25.0 },
-          { name: 'MSFT', value: 28000, percentage: 21.9 },
-          { name: 'TSLA', value: 15000, percentage: 11.7 },
-          { name: 'AMZN', value: 8000, percentage: 6.2 }
-        ];
-        
-        setAllocationData(demoAllocation);
-        setDataSource('Demo Data');
+        // No real data available
+        setError('No allocation data available');
+        setAllocationData([]);
         
       } catch (error) {
         console.error('Error fetching allocation:', error);
@@ -221,15 +213,10 @@ const AssetAllocation = () => {
         )}
       </CardHeader>
       <CardContent>
-        {error ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <p>{error}</p>
-            <p className="text-sm mt-1">Go to Broker Integration to connect your Trading212 account.</p>
-          </div>
-        ) : allocationData.length === 0 ? (
+        {error || allocationData.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <p>No allocation data available.</p>
-            <p className="text-sm mt-1">Connect your Trading212 account or upload CSV data to see allocation.</p>
+            <p className="text-sm mt-1">Go to Broker Integration to connect your Trading212 account.</p>
           </div>
         ) : (
           <div className="h-64">
