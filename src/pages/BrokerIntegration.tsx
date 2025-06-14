@@ -5,8 +5,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { usePortfolio } from "@/contexts/PortfolioContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { PortfolioProvider } from "@/contexts/PortfolioContext";
 import { supabase } from "@/integrations/supabase/client";
+import { RefreshCw } from "lucide-react";
 import ApiKeyManager from "@/components/ApiKeyManager";
 
 const brokerLogos = {
@@ -16,8 +18,13 @@ const brokerLogos = {
 
 const BrokerIntegrationContent = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const { selectedPortfolio } = usePortfolio();
   const [isConnecting, setIsConnecting] = useState<{ [key: string]: boolean }>({
+    Trading212: false,
+    Binance: false,
+  });
+  const [isRefreshing, setIsRefreshing] = useState<{ [key: string]: boolean }>({
     Trading212: false,
     Binance: false,
   });
@@ -93,6 +100,74 @@ const BrokerIntegrationContent = () => {
     }
   };
 
+  const refreshBrokerData = async (brokerName: string) => {
+    if (!selectedPortfolio) {
+      toast({
+        title: "No Portfolio Selected",
+        description: "Please select a portfolio first from the dashboard.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsRefreshing(prev => ({ ...prev, [brokerName]: true }));
+      
+      if (brokerName === 'Trading212') {
+        console.log('Refreshing Trading212 data...');
+        
+        // Clear cached data first
+        localStorage.removeItem('trading212_data');
+        
+        // Call the Trading212 sync function to get fresh data
+        const { data, error } = await supabase.functions.invoke('trading212-sync', {
+          body: { portfolioId: selectedPortfolio }
+        });
+
+        if (error) {
+          console.error('Trading212 refresh error:', error);
+          throw new Error(`Failed to refresh Trading212 data: ${error.message}`);
+        }
+
+        if (!data?.success) {
+          console.error('Trading212 API error:', data?.error, data?.message);
+          if (data?.error === 'RATE_LIMITED') {
+            throw new Error('Trading212 API rate limit reached. Please try again in a few minutes.');
+          }
+          throw new Error(data?.message || 'Failed to refresh Trading212 data. Please check your API key.');
+        }
+
+        // Store the fresh data
+        localStorage.setItem('trading212_data', JSON.stringify(data.data));
+
+        toast({
+          title: "Data Refreshed!",
+          description: `Trading212 data updated successfully. Found ${data.data.holdingsCount} holdings with total value of $${data.data.totalValue.toLocaleString()}.`,
+        });
+
+        console.log('Trading212 data refreshed successfully:', data.data);
+        
+        // Reload the page to show fresh data
+        window.location.reload();
+      } else {
+        toast({
+          title: "Coming Soon",
+          description: `${brokerName} refresh is coming soon.`,
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      console.error(`Error refreshing ${brokerName}:`, error);
+      toast({
+        title: "Refresh Failed",
+        description: error.message || `Failed to refresh ${brokerName} data`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsRefreshing(prev => ({ ...prev, [brokerName]: false }));
+    }
+  };
+
   const disconnectBroker = (brokerName: string) => {
     localStorage.removeItem(`${brokerName.toLowerCase()}_portfolio_id`);
     localStorage.removeItem(`${brokerName.toLowerCase()}_connected`);
@@ -126,11 +201,30 @@ const BrokerIntegrationContent = () => {
                   <CardContent className="flex flex-col items-center justify-center space-y-4">
                     <img src={logo} alt={`${brokerName} Logo`} className="h-12 w-auto object-contain" />
                     {connectedBrokers[brokerName] ? (
-                      <div className="flex flex-col items-center space-y-2">
+                      <div className="flex flex-col items-center space-y-2 w-full">
                         <div className="text-sm text-green-600 font-medium">✓ Connected</div>
-                        <Button variant="destructive" onClick={() => disconnectBroker(brokerName)}>
-                          Disconnect {brokerName}
-                        </Button>
+                        <div className="flex flex-col gap-2 w-full">
+                          <Button 
+                            onClick={() => refreshBrokerData(brokerName)} 
+                            disabled={isRefreshing[brokerName] || !selectedPortfolio}
+                            className="w-full"
+                          >
+                            {isRefreshing[brokerName] ? (
+                              <>
+                                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                Refreshing...
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw className="h-4 w-4 mr-2" />
+                                Refresh Data
+                              </>
+                            )}
+                          </Button>
+                          <Button variant="destructive" onClick={() => disconnectBroker(brokerName)}>
+                            Disconnect {brokerName}
+                          </Button>
+                        </div>
                       </div>
                     ) : (
                       <Button 
