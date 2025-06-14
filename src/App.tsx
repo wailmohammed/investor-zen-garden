@@ -1,8 +1,9 @@
+
 import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from 'react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from "@/components/ui/toaster"
-import { ThemeProvider } from "@/components/theme-provider"
+import { ThemeProvider } from "@/contexts/ThemeContext"
 
 import Index from './pages/Index';
 import Login from './pages/Login';
@@ -30,7 +31,7 @@ const queryClient = new QueryClient();
 
 function App() {
   return (
-    <QueryClient client={queryClient}>
+    <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
         <BrowserRouter>
@@ -61,7 +62,7 @@ function App() {
           </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
-    </QueryClient>
+    </QueryClientProvider>
   );
 }
 
