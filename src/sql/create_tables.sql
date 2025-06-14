@@ -3,15 +3,26 @@
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT,
-  first_name TEXT,
-  last_name TEXT,
+  username TEXT,
+  full_name TEXT,
   is_admin BOOLEAN DEFAULT FALSE,
+  default_currency TEXT DEFAULT 'USD',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
 -- Enable RLS on profiles
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+-- Create a security definer function to check admin status safely
+CREATE OR REPLACE FUNCTION public.check_user_is_admin(user_uuid uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT COALESCE(is_admin, false) FROM public.profiles WHERE id = user_uuid;
+$$;
 
 -- Create policy for users to read any profile
 CREATE POLICY "Users can read any profile"
@@ -29,12 +40,7 @@ CREATE POLICY "Users can update their own profile"
 CREATE POLICY "Admins can update any profile"
   ON public.profiles
   FOR UPDATE
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE id = auth.uid() AND is_admin = true
-    )
-  );
+  USING (public.check_user_is_admin(auth.uid()));
 
 -- Create crypto payments table
 CREATE TABLE IF NOT EXISTS public.crypto_payments (
@@ -68,12 +74,7 @@ CREATE POLICY "Users can create their own payments"
 CREATE POLICY "Admins can read all payments"
   ON public.crypto_payments
   FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE id = auth.uid() AND is_admin = true
-    )
-  );
+  USING (public.check_user_is_admin(auth.uid()));
 
 -- Function to get all users (for admin use)
 CREATE OR REPLACE FUNCTION public.get_all_users()
@@ -84,10 +85,7 @@ SET search_path = auth
 AS $$
 BEGIN
   -- Check if the user is an admin
-  IF EXISTS (
-    SELECT 1 FROM public.profiles
-    WHERE id = auth.uid() AND is_admin = true
-  ) THEN
+  IF public.check_user_is_admin(auth.uid()) THEN
     RETURN QUERY SELECT * FROM auth.users;
   ELSE
     RAISE EXCEPTION 'Access denied: Only admins can view all users';

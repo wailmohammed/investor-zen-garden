@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,14 +9,16 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import { Link } from "react-router-dom";
+import { Settings } from "lucide-react";
 
 const Profile = () => {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [profile, setProfile] = useState({
     username: "",
-    fullName: "",
+    full_name: "",
     email: user?.email || "",
   });
 
@@ -29,7 +32,7 @@ const Profile = () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('username, full_name')
+        .select('username, full_name, email')
         .eq('id', user?.id)
         .single();
       
@@ -41,8 +44,8 @@ const Profile = () => {
       if (data) {
         setProfile({
           username: data.username || "",
-          fullName: data.full_name || "",
-          email: user?.email || "",
+          full_name: data.full_name || "",
+          email: data.email || user?.email || "",
         });
       }
     } catch (error) {
@@ -64,7 +67,7 @@ const Profile = () => {
         .from('profiles')
         .update({
           username: profile.username,
-          full_name: profile.fullName,
+          full_name: profile.full_name,
           updated_at: new Date().toISOString(),
         })
         .eq('id', user?.id);
@@ -92,9 +95,19 @@ const Profile = () => {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Profile</h1>
-          <p className="text-muted-foreground">Manage your personal information</p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold">Profile</h1>
+            <p className="text-muted-foreground">Manage your personal information</p>
+          </div>
+          {isAdmin && (
+            <Link to="/admin">
+              <Button variant="outline" className="gap-2">
+                <Settings className="w-4 h-4" />
+                Admin Dashboard
+              </Button>
+            </Link>
+          )}
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -115,17 +128,17 @@ const Profile = () => {
                       name="username"
                       value={profile.username}
                       onChange={handleChange}
-                      placeholder="Username"
+                      placeholder="Enter username"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="fullName">Full Name</Label>
+                    <Label htmlFor="full_name">Full Name</Label>
                     <Input
-                      id="fullName"
-                      name="fullName"
-                      value={profile.fullName}
+                      id="full_name"
+                      name="full_name"
+                      value={profile.full_name}
                       onChange={handleChange}
-                      placeholder="Full Name"
+                      placeholder="Enter full name"
                     />
                   </div>
                 </div>
@@ -156,7 +169,11 @@ const Profile = () => {
             <CardContent className="flex flex-col items-center space-y-4">
               <Avatar className="h-24 w-24">
                 <AvatarImage src="https://github.com/shadcn.png" alt="Profile" />
-                <AvatarFallback>{profile.username?.slice(0, 2) || "U"}</AvatarFallback>
+                <AvatarFallback>
+                  {profile.username?.slice(0, 2).toUpperCase() || 
+                   profile.full_name?.split(' ').map(n => n[0]).join('').toUpperCase() || 
+                   "U"}
+                </AvatarFallback>
               </Avatar>
               <Button variant="outline">Change Picture</Button>
             </CardContent>
