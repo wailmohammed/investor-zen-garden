@@ -47,16 +47,22 @@ const TopHoldings = () => {
             console.error('Error fetching Trading212 holdings:', error);
             setHoldings([]);
           } else if (data?.success && data.data.positions) {
-            const realHoldings = data.data.positions.slice(0, 5).map((position: any) => ({
-              symbol: position.symbol,
-              quantity: position.quantity,
-              averagePrice: position.averagePrice,
-              currentPrice: position.currentPrice,
-              marketValue: position.marketValue,
-              unrealizedPnL: position.unrealizedPnL,
-              change: position.unrealizedPnL,
-              changePercent: position.marketValue > 0 ? (position.unrealizedPnL / (position.marketValue - position.unrealizedPnL)) * 100 : 0
-            }));
+            const realHoldings = data.data.positions.slice(0, 5).map((position: any) => {
+              const marketValue = position.marketValue || (position.quantity * position.currentPrice);
+              const unrealizedPnL = position.unrealizedPnL || 0;
+              const changePercent = marketValue > 0 ? (unrealizedPnL / (marketValue - unrealizedPnL)) * 100 : 0;
+              
+              return {
+                symbol: position.symbol,
+                quantity: position.quantity || 0,
+                averagePrice: position.averagePrice || 0,
+                currentPrice: position.currentPrice || 0,
+                marketValue: marketValue,
+                unrealizedPnL: unrealizedPnL,
+                change: unrealizedPnL,
+                changePercent: changePercent
+              };
+            });
             
             setHoldings(realHoldings);
           }
@@ -116,7 +122,7 @@ const TopHoldings = () => {
                 <div className="text-right">
                   <div className="font-medium">${holding.marketValue.toFixed(2)}</div>
                   <div className={`text-sm ${holding.changePercent && holding.changePercent >= 0 ? 'text-finance-green' : 'text-finance-red'}`}>
-                    {holding.changePercent ? `${holding.changePercent >= 0 ? '+' : ''}${holding.changePercent.toFixed(2)}%` : 'N/A'}
+                    {holding.changePercent !== undefined ? `${holding.changePercent >= 0 ? '+' : ''}${holding.changePercent.toFixed(2)}%` : 'N/A'}
                   </div>
                 </div>
               </div>

@@ -46,14 +46,26 @@ const AssetAllocation = () => {
             setAllocationData([]);
           } else if (data?.success && data.data.positions) {
             const positions = data.data.positions;
-            const totalValue = positions.reduce((sum: number, pos: any) => sum + pos.marketValue, 0);
+            
+            // Calculate total value from positions
+            const totalValue = positions.reduce((sum: number, pos: any) => {
+              const marketValue = pos.marketValue || (pos.quantity * pos.currentPrice);
+              return sum + marketValue;
+            }, 0);
             
             if (totalValue > 0) {
-              const allocation = positions.map((position: any) => ({
-                name: position.symbol,
-                value: position.marketValue,
-                percentage: (position.marketValue / totalValue) * 100
-              })).sort((a: any, b: any) => b.value - a.value);
+              const allocation = positions
+                .map((position: any) => {
+                  const marketValue = position.marketValue || (position.quantity * position.currentPrice);
+                  return {
+                    name: position.symbol,
+                    value: marketValue,
+                    percentage: (marketValue / totalValue) * 100
+                  };
+                })
+                .filter((item: any) => item.value > 0)
+                .sort((a: any, b: any) => b.value - a.value)
+                .slice(0, 8); // Show top 8 holdings
               
               setAllocationData(allocation);
             } else {

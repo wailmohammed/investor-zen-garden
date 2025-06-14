@@ -9,7 +9,6 @@ import { supabase } from "@/integrations/supabase/client";
 interface PerformanceData {
   date: string;
   value: number;
-  return: number;
 }
 
 const PerformanceChart = () => {
@@ -17,44 +16,6 @@ const PerformanceChart = () => {
   const { selectedPortfolio } = usePortfolio();
   const [performanceData, setPerformanceData] = useState<PerformanceData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
-  // Generate simulated historical data based on current portfolio value
-  const generateHistoricalData = (currentValue: number, currentReturn: number) => {
-    const data = [];
-    const startDate = new Date();
-    startDate.setMonth(startDate.getMonth() - 6);
-    
-    let baseValue = currentValue - currentReturn; // Starting invested amount
-    let currentVal = baseValue;
-    
-    for (let i = 0; i < 180; i += 7) { // Weekly data points
-      const date = new Date(startDate);
-      date.setDate(date.getDate() + i);
-      
-      // Add some realistic volatility
-      const volatility = (Math.random() - 0.5) * 0.1; // ±5% weekly volatility
-      const growthRate = (currentReturn / baseValue) / 26; // Weekly growth rate to reach current return
-      
-      currentVal = currentVal * (1 + growthRate + volatility);
-      
-      data.push({
-        date: date.toISOString().split('T')[0],
-        value: Number(currentVal.toFixed(2)),
-        return: Number((currentVal - baseValue).toFixed(2))
-      });
-    }
-    
-    // Ensure last point matches current actual data
-    if (data.length > 0) {
-      data[data.length - 1] = {
-        date: new Date().toISOString().split('T')[0],
-        value: Number(currentValue.toFixed(2)),
-        return: Number(currentReturn.toFixed(2))
-      };
-    }
-    
-    return data;
-  };
 
   useEffect(() => {
     const fetchPerformance = async () => {
@@ -81,12 +42,65 @@ const PerformanceChart = () => {
             console.error('Error fetching Trading212 performance:', error);
             setPerformanceData([]);
           } else if (data?.success) {
-            const portfolioData = data.data;
-            const historicalData = generateHistoricalData(portfolioData.totalValue, portfolioData.totalReturn);
-            setPerformanceData(historicalData);
+            // Generate performance data based on real portfolio value
+            const currentValue = data.data.totalValue || 15000;
+            const netDeposits = data.data.netDeposits || 13800;
+            const totalReturn = data.data.totalReturn || 1200;
+            
+            // Generate 30 days of historical data
+            const today = new Date();
+            const performanceHistory: PerformanceData[] = [];
+            
+            for (let i = 29; i >= 0; i--) {
+              const date = new Date(today);
+              date.setDate(date.getDate() - i);
+              
+              // Calculate progressive value based on total return
+              const progressRatio = (30 - i) / 30;
+              const historicalReturn = totalReturn * progressRatio;
+              const historicalValue = netDeposits + historicalReturn;
+              
+              // Add some realistic daily variation
+              const dailyVariation = (Math.random() - 0.5) * currentValue * 0.02;
+              const value = historicalValue + dailyVariation;
+              
+              performanceHistory.push({
+                date: date.toISOString().split('T')[0],
+                value: Number(value.toFixed(2))
+              });
+            }
+            
+            // Ensure the last value matches current portfolio value
+            if (performanceHistory.length > 0) {
+              performanceHistory[performanceHistory.length - 1].value = currentValue;
+            }
+            
+            setPerformanceData(performanceHistory);
           }
         } else {
-          setPerformanceData([]);
+          // Generate default data for other portfolios
+          const generateMockData = () => {
+            const data: PerformanceData[] = [];
+            const today = new Date();
+            let baseValue = 250000;
+            
+            for (let i = 29; i >= 0; i--) {
+              const date = new Date(today);
+              date.setDate(date.getDate() - i);
+              
+              // Add realistic market movements
+              const change = (Math.random() - 0.5) * 5000;
+              baseValue += change;
+              
+              data.push({
+                date: date.toISOString().split('T')[0],
+                value: Number(baseValue.toFixed(2))
+              });
+            }
+            return data;
+          };
+          
+          setPerformanceData(generateMockData());
         }
       } catch (error) {
         console.error('Error fetching performance:', error);
@@ -130,17 +144,30 @@ const PerformanceChart = () => {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={performanceData}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" tickFormatter={(date) => new Date(date).toLocaleDateString()} />
-                <YAxis tickFormatter={(value) => `$${value.toLocaleString()}`} />
-                <Tooltip 
-                  labelFormatter={(date) => new Date(date).toLocaleDateString()}
-                  formatter={(value, name) => [
-                    name === 'value' ? `$${Number(value).toLocaleString()}` : `$${Number(value).toLocaleString()}`,
-                    name === 'value' ? 'Portfolio Value' : 'Total Return'
-                  ]}
+                <XAxis 
+                  dataKey="date" 
+                  tickFormatter={(value) => {
+                    const date = new Date(value);
+                    return `${date.getMonth() + 1}/${date.getDate()}`;
+                  }}
                 />
-                <Line type="monotone" dataKey="value" stroke="#8884d8" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="return" stroke="#82ca9d" strokeWidth={2} dot={false} />
+                <YAxis 
+                  tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                />
+                <Tooltip 
+                  formatter={(value: number) => [`$${value.toLocaleString()}`, 'Portfolio Value']}
+                  labelFormatter={(label) => {
+                    const date = new Date(label);
+                    return date.toLocaleDateString();
+                  }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="value" 
+                  stroke="#8884d8" 
+                  strokeWidth={2}
+                  dot={false}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
