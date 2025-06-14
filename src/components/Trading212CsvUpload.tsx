@@ -5,6 +5,8 @@ import { CSVUpload } from "@/components/ui/csv-upload";
 import { useToast } from "@/hooks/use-toast";
 import { usePortfolio } from "@/contexts/PortfolioContext";
 import { supabase } from "@/integrations/supabase/client";
+import { AlertCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Trading212CsvData {
   Action: string;
@@ -29,26 +31,38 @@ interface Trading212CsvData {
 
 const Trading212CsvUpload = () => {
   const { toast } = useToast();
-  const { selectedPortfolio } = usePortfolio();
+  const { selectedPortfolio, portfolios } = usePortfolio();
   const [csvData, setCsvData] = useState<Trading212CsvData[]>([]);
   const [apiData, setApiData] = useState<any>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [comparisonResult, setComparisonResult] = useState<any>(null);
 
   const handleCsvUpload = (data: any[]) => {
-    console.log('Trading212 CSV data uploaded:', data);
+    if (!selectedPortfolio) {
+      toast({
+        title: "No Portfolio Selected",
+        description: "Please select a portfolio first before uploading CSV data.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    console.log('Trading212 CSV data uploaded to portfolio:', selectedPortfolio, data);
     setCsvData(data);
     
-    // Store CSV data in localStorage for dashboard components to use
-    localStorage.setItem('trading212_csv_data', JSON.stringify(data));
+    // Store CSV data with portfolio association
+    const portfolioKey = `trading212_csv_data_${selectedPortfolio}`;
+    localStorage.setItem(portfolioKey, JSON.stringify(data));
+    localStorage.setItem('trading212_csv_data', JSON.stringify(data)); // Keep for backward compatibility
     
-    // Process CSV data to extract current holdings
     const holdings = processCsvToHoldings(data);
-    console.log('Processed CSV holdings:', holdings);
+    console.log('Processed CSV holdings for portfolio:', selectedPortfolio, holdings);
+    
+    const selectedPortfolioName = portfolios.find(p => p.id === selectedPortfolio)?.name || 'Unknown';
     
     toast({
       title: "CSV Data Uploaded",
-      description: `Processed ${data.length} transactions into ${holdings.length} holdings. Data is now available in dashboard.`,
+      description: `Processed ${data.length} transactions into ${holdings.length} holdings for portfolio "${selectedPortfolioName}". Data is now available in dashboard.`,
     });
   };
 
@@ -86,7 +100,6 @@ const Trading212CsvUpload = () => {
       }
     });
     
-    // Filter out positions with zero quantity
     return Array.from(holdingsMap.values()).filter(holding => holding.quantity > 0);
   };
 
@@ -102,7 +115,7 @@ const Trading212CsvUpload = () => {
 
     try {
       setIsProcessing(true);
-      console.log('Fetching Trading212 API data...');
+      console.log('Fetching Trading212 API data for portfolio:', selectedPortfolio);
       
       const { data, error } = await supabase.functions.invoke('trading212-sync', {
         body: { portfolioId: selectedPortfolio }
@@ -118,7 +131,7 @@ const Trading212CsvUpload = () => {
         throw new Error(data?.message || 'Failed to fetch API data');
       }
 
-      console.log('Trading212 API data:', data.data);
+      console.log('Trading212 API data for portfolio:', selectedPortfolio, data.data);
       setApiData(data.data);
       
       toast({
@@ -162,7 +175,6 @@ const Trading212CsvUpload = () => {
       differences: []
     };
     
-    // Find matches and differences
     csvHoldings.forEach(csvHolding => {
       const apiPosition = apiPositions.find((pos: any) => pos.symbol === csvHolding.symbol);
       
@@ -193,7 +205,6 @@ const Trading212CsvUpload = () => {
       }
     });
     
-    // Find API-only positions
     apiPositions.forEach((apiPosition: any) => {
       const csvHolding = csvHoldings.find(holding => holding.symbol === apiPosition.symbol);
       if (!csvHolding) {
@@ -216,10 +227,28 @@ const Trading212CsvUpload = () => {
         <CardHeader>
           <CardTitle>Trading212 CSV Upload & Comparison</CardTitle>
           <CardDescription>
-            Upload your Trading212 CSV export and compare it with live API data. CSV data will be used in dashboard charts when API is unavailable.
+            Upload your Trading212 CSV export and compare it with live API data. Data will be linked to your selected portfolio.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          
+          {!selectedPortfolio && (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Please select a portfolio first before uploading data. Go to the Broker Integration tab to select a portfolio.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {selectedPortfolio && (
+            <div className="p-3 bg-blue-50 rounded-md">
+              <p className="text-sm text-blue-700">
+                <strong>Target Portfolio:</strong> {portfolios.find(p => p.id === selectedPortfolio)?.name || 'Unknown'}
+              </p>
+            </div>
+          )}
+          
           <div>
             <h4 className="font-medium mb-2">1. Upload CSV Data</h4>
             <CSVUpload onFileUpload={handleCsvUpload} />
@@ -250,7 +279,7 @@ const Trading212CsvUpload = () => {
             <h4 className="font-medium mb-2">3. Compare Data</h4>
             <Button 
               onClick={compareData} 
-              disabled={!csvData.length || !apiData}
+              disabled={!csvData.length || !apiData || !selectedPortfolio}
               variant="outline"
               className="w-full"
             >
