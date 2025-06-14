@@ -14,6 +14,16 @@ import StatCard from "@/components/StatCard";
 import { BarChart3, DollarSign, TrendingUp, Shield } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
+interface HoldingData {
+  symbol: string;
+  company: string;
+  shares: number;
+  avgCost: number;
+  yield: number;
+  annualIncome: number;
+  safety: string;
+}
+
 const DividendContent = () => {
   const { user } = useAuth();
   const { portfolios, selectedPortfolio, setSelectedPortfolio } = usePortfolio();
@@ -65,8 +75,8 @@ const DividendContent = () => {
     };
   }, [dividends]);
 
-  // Group dividends by stock for holdings view
-  const holdingsData = React.useMemo(() => {
+  // Group dividends by stock for holdings view with proper typing
+  const holdingsData: HoldingData[] = React.useMemo(() => {
     const grouped = dividends.reduce((acc, dividend) => {
       const key = dividend.symbol;
       if (!acc[key]) {
@@ -88,10 +98,39 @@ const DividendContent = () => {
       }
       
       return acc;
-    }, {} as Record<string, any>);
+    }, {} as Record<string, HoldingData>);
     
     return Object.values(grouped);
   }, [dividends]);
+
+  // Test Binance API connection
+  const testBinanceConnection = async () => {
+    try {
+      const apiKey = localStorage.getItem('binance_api_key');
+      const secretKey = localStorage.getItem('binance_secret_api_key');
+      
+      if (!apiKey || !secretKey) {
+        alert('Please set your Binance API keys first in the Data Integration page');
+        return;
+      }
+
+      // Simple API test - get account info
+      const timestamp = Date.now();
+      const queryString = `timestamp=${timestamp}`;
+      
+      // In a real implementation, you'd need to create a proper signature
+      // For now, just test if the keys exist
+      console.log('Testing Binance connection for user: mohammed1');
+      console.log('API Key set:', !!apiKey);
+      console.log('Secret Key set:', !!secretKey);
+      
+      alert('Binance API keys are configured. Full connection testing requires backend implementation.');
+      
+    } catch (error) {
+      console.error('Binance connection test failed:', error);
+      alert('Binance connection test failed. Please check your API keys.');
+    }
+  };
 
   if (!selectedPortfolio && portfolios.length > 0) {
     return (
@@ -126,9 +165,14 @@ const DividendContent = () => {
           <h1 className="text-3xl font-bold">Dividend Tracker</h1>
           <p className="text-muted-foreground">Track, analyze and forecast your dividend income</p>
         </div>
-        <Button variant="outline">
-          Dividend Stats
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={testBinanceConnection}>
+            Test Binance API
+          </Button>
+          <Button variant="outline">
+            Dividend Stats
+          </Button>
+        </div>
       </div>
 
       {/* Portfolio Selection */}
