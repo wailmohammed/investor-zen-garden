@@ -41,7 +41,7 @@ const Portfolio = () => {
               <TabsTrigger value="portfolios">Portfolios</TabsTrigger>
               <TabsTrigger value="dividends">Dividends</TabsTrigger>
               <TabsTrigger value="watchlists">Watchlists</TabsTrigger>
-              <TabsTrigger value="trading212">Trading212 Data</TabsTrigger>
+              <TabsTrigger value="brokerage">Brokerage Data</TabsTrigger>
               <TabsTrigger value="import">Import Data</TabsTrigger>
             </TabsList>
 
@@ -57,7 +57,7 @@ const Portfolio = () => {
               <WatchlistManager />
             </TabsContent>
 
-            <TabsContent value="trading212">
+            <TabsContent value="brokerage">
               <Trading212CsvUpload />
             </TabsContent>
 
