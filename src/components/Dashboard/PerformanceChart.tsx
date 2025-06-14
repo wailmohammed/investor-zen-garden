@@ -17,6 +17,7 @@ const PerformanceChart = () => {
   const [performanceData, setPerformanceData] = useState<PerformanceData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [usingCachedData, setUsingCachedData] = useState(false);
 
   useEffect(() => {
     const fetchPerformance = async () => {
@@ -29,6 +30,7 @@ const PerformanceChart = () => {
       try {
         setIsLoading(true);
         setError(null);
+        setUsingCachedData(false);
         
         // Check if this is a Trading212 connected portfolio
         const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
@@ -36,55 +38,111 @@ const PerformanceChart = () => {
         if (selectedPortfolio === trading212PortfolioId) {
           console.log('Fetching real Trading212 performance data');
           
-          const { data, error } = await supabase.functions.invoke('trading212-sync', {
-            body: { portfolioId: selectedPortfolio }
-          });
+          // Check for cached data first
+          const cachedData = localStorage.getItem('trading212_data');
+          let shouldUseCached = false;
 
-          if (error) {
-            console.error('Error fetching Trading212 performance:', error);
-            setError('Failed to fetch performance data');
-            setPerformanceData([]);
-          } else if (!data?.success) {
-            console.error('Trading212 API error:', data?.error);
-            setError(data?.message || 'No performance data available');
-            setPerformanceData([]);
-          } else if (data.data) {
-            // Generate performance data based on real portfolio value
-            const currentValue = data.data.totalValue || 0;
-            const netDeposits = data.data.netDeposits || 0;
-            const totalReturn = data.data.totalReturn || 0;
-            
-            if (currentValue > 0) {
-              // Generate 30 days of historical data
-              const today = new Date();
-              const performanceHistory: PerformanceData[] = [];
+          try {
+            const { data, error } = await supabase.functions.invoke('trading212-sync', {
+              body: { portfolioId: selectedPortfolio }
+            });
+
+            if (error) {
+              console.error('Error fetching Trading212 performance:', error);
+              shouldUseCached = true;
+            } else if (!data?.success) {
+              console.error('Trading212 API error:', data?.error);
+              shouldUseCached = true;
+            } else if (data.data) {
+              // Generate performance data based on real portfolio value
+              const currentValue = data.data.totalValue || 0;
+              const netDeposits = data.data.netDeposits || 0;
+              const totalReturn = data.data.totalReturn || 0;
               
-              for (let i = 29; i >= 0; i--) {
-                const date = new Date(today);
-                date.setDate(date.getDate() - i);
+              if (currentValue > 0) {
+                // Generate 30 days of historical data
+                const today = new Date();
+                const performanceHistory: PerformanceData[] = [];
                 
-                // Calculate progressive value based on total return
-                const progressRatio = (30 - i) / 30;
-                const historicalReturn = totalReturn * progressRatio;
-                const historicalValue = netDeposits + historicalReturn;
+                for (let i = 29; i >= 0; i--) {
+                  const date = new Date(today);
+                  date.setDate(date.getDate() - i);
+                  
+                  // Calculate progressive value based on total return
+                  const progressRatio = (30 - i) / 30;
+                  const historicalReturn = totalReturn * progressRatio;
+                  const historicalValue = netDeposits + historicalReturn;
+                  
+                  // Add some realistic daily variation
+                  const dailyVariation = (Math.random() - 0.5) * currentValue * 0.02;
+                  const value = historicalValue + dailyVariation;
+                  
+                  performanceHistory.push({
+                    date: date.toISOString().split('T')[0],
+                    value: Number(value.toFixed(2))
+                  });
+                }
                 
-                // Add some realistic daily variation
-                const dailyVariation = (Math.random() - 0.5) * currentValue * 0.02;
-                const value = historicalValue + dailyVariation;
+                // Ensure the last value matches current portfolio value
+                if (performanceHistory.length > 0) {
+                  performanceHistory[performanceHistory.length - 1].value = currentValue;
+                }
                 
-                performanceHistory.push({
-                  date: date.toISOString().split('T')[0],
-                  value: Number(value.toFixed(2))
-                });
+                setPerformanceData(performanceHistory);
+              } else {
+                shouldUseCached = true;
               }
-              
-              // Ensure the last value matches current portfolio value
-              if (performanceHistory.length > 0) {
-                performanceHistory[performanceHistory.length - 1].value = currentValue;
-              }
-              
-              setPerformanceData(performanceHistory);
             } else {
+              shouldUseCached = true;
+            }
+          } catch (fetchError) {
+            console.error('Network error fetching Trading212 performance:', fetchError);
+            shouldUseCached = true;
+          }
+
+          // Use cached data if API failed
+          if (shouldUseCached && cachedData) {
+            try {
+              const cached = JSON.parse(cachedData);
+              const currentValue = cached.totalValue || 0;
+              const netDeposits = cached.netDeposits || 0;
+              const totalReturn = cached.totalReturn || 0;
+              
+              if (currentValue > 0) {
+                // Generate 30 days of historical data from cached values
+                const today = new Date();
+                const performanceHistory: PerformanceData[] = [];
+                
+                for (let i = 29; i >= 0; i--) {
+                  const date = new Date(today);
+                  date.setDate(date.getDate() - i);
+                  
+                  const progressRatio = (30 - i) / 30;
+                  const historicalReturn = totalReturn * progressRatio;
+                  const historicalValue = netDeposits + historicalReturn;
+                  
+                  const dailyVariation = (Math.random() - 0.5) * currentValue * 0.02;
+                  const value = historicalValue + dailyVariation;
+                  
+                  performanceHistory.push({
+                    date: date.toISOString().split('T')[0],
+                    value: Number(value.toFixed(2))
+                  });
+                }
+                
+                if (performanceHistory.length > 0) {
+                  performanceHistory[performanceHistory.length - 1].value = currentValue;
+                }
+                
+                setPerformanceData(performanceHistory);
+                setUsingCachedData(true);
+                console.log('Using cached Trading212 performance data');
+              } else {
+                setError('No performance data available');
+                setPerformanceData([]);
+              }
+            } catch (parseError) {
+              console.error('Error parsing cached performance data:', parseError);
               setError('No performance data available');
               setPerformanceData([]);
             }
@@ -127,6 +185,9 @@ const PerformanceChart = () => {
     <Card>
       <CardHeader>
         <CardTitle>Portfolio Performance</CardTitle>
+        {usingCachedData && (
+          <p className="text-xs text-blue-600">Using cached data</p>
+        )}
       </CardHeader>
       <CardContent>
         {error ? (

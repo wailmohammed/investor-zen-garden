@@ -49,19 +49,79 @@ const PortfolioSummary = () => {
         if (selectedPortfolio === trading212PortfolioId) {
           console.log('Fetching real Trading212 portfolio data');
           
-          // Call the Trading212 sync function to get real data
-          const { data, error } = await supabase.functions.invoke('trading212-sync', {
-            body: { portfolioId: selectedPortfolio }
-          });
+          // Check for cached data first
+          const cachedData = localStorage.getItem('trading212_data');
+          let shouldUseCached = false;
 
-          if (error) {
-            console.error('Error fetching Trading212 data:', error);
-            toast({
-              title: "Error",
-              description: "Failed to fetch Trading212 data. Using cached data.",
-              variant: "destructive",
+          try {
+            // Call the Trading212 sync function to get real data
+            const { data, error } = await supabase.functions.invoke('trading212-sync', {
+              body: { portfolioId: selectedPortfolio }
             });
-            // Fall back to cached data or mock data
+
+            if (error) {
+              console.error('Error fetching Trading212 data:', error);
+              shouldUseCached = true;
+            } else if (data?.success) {
+              // Use real Trading212 data
+              const realData = data.data;
+              setPortfolioData({
+                totalValue: `$${realData.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                todayChange: `${realData.todayChange >= 0 ? '+' : ''}$${realData.todayChange.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                todayPercentage: `${realData.todayPercentage >= 0 ? '+' : ''}${realData.todayPercentage.toFixed(2)}%`,
+                totalReturn: `${realData.totalReturn >= 0 ? '+' : ''}$${realData.totalReturn.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                totalReturnPercentage: `${realData.totalReturnPercentage >= 0 ? '+' : ''}${realData.totalReturnPercentage.toFixed(2)}%`,
+                holdingsCount: realData.holdingsCount,
+                netDeposits: `$${realData.netDeposits.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              });
+              
+              // Update cached data
+              localStorage.setItem('trading212_data', JSON.stringify(realData));
+              console.log('Real Trading212 data loaded:', realData);
+            } else {
+              console.error('Trading212 API error:', data?.error);
+              shouldUseCached = true;
+            }
+          } catch (fetchError) {
+            console.error('Network error fetching Trading212 data:', fetchError);
+            shouldUseCached = true;
+          }
+
+          // Use cached data if API failed
+          if (shouldUseCached && cachedData) {
+            try {
+              const cachedRealData = JSON.parse(cachedData);
+              setPortfolioData({
+                totalValue: `$${cachedRealData.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                todayChange: `${cachedRealData.todayChange >= 0 ? '+' : ''}$${cachedRealData.todayChange.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                todayPercentage: `${cachedRealData.todayPercentage >= 0 ? '+' : ''}${cachedRealData.todayPercentage.toFixed(2)}%`,
+                totalReturn: `${cachedRealData.totalReturn >= 0 ? '+' : ''}$${cachedRealData.totalReturn.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                totalReturnPercentage: `${cachedRealData.totalReturnPercentage >= 0 ? '+' : ''}${cachedRealData.totalReturnPercentage.toFixed(2)}%`,
+                holdingsCount: cachedRealData.holdingsCount,
+                netDeposits: `$${cachedRealData.netDeposits.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              });
+              console.log('Using cached Trading212 data');
+              
+              toast({
+                title: "Using Cached Data",
+                description: "Trading212 API is temporarily unavailable. Showing cached portfolio data.",
+                variant: "default",
+              });
+            } catch (parseError) {
+              console.error('Error parsing cached data:', parseError);
+              // Fall back to sample data
+              setPortfolioData({
+                totalValue: "$2,631.96",
+                todayChange: "-$32.15",
+                todayPercentage: "-1.21%",
+                totalReturn: "-$95.13",
+                totalReturnPercentage: "-11.0%",
+                holdingsCount: 3,
+                netDeposits: "$2,727.09"
+              });
+            }
+          } else if (shouldUseCached) {
+            // No cached data available, use sample data
             setPortfolioData({
               totalValue: "$2,631.96",
               todayChange: "-$32.15",
@@ -71,20 +131,11 @@ const PortfolioSummary = () => {
               holdingsCount: 3,
               netDeposits: "$2,727.09"
             });
-          } else if (data?.success) {
-            // Use real Trading212 data
-            const realData = data.data;
-            setPortfolioData({
-              totalValue: `$${realData.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-              todayChange: `${realData.todayChange >= 0 ? '+' : ''}$${realData.todayChange.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-              todayPercentage: `${realData.todayPercentage >= 0 ? '+' : ''}${realData.todayPercentage.toFixed(2)}%`,
-              totalReturn: `${realData.totalReturn >= 0 ? '+' : ''}$${realData.totalReturn.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-              totalReturnPercentage: `${realData.totalReturnPercentage >= 0 ? '+' : ''}${realData.totalReturnPercentage.toFixed(2)}%`,
-              holdingsCount: realData.holdingsCount,
-              netDeposits: `$${realData.netDeposits.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            toast({
+              title: "Sample Data",
+              description: "Trading212 API is unavailable. Showing sample portfolio data.",
+              variant: "default",
             });
-            
-            console.log('Real Trading212 data loaded:', realData);
           }
         } else if (selectedPortfolio === binancePortfolioId) {
           console.log('Loading Binance portfolio data');

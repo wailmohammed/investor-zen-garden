@@ -24,6 +24,7 @@ const TopHoldings = () => {
   const [allHoldings, setAllHoldings] = useState<Holding[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [usingCachedData, setUsingCachedData] = useState(false);
 
   useEffect(() => {
     const fetchHoldings = async () => {
@@ -37,6 +38,7 @@ const TopHoldings = () => {
       try {
         setIsLoading(true);
         setError(null);
+        setUsingCachedData(false);
         
         // Check if this is a Trading212 connected portfolio
         const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
@@ -44,42 +46,88 @@ const TopHoldings = () => {
         if (selectedPortfolio === trading212PortfolioId) {
           console.log('Fetching real Trading212 holdings data');
           
-          const { data, error } = await supabase.functions.invoke('trading212-sync', {
-            body: { portfolioId: selectedPortfolio }
-          });
+          // Check for cached data first
+          const cachedData = localStorage.getItem('trading212_data');
+          let shouldUseCached = false;
 
-          if (error) {
-            console.error('Error fetching Trading212 holdings:', error);
-            setError('Failed to fetch Trading212 data. Please check your connection.');
-            setHoldings([]);
-            setAllHoldings([]);
-          } else if (!data?.success) {
-            console.error('Trading212 API error:', data?.error);
-            setError(data?.message || 'No data available from Trading212');
-            setHoldings([]);
-            setAllHoldings([]);
-          } else if (data.data.positions && data.data.positions.length > 0) {
-            const processedHoldings = data.data.positions.map((position: any) => {
-              const marketValue = position.marketValue || (position.quantity * position.currentPrice);
-              const unrealizedPnL = position.unrealizedPnL || 0;
-              const changePercent = marketValue > 0 ? (unrealizedPnL / (marketValue - unrealizedPnL)) * 100 : 0;
-              
-              return {
-                symbol: position.symbol,
-                quantity: position.quantity || 0,
-                averagePrice: position.averagePrice || 0,
-                currentPrice: position.currentPrice || 0,
-                marketValue: marketValue,
-                unrealizedPnL: unrealizedPnL,
-                change: unrealizedPnL,
-                changePercent: changePercent
-              };
+          try {
+            const { data, error } = await supabase.functions.invoke('trading212-sync', {
+              body: { portfolioId: selectedPortfolio }
             });
-            
-            // Store all holdings for the dialog
-            setAllHoldings(processedHoldings);
-            // Show top 5 in the card
-            setHoldings(processedHoldings.slice(0, 5));
+
+            if (error) {
+              console.error('Error fetching Trading212 holdings:', error);
+              shouldUseCached = true;
+            } else if (!data?.success) {
+              console.error('Trading212 API error:', data?.error);
+              shouldUseCached = true;
+            } else if (data.data.positions && data.data.positions.length > 0) {
+              const processedHoldings = data.data.positions.map((position: any) => {
+                const marketValue = position.marketValue || (position.quantity * position.currentPrice);
+                const unrealizedPnL = position.unrealizedPnL || 0;
+                const changePercent = marketValue > 0 ? (unrealizedPnL / (marketValue - unrealizedPnL)) * 100 : 0;
+                
+                return {
+                  symbol: position.symbol,
+                  quantity: position.quantity || 0,
+                  averagePrice: position.averagePrice || 0,
+                  currentPrice: position.currentPrice || 0,
+                  marketValue: marketValue,
+                  unrealizedPnL: unrealizedPnL,
+                  change: unrealizedPnL,
+                  changePercent: changePercent
+                };
+              });
+              
+              // Store all holdings for the dialog
+              setAllHoldings(processedHoldings);
+              // Show top 5 in the card
+              setHoldings(processedHoldings.slice(0, 5));
+            } else {
+              shouldUseCached = true;
+            }
+          } catch (fetchError) {
+            console.error('Network error fetching Trading212 holdings:', fetchError);
+            shouldUseCached = true;
+          }
+
+          // Use cached data if API failed
+          if (shouldUseCached && cachedData) {
+            try {
+              const cached = JSON.parse(cachedData);
+              if (cached.positions && cached.positions.length > 0) {
+                const processedHoldings = cached.positions.map((position: any) => {
+                  const marketValue = position.marketValue || (position.quantity * position.currentPrice);
+                  const unrealizedPnL = position.unrealizedPnL || 0;
+                  const changePercent = marketValue > 0 ? (unrealizedPnL / (marketValue - unrealizedPnL)) * 100 : 0;
+                  
+                  return {
+                    symbol: position.symbol,
+                    quantity: position.quantity || 0,
+                    averagePrice: position.averagePrice || 0,
+                    currentPrice: position.currentPrice || 0,
+                    marketValue: marketValue,
+                    unrealizedPnL: unrealizedPnL,
+                    change: unrealizedPnL,
+                    changePercent: changePercent
+                  };
+                });
+                
+                setAllHoldings(processedHoldings);
+                setHoldings(processedHoldings.slice(0, 5));
+                setUsingCachedData(true);
+                console.log('Using cached Trading212 holdings data');
+              } else {
+                setError('No holdings found');
+                setHoldings([]);
+                setAllHoldings([]);
+              }
+            } catch (parseError) {
+              console.error('Error parsing cached holdings data:', parseError);
+              setError('No holdings found');
+              setHoldings([]);
+              setAllHoldings([]);
+            }
           } else {
             setError('No holdings found in your Trading212 account');
             setHoldings([]);
@@ -125,6 +173,9 @@ const TopHoldings = () => {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Top Holdings</CardTitle>
+        {usingCachedData && (
+          <p className="text-xs text-blue-600">Using cached data</p>
+        )}
         {allHoldings.length > 0 && (
           <ViewAllHoldingsDialog holdings={allHoldings} />
         )}

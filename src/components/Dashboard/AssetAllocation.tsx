@@ -20,6 +20,7 @@ const AssetAllocation = () => {
   const [allocationData, setAllocationData] = useState<AllocationData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [usingCachedData, setUsingCachedData] = useState(false);
 
   useEffect(() => {
     const fetchAllocation = async () => {
@@ -32,6 +33,7 @@ const AssetAllocation = () => {
       try {
         setIsLoading(true);
         setError(null);
+        setUsingCachedData(false);
         
         // Check if this is a Trading212 connected portfolio
         const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
@@ -39,48 +41,99 @@ const AssetAllocation = () => {
         if (selectedPortfolio === trading212PortfolioId) {
           console.log('Fetching real Trading212 allocation data');
           
-          const { data, error } = await supabase.functions.invoke('trading212-sync', {
-            body: { portfolioId: selectedPortfolio }
-          });
+          // Check for cached data first
+          const cachedData = localStorage.getItem('trading212_data');
+          let shouldUseCached = false;
 
-          if (error) {
-            console.error('Error fetching Trading212 allocation:', error);
-            setError('Failed to fetch allocation data');
-            setAllocationData([]);
-          } else if (!data?.success) {
-            console.error('Trading212 API error:', data?.error);
-            setError(data?.message || 'No allocation data available');
-            setAllocationData([]);
-          } else if (data.data.positions && data.data.positions.length > 0) {
-            const positions = data.data.positions;
-            
-            // Calculate total value from positions
-            const totalValue = positions.reduce((sum: number, pos: any) => {
-              const marketValue = pos.marketValue || (pos.quantity * pos.currentPrice);
-              return sum + marketValue;
-            }, 0);
-            
-            if (totalValue > 0) {
-              const allocation = positions
-                .map((position: any) => {
-                  const marketValue = position.marketValue || (position.quantity * position.currentPrice);
-                  return {
-                    name: position.symbol,
-                    value: marketValue,
-                    percentage: (marketValue / totalValue) * 100
-                  };
-                })
-                .filter((item: any) => item.value > 0)
-                .sort((a: any, b: any) => b.value - a.value)
-                .slice(0, 8); // Show top 8 holdings
+          try {
+            const { data, error } = await supabase.functions.invoke('trading212-sync', {
+              body: { portfolioId: selectedPortfolio }
+            });
+
+            if (error) {
+              console.error('Error fetching Trading212 allocation:', error);
+              shouldUseCached = true;
+            } else if (!data?.success) {
+              console.error('Trading212 API error:', data?.error);
+              shouldUseCached = true;
+            } else if (data.data.positions && data.data.positions.length > 0) {
+              const positions = data.data.positions;
               
-              setAllocationData(allocation);
+              // Calculate total value from positions
+              const totalValue = positions.reduce((sum: number, pos: any) => {
+                const marketValue = pos.marketValue || (pos.quantity * pos.currentPrice);
+                return sum + marketValue;
+              }, 0);
+              
+              if (totalValue > 0) {
+                const allocation = positions
+                  .map((position: any) => {
+                    const marketValue = position.marketValue || (position.quantity * position.currentPrice);
+                    return {
+                      name: position.symbol,
+                      value: marketValue,
+                      percentage: (marketValue / totalValue) * 100
+                    };
+                  })
+                  .filter((item: any) => item.value > 0)
+                  .sort((a: any, b: any) => b.value - a.value)
+                  .slice(0, 8); // Show top 8 holdings
+                
+                setAllocationData(allocation);
+              } else {
+                shouldUseCached = true;
+              }
             } else {
+              shouldUseCached = true;
+            }
+          } catch (fetchError) {
+            console.error('Network error fetching Trading212 allocation:', fetchError);
+            shouldUseCached = true;
+          }
+
+          // Use cached data if API failed
+          if (shouldUseCached && cachedData) {
+            try {
+              const cached = JSON.parse(cachedData);
+              if (cached.positions && cached.positions.length > 0) {
+                const positions = cached.positions;
+                const totalValue = positions.reduce((sum: number, pos: any) => {
+                  const marketValue = pos.marketValue || (pos.quantity * pos.currentPrice);
+                  return sum + marketValue;
+                }, 0);
+                
+                if (totalValue > 0) {
+                  const allocation = positions
+                    .map((position: any) => {
+                      const marketValue = position.marketValue || (position.quantity * position.currentPrice);
+                      return {
+                        name: position.symbol,
+                        value: marketValue,
+                        percentage: (marketValue / totalValue) * 100
+                      };
+                    })
+                    .filter((item: any) => item.value > 0)
+                    .sort((a: any, b: any) => b.value - a.value)
+                    .slice(0, 8);
+                  
+                  setAllocationData(allocation);
+                  setUsingCachedData(true);
+                  console.log('Using cached Trading212 allocation data');
+                } else {
+                  setError('No allocation data available');
+                  setAllocationData([]);
+                }
+              } else {
+                setError('No allocation data available');
+                setAllocationData([]);
+              }
+            } catch (parseError) {
+              console.error('Error parsing cached allocation data:', parseError);
               setError('No allocation data available');
               setAllocationData([]);
             }
           } else {
-            setError('No positions found in your Trading212 account');
+            setError('No allocation data available');
             setAllocationData([]);
           }
         } else {
@@ -118,6 +171,9 @@ const AssetAllocation = () => {
     <Card>
       <CardHeader>
         <CardTitle>Asset Allocation</CardTitle>
+        {usingCachedData && (
+          <p className="text-xs text-blue-600">Using cached data</p>
+        )}
       </CardHeader>
       <CardContent>
         {error ? (
