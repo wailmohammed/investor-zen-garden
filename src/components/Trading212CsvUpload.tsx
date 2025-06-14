@@ -7,6 +7,7 @@ import { usePortfolio } from "@/contexts/PortfolioContext";
 import { supabase } from "@/integrations/supabase/client";
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { PortfolioSelector } from "@/components/ui/portfolio-selector";
 
 interface Trading212CsvData {
   Action: string;
@@ -31,7 +32,7 @@ interface Trading212CsvData {
 
 const Trading212CsvUpload = () => {
   const { toast } = useToast();
-  const { selectedPortfolio, portfolios } = usePortfolio();
+  const { selectedPortfolio, setSelectedPortfolio, portfolios } = usePortfolio();
   const [csvData, setCsvData] = useState<Trading212CsvData[]>([]);
   const [apiData, setApiData] = useState<any>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -223,6 +224,39 @@ const Trading212CsvUpload = () => {
 
   return (
     <div className="space-y-6">
+      {/* Portfolio Selection Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Select Portfolio</CardTitle>
+          <CardDescription>Choose which portfolio to upload your brokerage data to</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {portfolios.length === 0 ? (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                No portfolios found. Please create a portfolio first in the Portfolios tab.
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <PortfolioSelector
+              portfolios={portfolios}
+              value={selectedPortfolio}
+              onValueChange={setSelectedPortfolio}
+              placeholder="Select a portfolio for your brokerage data"
+              label="Target Portfolio"
+            />
+          )}
+          {selectedPortfolio && (
+            <div className="mt-3 p-3 bg-green-50 rounded-md">
+              <p className="text-sm text-green-700">
+                ✓ Portfolio selected: {portfolios.find(p => p.id === selectedPortfolio)?.name}
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Trading212 CSV Upload & Comparison</CardTitle>
@@ -236,17 +270,9 @@ const Trading212CsvUpload = () => {
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                Please select a portfolio first before uploading data. Go to the Broker Integration tab to select a portfolio.
+                Please select a portfolio first before uploading data.
               </AlertDescription>
             </Alert>
-          )}
-
-          {selectedPortfolio && (
-            <div className="p-3 bg-blue-50 rounded-md">
-              <p className="text-sm text-blue-700">
-                <strong>Target Portfolio:</strong> {portfolios.find(p => p.id === selectedPortfolio)?.name || 'Unknown'}
-              </p>
-            </div>
           )}
           
           <div>
