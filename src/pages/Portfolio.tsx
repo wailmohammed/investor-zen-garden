@@ -3,6 +3,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import PortfolioManager from "@/components/Portfolio/PortfolioManager";
 import WatchlistManager from "@/components/Portfolio/WatchlistManager";
 import DividendManager from "@/components/Portfolio/DividendManager";
+import Trading212CsvUpload from "@/components/Trading212CsvUpload";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CSVUpload } from "@/components/ui/csv-upload";
@@ -36,10 +37,11 @@ const Portfolio = () => {
           </div>
 
           <Tabs defaultValue="portfolios" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="portfolios">Portfolios</TabsTrigger>
               <TabsTrigger value="dividends">Dividends</TabsTrigger>
               <TabsTrigger value="watchlists">Watchlists</TabsTrigger>
+              <TabsTrigger value="trading212">Trading212 Data</TabsTrigger>
               <TabsTrigger value="import">Import Data</TabsTrigger>
             </TabsList>
 
@@ -53,6 +55,10 @@ const Portfolio = () => {
 
             <TabsContent value="watchlists">
               <WatchlistManager />
+            </TabsContent>
+
+            <TabsContent value="trading212">
+              <Trading212CsvUpload />
             </TabsContent>
 
             <TabsContent value="import">
