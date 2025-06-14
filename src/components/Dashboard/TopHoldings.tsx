@@ -122,18 +122,18 @@ const TopHoldings = () => {
           });
           setHoldings(mockHoldings.slice(0, 4));
         } else if (data?.success && data.data.positions) {
-          // Convert Trading212 positions to our format
+          // Convert Trading212 positions to our format with proper null checks
           const realHoldings = data.data.positions.map((position, index) => ({
-            symbol: position.symbol,
-            name: position.symbol, // Trading212 API doesn't provide company names
-            price: `$${position.currentPrice.toFixed(2)}`,
+            symbol: position.symbol || 'N/A',
+            name: position.symbol || 'Unknown', // Trading212 API doesn't provide company names
+            price: `$${(position.currentPrice || 0).toFixed(2)}`,
             change: {
-              value: `${position.unrealizedPnL >= 0 ? '+' : ''}$${Math.abs(position.unrealizedPnL).toFixed(2)}`,
-              percentage: `${position.unrealizedPnL >= 0 ? '+' : ''}${((position.unrealizedPnL / (position.averagePrice * position.quantity)) * 100).toFixed(2)}%`,
-              isPositive: position.unrealizedPnL >= 0
+              value: `${(position.unrealizedPnL || 0) >= 0 ? '+' : ''}$${Math.abs(position.unrealizedPnL || 0).toFixed(2)}`,
+              percentage: `${(position.unrealizedPnL || 0) >= 0 ? '+' : ''}${(((position.unrealizedPnL || 0) / ((position.averagePrice || 1) * (position.quantity || 1))) * 100).toFixed(2)}%`,
+              isPositive: (position.unrealizedPnL || 0) >= 0
             },
-            shares: position.quantity,
-            totalValue: `$${position.marketValue.toFixed(2)}`
+            shares: position.quantity || 0,
+            totalValue: `$${(position.marketValue || (position.currentPrice || 0) * (position.quantity || 0)).toFixed(2)}`
           }));
           
           setHoldings(realHoldings);
