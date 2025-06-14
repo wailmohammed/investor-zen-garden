@@ -24,7 +24,7 @@ const TopHoldings = () => {
   const [allHoldings, setAllHoldings] = useState<Holding[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [usingCachedData, setUsingCachedData] = useState(false);
+  const [dataSource, setDataSource] = useState<string>('');
 
   useEffect(() => {
     const fetchHoldings = async () => {
@@ -38,30 +38,20 @@ const TopHoldings = () => {
       try {
         setIsLoading(true);
         setError(null);
-        setUsingCachedData(false);
+        setDataSource('');
         
-        // Check if this is a Trading212 connected portfolio
         const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
         
         if (selectedPortfolio === trading212PortfolioId) {
-          console.log('Fetching real Trading212 holdings data');
+          console.log('Fetching Trading212 holdings data');
           
-          // Check for cached data first
-          const cachedData = localStorage.getItem('trading212_data');
-          let shouldUseCached = false;
-
+          // Try fresh API data first
           try {
             const { data, error } = await supabase.functions.invoke('trading212-sync', {
               body: { portfolioId: selectedPortfolio }
             });
 
-            if (error) {
-              console.error('Error fetching Trading212 holdings:', error);
-              shouldUseCached = true;
-            } else if (!data?.success) {
-              console.error('Trading212 API error:', data?.error);
-              shouldUseCached = true;
-            } else if (data.data.positions && data.data.positions.length > 0) {
+            if (!error && data?.success && data.data.positions && data.data.positions.length > 0) {
               const processedHoldings = data.data.positions.map((position: any) => {
                 const marketValue = position.marketValue || (position.quantity * position.currentPrice);
                 const unrealizedPnL = position.unrealizedPnL || 0;
@@ -79,20 +69,19 @@ const TopHoldings = () => {
                 };
               });
               
-              // Store all holdings for the dialog
               setAllHoldings(processedHoldings);
-              // Show top 5 in the card
               setHoldings(processedHoldings.slice(0, 5));
-            } else {
-              shouldUseCached = true;
+              setDataSource('Live API');
+              localStorage.setItem('trading212_data', JSON.stringify(data.data));
+              return;
             }
-          } catch (fetchError) {
-            console.error('Network error fetching Trading212 holdings:', fetchError);
-            shouldUseCached = true;
+          } catch (apiError) {
+            console.log('API call failed, trying cached data');
           }
 
-          // Use cached data if API failed
-          if (shouldUseCached && cachedData) {
+          // Try cached API data
+          const cachedData = localStorage.getItem('trading212_data');
+          if (cachedData) {
             try {
               const cached = JSON.parse(cachedData);
               if (cached.positions && cached.positions.length > 0) {
@@ -115,30 +104,116 @@ const TopHoldings = () => {
                 
                 setAllHoldings(processedHoldings);
                 setHoldings(processedHoldings.slice(0, 5));
-                setUsingCachedData(true);
-                console.log('Using cached Trading212 holdings data');
-              } else {
-                setError('No holdings found');
-                setHoldings([]);
-                setAllHoldings([]);
+                setDataSource('Cached API');
+                return;
               }
             } catch (parseError) {
-              console.error('Error parsing cached holdings data:', parseError);
-              setError('No holdings found');
-              setHoldings([]);
-              setAllHoldings([]);
+              console.error('Error parsing cached data:', parseError);
             }
-          } else {
-            setError('No holdings found in your Trading212 account');
-            setHoldings([]);
-            setAllHoldings([]);
           }
-        } else {
-          // No Trading212 connection
-          setError('Connect your Trading212 account to see real holdings');
-          setHoldings([]);
-          setAllHoldings([]);
+
+          // Try CSV data as fallback
+          const csvDataStr = localStorage.getItem('trading212_csv_data');
+          if (csvDataStr) {
+            try {
+              const csvData = JSON.parse(csvDataStr);
+              if (csvData && csvData.length > 0) {
+                // Process CSV data to create holdings
+                const holdingsMap = new Map();
+                
+                csvData.forEach((transaction: any) => {
+                  const ticker = transaction.Ticker || transaction.Symbol;
+                  const action = transaction.Action;
+                  const shares = parseFloat(transaction["No. of shares"] || transaction.Quantity || "0");
+                  const price = parseFloat(transaction["Price / share"] || transaction.Price || "0");
+                  
+                  if (ticker && (action === "Market buy" || action === "Market sell" || !action)) {
+                    if (!holdingsMap.has(ticker)) {
+                      holdingsMap.set(ticker, {
+                        symbol: ticker,
+                        name: transaction.Name,
+                        quantity: 0,
+                        totalCost: 0,
+                        transactions: []
+                      });
+                    }
+                    
+                    const holding = holdingsMap.get(ticker);
+                    if (action === "Market buy" || !action) {
+                      holding.quantity += shares;
+                      holding.totalCost += shares * price;
+                    } else if (action === "Market sell") {
+                      holding.quantity -= shares;
+                      holding.totalCost -= shares * price;
+                    }
+                    holding.transactions.push(transaction);
+                  }
+                });
+                
+                const processedHoldings = Array.from(holdingsMap.values())
+                  .filter((holding: any) => holding.quantity > 0)
+                  .map((holding: any) => ({
+                    symbol: holding.symbol,
+                    quantity: holding.quantity,
+                    averagePrice: holding.quantity > 0 ? holding.totalCost / holding.quantity : 0,
+                    currentPrice: holding.quantity > 0 ? holding.totalCost / holding.quantity : 0,
+                    marketValue: holding.totalCost,
+                    unrealizedPnL: 0,
+                    change: 0,
+                    changePercent: 0
+                  }));
+                
+                if (processedHoldings.length > 0) {
+                  setAllHoldings(processedHoldings);
+                  setHoldings(processedHoldings.slice(0, 5));
+                  setDataSource('CSV Data');
+                  return;
+                }
+              }
+            } catch (parseError) {
+              console.error('Error parsing CSV data:', parseError);
+            }
+          }
         }
+
+        // Use demo data as final fallback
+        const demoHoldings = [
+          {
+            symbol: 'AAPL',
+            quantity: 150,
+            averagePrice: 180.50,
+            currentPrice: 195.20,
+            marketValue: 29280,
+            unrealizedPnL: 2205,
+            change: 2205,
+            changePercent: 8.14
+          },
+          {
+            symbol: 'GOOGL',
+            quantity: 50,
+            averagePrice: 125.30,
+            currentPrice: 135.80,
+            marketValue: 6790,
+            unrealizedPnL: 525,
+            change: 525,
+            changePercent: 8.38
+          },
+          {
+            symbol: 'MSFT',
+            quantity: 75,
+            averagePrice: 320.00,
+            currentPrice: 315.50,
+            marketValue: 23662.50,
+            unrealizedPnL: -337.50,
+            change: -337.50,
+            changePercent: -1.41
+          }
+        ];
+        
+        setAllHoldings(demoHoldings);
+        setHoldings(demoHoldings.slice(0, 5));
+        setDataSource('Demo Data');
+        
       } catch (error) {
         console.error('Error fetching holdings:', error);
         setError('Failed to fetch holdings data');
@@ -173,8 +248,8 @@ const TopHoldings = () => {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Top Holdings</CardTitle>
-        {usingCachedData && (
-          <p className="text-xs text-blue-600">Using cached data</p>
+        {dataSource && (
+          <p className="text-xs text-blue-600">Source: {dataSource}</p>
         )}
         {allHoldings.length > 0 && (
           <ViewAllHoldingsDialog holdings={allHoldings} />
@@ -189,7 +264,7 @@ const TopHoldings = () => {
         ) : holdings.length === 0 ? (
           <div className="text-center py-4 text-muted-foreground">
             <p>No holdings data available.</p>
-            <p className="text-sm mt-1">Connect your Trading212 account to see real holdings.</p>
+            <p className="text-sm mt-1">Connect your Trading212 account or upload CSV data to see holdings.</p>
           </div>
         ) : (
           <div className="space-y-4">

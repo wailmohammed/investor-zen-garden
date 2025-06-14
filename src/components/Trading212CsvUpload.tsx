@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,13 +39,16 @@ const Trading212CsvUpload = () => {
     console.log('Trading212 CSV data uploaded:', data);
     setCsvData(data);
     
+    // Store CSV data in localStorage for dashboard components to use
+    localStorage.setItem('trading212_csv_data', JSON.stringify(data));
+    
     // Process CSV data to extract current holdings
     const holdings = processCsvToHoldings(data);
     console.log('Processed CSV holdings:', holdings);
     
     toast({
       title: "CSV Data Uploaded",
-      description: `Processed ${data.length} transactions into ${holdings.length} holdings`,
+      description: `Processed ${data.length} transactions into ${holdings.length} holdings. Data is now available in dashboard.`,
     });
   };
 
@@ -214,7 +216,7 @@ const Trading212CsvUpload = () => {
         <CardHeader>
           <CardTitle>Trading212 CSV Upload & Comparison</CardTitle>
           <CardDescription>
-            Upload your Trading212 CSV export and compare it with live API data
+            Upload your Trading212 CSV export and compare it with live API data. CSV data will be used in dashboard charts when API is unavailable.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -223,7 +225,7 @@ const Trading212CsvUpload = () => {
             <CSVUpload onFileUpload={handleCsvUpload} />
             {csvData.length > 0 && (
               <div className="mt-2 text-sm text-green-600">
-                ✓ CSV uploaded: {csvData.length} transactions processed
+                ✓ CSV uploaded: {csvData.length} transactions processed and saved for dashboard use
               </div>
             )}
           </div>
