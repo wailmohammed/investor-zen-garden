@@ -8,6 +8,7 @@ interface Portfolio {
   name: string;
   description?: string;
   is_default: boolean;
+  portfolio_type: 'stock' | 'crypto';
 }
 
 interface PortfolioContextType {
@@ -16,6 +17,8 @@ interface PortfolioContextType {
   setSelectedPortfolio: (portfolioId: string) => void;
   isLoading: boolean;
   refreshPortfolios: () => Promise<void>;
+  stockPortfolios: Portfolio[];
+  cryptoPortfolios: Portfolio[];
 }
 
 const PortfolioContext = createContext<PortfolioContextType | undefined>(undefined);
@@ -76,8 +79,8 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Handle portfolio selection changes
   const handleSetSelectedPortfolio = (portfolioId: string) => {
     console.log('Portfolio selection changed to:', portfolioId);
-    const selectedName = portfolios.find(p => p.id === portfolioId)?.name;
-    console.log('Selected portfolio name:', selectedName);
+    const selectedPortfolioData = portfolios.find(p => p.id === portfolioId);
+    console.log('Selected portfolio:', selectedPortfolioData?.name, 'Type:', selectedPortfolioData?.portfolio_type);
     
     // Check if it's a broker portfolio
     const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
@@ -87,8 +90,10 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       console.log('Selected Trading212 portfolio');
     } else if (portfolioId === binancePortfolioId) {
       console.log('Selected Binance portfolio');
+    } else if (selectedPortfolioData?.portfolio_type === 'crypto') {
+      console.log('Selected crypto portfolio');
     } else {
-      console.log('Selected regular portfolio');
+      console.log('Selected stock portfolio');
     }
     
     setSelectedPortfolio(portfolioId);
@@ -106,13 +111,19 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [selectedPortfolio]);
 
+  // Separate portfolios by type
+  const stockPortfolios = portfolios.filter(p => p.portfolio_type === 'stock');
+  const cryptoPortfolios = portfolios.filter(p => p.portfolio_type === 'crypto');
+
   return (
     <PortfolioContext.Provider value={{
       portfolios,
       selectedPortfolio,
       setSelectedPortfolio: handleSetSelectedPortfolio,
       isLoading,
-      refreshPortfolios
+      refreshPortfolios,
+      stockPortfolios,
+      cryptoPortfolios
     }}>
       {children}
     </PortfolioContext.Provider>

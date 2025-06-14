@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2, Plus, Edit2, Check, X, Star } from "lucide-react";
+import { Trash2, Plus, Edit2, Check, X, Star, Coins, TrendingUp } from "lucide-react";
 import { PortfolioSelector } from "@/components/ui/portfolio-selector";
 import {
   Dialog,
@@ -19,6 +20,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface PortfolioManagerProps {
   csvData?: any[];
@@ -28,9 +30,17 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
   const { user, isAdmin } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [newPortfolio, setNewPortfolio] = useState({ name: "", description: "" });
+  const [newPortfolio, setNewPortfolio] = useState({ 
+    name: "", 
+    description: "", 
+    portfolio_type: "stock" as "stock" | "crypto"
+  });
   const [editingPortfolio, setEditingPortfolio] = useState<string | null>(null);
-  const [editValues, setEditValues] = useState({ name: "", description: "" });
+  const [editValues, setEditValues] = useState({ 
+    name: "", 
+    description: "", 
+    portfolio_type: "stock" as "stock" | "crypto"
+  });
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [importTargetPortfolio, setImportTargetPortfolio] = useState<string>("");
 
@@ -137,7 +147,7 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
 
   // Create portfolio mutation
   const createPortfolioMutation = useMutation({
-    mutationFn: async (portfolio: { name: string; description: string }) => {
+    mutationFn: async (portfolio: { name: string; description: string; portfolio_type: "stock" | "crypto" }) => {
       console.log("Creating portfolio:", portfolio);
       
       if (!user?.id) {
@@ -161,6 +171,7 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
         user_id: user.id,
         name: portfolio.name.trim(),
         description: portfolio.description?.trim() || null,
+        portfolio_type: portfolio.portfolio_type,
         is_default: portfolios.length === 0, // First portfolio is default
       };
 
@@ -184,11 +195,11 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
       console.log("Portfolio creation mutation success:", data);
       queryClient.invalidateQueries({ queryKey: ['portfolios'] });
       refetch();
-      setNewPortfolio({ name: "", description: "" });
+      setNewPortfolio({ name: "", description: "", portfolio_type: "stock" });
       setIsCreateDialogOpen(false);
       toast({
         title: "Portfolio created",
-        description: "Your portfolio has been created successfully.",
+        description: `Your ${data.portfolio_type} portfolio has been created successfully.`,
       });
     },
     onError: (error: any) => {
@@ -203,7 +214,10 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
 
   // Update portfolio mutation
   const updatePortfolioMutation = useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: { name: string; description: string } }) => {
+    mutationFn: async ({ id, updates }: { 
+      id: string; 
+      updates: { name: string; description: string; portfolio_type: "stock" | "crypto" } 
+    }) => {
       console.log("Updating portfolio:", id, updates);
       
       const { data, error } = await supabase
@@ -211,6 +225,7 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
         .update({
           name: updates.name.trim(),
           description: updates.description?.trim() || null,
+          portfolio_type: updates.portfolio_type,
           updated_at: new Date().toISOString()
         })
         .eq('id', id)
@@ -362,6 +377,9 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
   const plan = subscription?.plan || 'Free';
   const canCreateMore = currentCount < limit;
 
+  const stockPortfolios = portfolios?.filter(p => p.portfolio_type === 'stock') || [];
+  const cryptoPortfolios = portfolios?.filter(p => p.portfolio_type === 'crypto') || [];
+
   const handleCreatePortfolio = async () => {
     console.log("handleCreatePortfolio called with:", newPortfolio);
     
@@ -405,6 +423,7 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
       await createPortfolioMutation.mutateAsync({
         name: portfolioName,
         description: `Portfolio created from CSV with ${csvData.length} items`,
+        portfolio_type: "stock" // CSV imports are typically stock portfolios
       });
     } catch (error) {
       console.error("Error in handleCreateFromCSV:", error);
@@ -413,7 +432,11 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
 
   const startEditing = (portfolio: any) => {
     setEditingPortfolio(portfolio.id);
-    setEditValues({ name: portfolio.name, description: portfolio.description || "" });
+    setEditValues({ 
+      name: portfolio.name, 
+      description: portfolio.description || "",
+      portfolio_type: portfolio.portfolio_type || "stock"
+    });
   };
 
   const handleUpdatePortfolio = async (portfolioId: string) => {
@@ -443,6 +466,127 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
     }
   };
 
+  const getPortfolioIcon = (type: string) => {
+    return type === 'crypto' ? <Coins className="h-4 w-4" /> : <TrendingUp className="h-4 w-4" />;
+  };
+
+  const renderPortfolioSection = (portfolios: any[], title: string, type: "stock" | "crypto") => (
+    <div className="space-y-2">
+      <h3 className="text-lg font-semibold flex items-center gap-2">
+        {getPortfolioIcon(type)}
+        {title} ({portfolios.length})
+      </h3>
+      {portfolios.map((portfolio) => (
+        <div key={portfolio.id} className="flex items-center justify-between p-3 border rounded-lg">
+          {editingPortfolio === portfolio.id ? (
+            <div className="flex-1 space-y-2 mr-4">
+              <Input
+                value={editValues.name}
+                onChange={(e) => setEditValues({ ...editValues, name: e.target.value })}
+                placeholder="Portfolio name"
+              />
+              <Textarea
+                value={editValues.description}
+                onChange={(e) => setEditValues({ ...editValues, description: e.target.value })}
+                placeholder="Portfolio description"
+                rows={2}
+              />
+              <Select
+                value={editValues.portfolio_type}
+                onValueChange={(value: "stock" | "crypto") => 
+                  setEditValues({ ...editValues, portfolio_type: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="stock">Stock Portfolio</SelectItem>
+                  <SelectItem value="crypto">Crypto Portfolio</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                {getPortfolioIcon(portfolio.portfolio_type)}
+                <h3 className="font-medium">{portfolio.name}</h3>
+                {portfolio.is_default && (
+                  <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                )}
+                <span className="text-xs bg-muted px-2 py-1 rounded">
+                  {portfolio.portfolio_type}
+                </span>
+              </div>
+              {portfolio.description && (
+                <p className="text-sm text-muted-foreground">{portfolio.description}</p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Created: {new Date(portfolio.created_at).toLocaleDateString()}
+              </p>
+            </div>
+          )}
+          
+          <div className="flex items-center gap-2">
+            {editingPortfolio === portfolio.id ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleUpdatePortfolio(portfolio.id)}
+                  disabled={updatePortfolioMutation.isPending}
+                >
+                  <Check className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setEditingPortfolio(null)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </>
+            ) : (
+              <>
+                {!portfolio.is_default && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setDefaultMutation.mutate(portfolio.id)}
+                    disabled={setDefaultMutation.isPending}
+                    title="Set as default portfolio"
+                  >
+                    <Star className="h-4 w-4" />
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => startEditing(portfolio)}
+                >
+                  <Edit2 className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleDeletePortfolio(portfolio.id)}
+                  disabled={deletePortfolioMutation.isPending}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      ))}
+      {portfolios.length === 0 && (
+        <p className="text-center text-muted-foreground py-4 text-sm">
+          No {type} portfolios yet.
+        </p>
+      )}
+    </div>
+  );
+
   return (
     <Card>
       <CardHeader>
@@ -456,7 +600,7 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
           )}
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-6">
         {csvData.length > 0 && portfolios.length > 0 && (
           <PortfolioSelector
             portfolios={portfolios}
@@ -484,12 +628,39 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
               </DialogHeader>
               <div className="space-y-4">
                 <div>
+                  <Label htmlFor="type">Portfolio Type</Label>
+                  <Select
+                    value={newPortfolio.portfolio_type}
+                    onValueChange={(value: "stock" | "crypto") => 
+                      setNewPortfolio({ ...newPortfolio, portfolio_type: value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="stock">
+                        <div className="flex items-center gap-2">
+                          <TrendingUp className="h-4 w-4" />
+                          Stock Portfolio
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="crypto">
+                        <div className="flex items-center gap-2">
+                          <Coins className="h-4 w-4" />
+                          Crypto Portfolio
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
                   <Label htmlFor="name">Portfolio Name</Label>
                   <Input
                     id="name"
                     value={newPortfolio.name}
                     onChange={(e) => setNewPortfolio({ ...newPortfolio, name: e.target.value })}
-                    placeholder="My Investment Portfolio"
+                    placeholder={`My ${newPortfolio.portfolio_type === 'crypto' ? 'Crypto' : 'Investment'} Portfolio`}
                   />
                 </div>
                 <div>
@@ -538,92 +709,9 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
           </p>
         )}
 
-        <div className="space-y-2">
-          {portfolios?.map((portfolio) => (
-            <div key={portfolio.id} className="flex items-center justify-between p-3 border rounded-lg">
-              {editingPortfolio === portfolio.id ? (
-                <div className="flex-1 space-y-2 mr-4">
-                  <Input
-                    value={editValues.name}
-                    onChange={(e) => setEditValues({ ...editValues, name: e.target.value })}
-                    placeholder="Portfolio name"
-                  />
-                  <Textarea
-                    value={editValues.description}
-                    onChange={(e) => setEditValues({ ...editValues, description: e.target.value })}
-                    placeholder="Portfolio description"
-                    rows={2}
-                  />
-                </div>
-              ) : (
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-medium">{portfolio.name}</h3>
-                    {portfolio.is_default && (
-                      <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                    )}
-                  </div>
-                  {portfolio.description && (
-                    <p className="text-sm text-muted-foreground">{portfolio.description}</p>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    Created: {new Date(portfolio.created_at).toLocaleDateString()}
-                  </p>
-                </div>
-              )}
-              
-              <div className="flex items-center gap-2">
-                {editingPortfolio === portfolio.id ? (
-                  <>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleUpdatePortfolio(portfolio.id)}
-                      disabled={updatePortfolioMutation.isPending}
-                    >
-                      <Check className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setEditingPortfolio(null)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    {!portfolio.is_default && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setDefaultMutation.mutate(portfolio.id)}
-                        disabled={setDefaultMutation.isPending}
-                        title="Set as default portfolio"
-                      >
-                        <Star className="h-4 w-4" />
-                      </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => startEditing(portfolio)}
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleDeletePortfolio(portfolio.id)}
-                      disabled={deletePortfolioMutation.isPending}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
-          ))}
+        <div className="space-y-6">
+          {renderPortfolioSection(stockPortfolios, "Stock Portfolios", "stock")}
+          {renderPortfolioSection(cryptoPortfolios, "Crypto Portfolios", "crypto")}
         </div>
 
         {portfolios?.length === 0 && (
