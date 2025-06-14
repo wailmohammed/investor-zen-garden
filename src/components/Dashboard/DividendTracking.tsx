@@ -1,9 +1,9 @@
-
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getUpcomingDividends, getDividendPortfolio } from "@/services/dividendService";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePortfolio } from "@/contexts/PortfolioContext";
 import { Dividend, DividendPortfolio } from "@/models/dividend";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
@@ -13,6 +13,7 @@ import { format } from "date-fns";
 
 const DividendTracking = () => {
   const { user } = useAuth();
+  const { selectedPortfolio } = usePortfolio();
   const [upcomingDividends, setUpcomingDividends] = useState<Dividend[]>([]);
   const [portfolio, setPortfolio] = useState<DividendPortfolio | null>(null);
   const [loading, setLoading] = useState(true);
@@ -20,17 +21,41 @@ const DividendTracking = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!user) return;
+      if (!user || !selectedPortfolio) {
+        console.log('No user or selected portfolio for dividend data');
+        setLoading(false);
+        return;
+      }
 
       setLoading(true);
       try {
-        const [dividends, portfolioData] = await Promise.all([
-          getUpcomingDividends(user.id),
-          getDividendPortfolio(user.id)
-        ]);
+        console.log('Fetching dividend data for portfolio:', selectedPortfolio);
+        
+        // Check if this is a connected broker portfolio
+        const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
+        const binancePortfolioId = localStorage.getItem('binance_portfolio_id');
+        
+        if (selectedPortfolio === trading212PortfolioId) {
+          // Trading212 portfolios typically don't have dividends (mostly CFDs)
+          console.log('Trading212 portfolio - no dividend data');
+          setUpcomingDividends([]);
+          setPortfolio(null);
+        } else if (selectedPortfolio === binancePortfolioId) {
+          // Crypto portfolios don't have traditional dividends
+          console.log('Binance portfolio - no dividend data');
+          setUpcomingDividends([]);
+          setPortfolio(null);
+        } else {
+          // Regular portfolio - fetch dividend data
+          const [dividends, portfolioData] = await Promise.all([
+            getUpcomingDividends(user.id),
+            getDividendPortfolio(user.id)
+          ]);
 
-        setUpcomingDividends(dividends);
-        setPortfolio(portfolioData);
+          console.log('Dividend data fetched:', { dividends, portfolioData });
+          setUpcomingDividends(dividends);
+          setPortfolio(portfolioData);
+        }
       } catch (error) {
         console.error("Error fetching dividend data:", error);
       } finally {
@@ -39,7 +64,7 @@ const DividendTracking = () => {
     };
 
     fetchData();
-  }, [user]);
+  }, [user, selectedPortfolio]);
 
   // Prepare monthly income data for the chart
   const monthlyData = [
@@ -80,6 +105,46 @@ const DividendTracking = () => {
         <CardContent>
           <div className="flex justify-center items-center h-48">
             <p>Loading dividend data...</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!selectedPortfolio) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Dividend Tracking</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex justify-center items-center h-48">
+            <p className="text-muted-foreground">Select a portfolio to view dividend data</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Check if this is a broker portfolio without dividends
+  const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
+  const binancePortfolioId = localStorage.getItem('binance_portfolio_id');
+  
+  if (selectedPortfolio === trading212PortfolioId || selectedPortfolio === binancePortfolioId) {
+    const brokerName = selectedPortfolio === trading212PortfolioId ? 'Trading212' : 'Binance';
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Dividend Tracking</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col items-center justify-center h-48 text-center">
+            <p className="text-muted-foreground mb-2">
+              {brokerName} portfolios typically don't include dividend-paying assets
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Switch to a stock portfolio to view dividend data
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -273,10 +338,7 @@ const DividendTracking = () => {
         )}
         {!portfolio && (
           <div className="flex flex-col items-center justify-center h-48 text-center">
-            <p className="text-muted-foreground mb-4">No dividend data available</p>
-            <button className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
-              Import Dividend Data
-            </button>
+            <p className="text-muted-foreground mb-4">No dividend data available for this portfolio</p>
           </div>
         )}
       </CardContent>

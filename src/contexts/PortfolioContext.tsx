@@ -15,6 +15,7 @@ interface PortfolioContextType {
   selectedPortfolio: string;
   setSelectedPortfolio: (portfolioId: string) => void;
   isLoading: boolean;
+  refreshPortfolios: () => Promise<void>;
 }
 
 const PortfolioContext = createContext<PortfolioContextType | undefined>(undefined);
@@ -33,48 +34,63 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [selectedPortfolio, setSelectedPortfolio] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
 
+  const refreshPortfolios = async () => {
+    if (!user?.id) {
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      console.log('Fetching portfolios for user:', user.id);
+      const { data, error } = await supabase
+        .from('portfolios')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('is_default', { ascending: false });
+
+      if (error) throw error;
+
+      console.log('Portfolios fetched:', data);
+      setPortfolios(data || []);
+      
+      // Set default portfolio if available, or preserve current selection if valid
+      if (data && data.length > 0) {
+        const currentIsValid = selectedPortfolio && data.some(p => p.id === selectedPortfolio);
+        if (!currentIsValid) {
+          const defaultPortfolio = data.find(p => p.is_default);
+          const portfolioToSelect = defaultPortfolio ? defaultPortfolio.id : data[0].id;
+          console.log('Setting selected portfolio to:', portfolioToSelect);
+          setSelectedPortfolio(portfolioToSelect);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching portfolios:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Fetch user's portfolios
   useEffect(() => {
-    const fetchPortfolios = async () => {
-      if (!user?.id) {
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        const { data, error } = await supabase
-          .from('portfolios')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('is_default', { ascending: false });
-
-        if (error) throw error;
-
-        setPortfolios(data || []);
-        
-        // Set default portfolio if available
-        const defaultPortfolio = data?.find(p => p.is_default);
-        if (defaultPortfolio) {
-          setSelectedPortfolio(defaultPortfolio.id);
-        } else if (data && data.length > 0) {
-          setSelectedPortfolio(data[0].id);
-        }
-      } catch (error) {
-        console.error('Error fetching portfolios:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchPortfolios();
+    refreshPortfolios();
   }, [user?.id]);
+
+  // Log portfolio selection changes
+  useEffect(() => {
+    if (selectedPortfolio) {
+      console.log('Selected portfolio changed to:', selectedPortfolio);
+      const selectedName = portfolios.find(p => p.id === selectedPortfolio)?.name;
+      console.log('Selected portfolio name:', selectedName);
+    }
+  }, [selectedPortfolio, portfolios]);
 
   return (
     <PortfolioContext.Provider value={{
       portfolios,
       selectedPortfolio,
       setSelectedPortfolio,
-      isLoading
+      isLoading,
+      refreshPortfolios
     }}>
       {children}
     </PortfolioContext.Provider>

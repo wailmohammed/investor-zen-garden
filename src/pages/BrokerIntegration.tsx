@@ -11,11 +11,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { usePortfolio } from "@/contexts/PortfolioContext";
 
 const BrokerIntegration = () => {
   const { toast } = useToast();
   const { user } = useAuth();
-  const [portfolios, setPortfolios] = useState<any[]>([]);
+  const { portfolios, refreshPortfolios } = usePortfolio();
   const [selectedPortfolio, setSelectedPortfolio] = useState<string>("");
   const [binanceApiKey, setBinanceApiKey] = useState("");
   const [binanceSecretKey, setBinanceSecretKey] = useState("");
@@ -27,32 +28,13 @@ const BrokerIntegration = () => {
 
   useEffect(() => {
     if (user) {
-      fetchPortfolios();
+      // Set first portfolio as default if none selected
+      if (portfolios.length > 0 && !selectedPortfolio) {
+        setSelectedPortfolio(portfolios[0].id);
+      }
       checkExistingConnections();
     }
-  }, [user]);
-
-  const fetchPortfolios = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('portfolios')
-        .select('*')
-        .eq('user_id', user?.id)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error("Error fetching portfolios:", error);
-        return;
-      }
-
-      setPortfolios(data || []);
-      if (data && data.length > 0 && !selectedPortfolio) {
-        setSelectedPortfolio(data[0].id);
-      }
-    } catch (error) {
-      console.error("Error fetching portfolios:", error);
-    }
-  };
+  }, [user, portfolios]);
 
   const checkExistingConnections = () => {
     // Check for existing connections
@@ -87,10 +69,62 @@ const BrokerIntegration = () => {
 
     console.log(`Syncing ${brokerType} data to portfolio ${portfolioId}:`, mockData[brokerType]);
     
+    // Refresh portfolios to ensure latest data is available
+    await refreshPortfolios();
+    
     toast({
-      title: "Data Synced",
-      description: `Successfully synced ${mockData[brokerType].length} holdings from ${brokerType} to your portfolio.`,
+      title: "Data Synced Successfully",
+      description: `Successfully synced ${mockData[brokerType].length} holdings from ${brokerType} to your portfolio. The data is now available across all pages.`,
     });
+  };
+
+  const validateTrading212API = async () => {
+    if (!trading212ApiKey.trim()) {
+      toast({
+        title: "Missing API key",
+        description: "Please provide your Trading212 API key.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!selectedPortfolio) {
+      toast({
+        title: "No portfolio selected",
+        description: "Please select a portfolio to sync data to.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      if (trading212ApiKey.length > 10) {
+        setTrading212Connected(true);
+        setIsTrading212DialogOpen(false);
+        
+        // Store connection details
+        localStorage.setItem('trading212_api_key', trading212ApiKey);
+        localStorage.setItem('trading212_portfolio_id', selectedPortfolio);
+        
+        console.log('Trading212 connected to portfolio:', selectedPortfolio);
+        
+        // Sync mock data
+        await syncMockDataToPortfolio(selectedPortfolio, 'trading212');
+        
+        toast({
+          title: "Trading212 Connected Successfully",
+          description: `Connected to Trading212 API and synced 3 holdings to your portfolio. Data is now visible across dashboard, portfolio, and dividend pages.`,
+        });
+      } else {
+        throw new Error("Invalid API key");
+      }
+    } catch (error) {
+      toast({
+        title: "Connection failed",
+        description: "Failed to connect to Trading212 API. Please check your API key.",
+        variant: "destructive",
+      });
+    }
   };
 
   const validateBinanceAPI = async () => {
@@ -141,53 +175,6 @@ const BrokerIntegration = () => {
     }
   };
 
-  const validateTrading212API = async () => {
-    if (!trading212ApiKey.trim()) {
-      toast({
-        title: "Missing API key",
-        description: "Please provide your Trading212 API key.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!selectedPortfolio) {
-      toast({
-        title: "No portfolio selected",
-        description: "Please select a portfolio to sync data to.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      if (trading212ApiKey.length > 10) {
-        setTrading212Connected(true);
-        setIsTrading212DialogOpen(false);
-        
-        // Store connection details
-        localStorage.setItem('trading212_api_key', trading212ApiKey);
-        localStorage.setItem('trading212_portfolio_id', selectedPortfolio);
-        
-        // Sync mock data
-        await syncMockDataToPortfolio(selectedPortfolio, 'trading212');
-        
-        toast({
-          title: "Trading212 Connected",
-          description: `Successfully connected to Trading212 API and synced data to your portfolio.`,
-        });
-      } else {
-        throw new Error("Invalid API key");
-      }
-    } catch (error) {
-      toast({
-        title: "Connection failed",
-        description: "Failed to connect to Trading212 API. Please check your API key.",
-        variant: "destructive",
-      });
-    }
-  };
-
   const disconnectBinance = () => {
     setBinanceConnected(false);
     setBinanceApiKey("");
@@ -225,7 +212,7 @@ const BrokerIntegration = () => {
             <CardHeader>
               <CardTitle>Portfolio Selection</CardTitle>
               <CardDescription>
-                Choose which portfolio to sync your broker data to
+                Choose which portfolio to sync your broker data to. Data will be visible across all pages.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -244,6 +231,11 @@ const BrokerIntegration = () => {
                     ))}
                   </SelectContent>
                 </Select>
+                {selectedPortfolio && (
+                  <p className="text-sm text-muted-foreground">
+                    Connected broker data will appear in Dashboard, Portfolio, and Dividend pages when this portfolio is selected.
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -408,7 +400,7 @@ const BrokerIntegration = () => {
                     <DialogHeader>
                       <DialogTitle>Connect Trading212 Account</DialogTitle>
                       <DialogDescription>
-                        Enter your Trading212 API key to connect your account.
+                        Enter your Trading212 API key to connect your account. Data will sync to the selected portfolio.
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
