@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { usePortfolio } from "@/contexts/PortfolioContext";
+import { PortfolioProvider } from "@/contexts/PortfolioContext";
 import { supabase } from "@/integrations/supabase/client";
 import ApiKeyManager from "@/components/ApiKeyManager";
 
@@ -13,7 +14,7 @@ const brokerLogos = {
   Binance: '/binance_logo.png',
 };
 
-const BrokerIntegration = () => {
+const BrokerIntegrationContent = () => {
   const { toast } = useToast();
   const { selectedPortfolio } = usePortfolio();
   const [isConnecting, setIsConnecting] = useState<{ [key: string]: boolean }>({
@@ -152,6 +153,14 @@ const BrokerIntegration = () => {
         </Card>
       </div>
     </DashboardLayout>
+  );
+};
+
+const BrokerIntegration = () => {
+  return (
+    <PortfolioProvider>
+      <BrokerIntegrationContent />
+    </PortfolioProvider>
   );
 };
 
