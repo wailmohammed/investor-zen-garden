@@ -62,12 +62,36 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           console.log('Setting selected portfolio to:', portfolioToSelect);
           setSelectedPortfolio(portfolioToSelect);
         }
+      } else {
+        // No portfolios found, clear selection
+        setSelectedPortfolio('');
       }
     } catch (error) {
       console.error('Error fetching portfolios:', error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Handle portfolio selection changes
+  const handleSetSelectedPortfolio = (portfolioId: string) => {
+    console.log('Portfolio selection changed to:', portfolioId);
+    const selectedName = portfolios.find(p => p.id === portfolioId)?.name;
+    console.log('Selected portfolio name:', selectedName);
+    
+    // Check if it's a broker portfolio
+    const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
+    const binancePortfolioId = localStorage.getItem('binance_portfolio_id');
+    
+    if (portfolioId === trading212PortfolioId) {
+      console.log('Selected Trading212 portfolio');
+    } else if (portfolioId === binancePortfolioId) {
+      console.log('Selected Binance portfolio');
+    } else {
+      console.log('Selected regular portfolio');
+    }
+    
+    setSelectedPortfolio(portfolioId);
   };
 
   // Fetch user's portfolios
@@ -78,17 +102,15 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Log portfolio selection changes
   useEffect(() => {
     if (selectedPortfolio) {
-      console.log('Selected portfolio changed to:', selectedPortfolio);
-      const selectedName = portfolios.find(p => p.id === selectedPortfolio)?.name;
-      console.log('Selected portfolio name:', selectedName);
+      console.log('Selected portfolio state updated to:', selectedPortfolio);
     }
-  }, [selectedPortfolio, portfolios]);
+  }, [selectedPortfolio]);
 
   return (
     <PortfolioContext.Provider value={{
       portfolios,
       selectedPortfolio,
-      setSelectedPortfolio,
+      setSelectedPortfolio: handleSetSelectedPortfolio,
       isLoading,
       refreshPortfolios
     }}>
