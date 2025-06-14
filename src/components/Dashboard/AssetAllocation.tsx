@@ -1,231 +1,127 @@
 
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, Sector } from "recharts";
-import { useState, useCallback } from "react";
-import { Button } from "@/components/ui/button";
-import { ChevronDown, Upload, RefreshCw } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { FileUpload } from "@/components/FileUpload";
-import { toast } from "sonner";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
+import { useAuth } from "@/contexts/AuthContext";
+import { usePortfolio } from "@/contexts/PortfolioContext";
+import { supabase } from "@/integrations/supabase/client";
+
+const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1', '#d084d0'];
+
+interface AllocationData {
+  name: string;
+  value: number;
+  percentage: number;
+}
 
 const AssetAllocation = () => {
-  const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined);
-  const [data, setData] = useState([
-    { name: "Stocks", value: 65, color: "#4f46e5" },
-    { name: "Bonds", value: 25, color: "#0d9488" },
-    { name: "Cash", value: 10, color: "#16a34a" },
-    { name: "Other", value: 5, color: "#38bdf8" },
-  ]);
-  const [viewType, setViewType] = useState<"allocation" | "performance">("allocation");
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const { user } = useAuth();
+  const { selectedPortfolio } = usePortfolio();
+  const [allocationData, setAllocationData] = useState<AllocationData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const onPieEnter = useCallback(
-    (_: any, index: number) => {
-      setActiveIndex(index);
-    },
-    []
-  );
+  useEffect(() => {
+    const fetchAllocation = async () => {
+      if (!user || !selectedPortfolio) {
+        setAllocationData([]);
+        setIsLoading(false);
+        return;
+      }
 
-  const onPieLeave = useCallback(() => {
-    setActiveIndex(undefined);
-  }, []);
+      try {
+        setIsLoading(true);
+        
+        // Check if this is a Trading212 connected portfolio
+        const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
+        
+        if (selectedPortfolio === trading212PortfolioId) {
+          console.log('Fetching real Trading212 allocation data');
+          
+          const { data, error } = await supabase.functions.invoke('trading212-sync', {
+            body: { portfolioId: selectedPortfolio }
+          });
 
-  const renderActiveShape = (props: any) => {
-    const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent, value } = props;
-  
+          if (error) {
+            console.error('Error fetching Trading212 allocation:', error);
+            setAllocationData([]);
+          } else if (data?.success && data.data.positions) {
+            const positions = data.data.positions;
+            const totalValue = positions.reduce((sum: number, pos: any) => sum + pos.marketValue, 0);
+            
+            if (totalValue > 0) {
+              const allocation = positions.map((position: any) => ({
+                name: position.symbol,
+                value: position.marketValue,
+                percentage: (position.marketValue / totalValue) * 100
+              })).sort((a: any, b: any) => b.value - a.value);
+              
+              setAllocationData(allocation);
+            } else {
+              setAllocationData([]);
+            }
+          }
+        } else {
+          setAllocationData([]);
+        }
+      } catch (error) {
+        console.error('Error fetching allocation:', error);
+        setAllocationData([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchAllocation();
+  }, [user, selectedPortfolio]);
+
+  if (isLoading) {
     return (
-      <g>
-        <text x={cx} y={cy - 15} dy={8} textAnchor="middle" fill="#333" fontSize={14}>
-          {payload.name}
-        </text>
-        <text x={cx} y={cy + 15} dy={8} textAnchor="middle" fill="#333" fontSize={16} fontWeight="bold">
-          {value}%
-        </text>
-        <Sector
-          cx={cx}
-          cy={cy}
-          innerRadius={innerRadius}
-          outerRadius={outerRadius + 10}
-          startAngle={startAngle}
-          endAngle={endAngle}
-          fill={fill}
-        />
-        <Sector
-          cx={cx}
-          cy={cy}
-          startAngle={startAngle}
-          endAngle={endAngle}
-          innerRadius={outerRadius + 6}
-          outerRadius={outerRadius + 10}
-          fill={fill}
-        />
-      </g>
+      <Card>
+        <CardHeader>
+          <CardTitle>Asset Allocation</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="animate-pulse">
+            <div className="h-64 bg-muted rounded-lg"></div>
+          </div>
+        </CardContent>
+      </Card>
     );
-  };
-
-  // Sample performance data (in a real app would come from an API)
-  const performanceData = [
-    { name: "Stocks", value: 11.2, color: "#4f46e5" },
-    { name: "Bonds", value: 4.8, color: "#0d9488" },
-    { name: "Cash", value: 0.3, color: "#16a34a" },
-    { name: "Other", value: 7.5, color: "#38bdf8" },
-  ];
-
-  const toggleViewType = () => {
-    if (viewType === "allocation") {
-      setViewType("performance");
-      setData(performanceData);
-    } else {
-      setViewType("allocation");
-      setData([
-        { name: "Stocks", value: 65, color: "#4f46e5" },
-        { name: "Bonds", value: 25, color: "#0d9488" },
-        { name: "Cash", value: 10, color: "#16a34a" },
-        { name: "Other", value: 5, color: "#38bdf8" },
-      ]);
-    }
-  };
-
-  const handleFileUpload = (file: File) => {
-    // In a real app, this would process the CSV file
-    console.log("Processing asset allocation data from file:", file.name);
-    toast.success("Asset allocation data imported successfully");
-    setDialogOpen(false);
-    
-    // Simulate updated data
-    setTimeout(() => {
-      setData([
-        { name: "Stocks", value: 58, color: "#4f46e5" },
-        { name: "Bonds", value: 22, color: "#0d9488" },
-        { name: "Cash", value: 15, color: "#16a34a" },
-        { name: "Crypto", value: 5, color: "#f59e0b" },
-      ]);
-      toast.info("Asset allocation updated with imported data");
-    }, 1500);
-  };
-
-  const refreshData = () => {
-    toast.info("Refreshing asset allocation data...");
-    // In a real app, this would fetch the latest data from the API
-    setTimeout(() => {
-      toast.success("Asset allocation data refreshed");
-    }, 1000);
-  };
+  }
 
   return (
     <Card>
-      <CardHeader className="pb-2 flex flex-row items-center justify-between">
+      <CardHeader>
         <CardTitle>Asset Allocation</CardTitle>
-        <div className="flex items-center space-x-2">
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8">
-                <Upload className="h-4 w-4 mr-1" /> Import
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Import Asset Allocation Data</DialogTitle>
-                <DialogDescription>
-                  Upload a CSV file with your asset allocation data
-                </DialogDescription>
-              </DialogHeader>
-              <FileUpload 
-                accept=".csv" 
-                onFileUpload={handleFileUpload} 
-                description="Drag and drop a CSV file here, or click to select a file"
-              />
-              <div className="text-sm text-muted-foreground mt-4">
-                <p className="mb-2">The CSV file should include the following columns:</p>
-                <ul className="list-disc pl-5 space-y-1">
-                  <li>Asset Class (e.g., Stocks, Bonds)</li>
-                  <li>Value or Percentage</li>
-                </ul>
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="h-8" 
-            onClick={refreshData}
-          >
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8">
-                <span className="mr-1">View</span>
-                <ChevronDown className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setViewType("allocation")}>
-                Allocation
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setViewType("performance")}>
-                Performance
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="h-8" 
-            onClick={toggleViewType}
-          >
-            {viewType === "allocation" ? "Show Performance" : "Show Allocation"}
-          </Button>
-        </div>
       </CardHeader>
       <CardContent>
-        <div className="h-[300px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={data}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                outerRadius={100}
-                fill="#8884d8"
-                dataKey="value"
-                activeIndex={activeIndex}
-                activeShape={renderActiveShape}
-                onMouseEnter={onPieEnter}
-                onMouseLeave={onPieLeave}
-                label={({ name, percent }) => 
-                  activeIndex === undefined ? `${name} ${(percent * 100).toFixed(0)}%` : undefined
-                }
-              >
-                {data.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip 
-                formatter={(value) => 
-                  viewType === "allocation" ? `${value}%` : `${value}% YTD`
-                } 
-              />
-              <Legend layout="horizontal" verticalAlign="bottom" align="center" />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
+        {allocationData.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <p>No allocation data available.</p>
+            <p className="text-sm mt-1">Connect your Trading212 account to see real allocation.</p>
+          </div>
+        ) : (
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={allocationData}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={80}
+                  dataKey="value"
+                  label={({ name, percentage }) => `${name} ${percentage.toFixed(1)}%`}
+                >
+                  {allocationData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value: number) => [`$${value.toFixed(2)}`, 'Value']} />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

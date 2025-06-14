@@ -1,101 +1,97 @@
 
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
 
-type MarketIndex = {
-  symbol: string;
-  name: string;
-  price: string;
-  change: {
-    value: string;
-    percentage: string;
-    isPositive: boolean;
-  };
-};
-
-// Mock data for indexes
-const indexes: MarketIndex[] = [
-  {
-    symbol: "SPY",
-    name: "S&P 500",
-    price: "$535.92",
-    change: {
-      value: "+$1.35",
-      percentage: "+0.25%",
-      isPositive: true,
-    },
-  },
-  {
-    symbol: "QQQ",
-    name: "Nasdaq 100",
-    price: "$457.13",
-    change: {
-      value: "+$3.83",
-      percentage: "+0.84%",
-      isPositive: true,
-    },
-  },
-  {
-    symbol: "DIA",
-    name: "Dow Jones",
-    price: "$390.28",
-    change: {
-      value: "-$0.57",
-      percentage: "-0.15%",
-      isPositive: false,
-    },
-  },
-  {
-    symbol: "IWM",
-    name: "Russell 2000",
-    price: "$203.15",
-    change: {
-      value: "+$1.78",
-      percentage: "+0.88%",
-      isPositive: true,
-    },
-  },
-];
+interface MarketData {
+  index: string;
+  value: string;
+  change: string;
+  changePercent: string;
+  isPositive: boolean;
+}
 
 const MarketOverview = () => {
-  // In a real app, we would fetch this data from an API
-  const { data = indexes, isLoading } = useQuery({
-    queryKey: ['marketIndexes'],
-    queryFn: async () => {
-      // This is a placeholder for real API call
-      // const { data, error } = await supabase.from('market_indexes').select('*');
-      // if (error) throw error;
-      // return data;
-      return indexes;
-    },
-  });
+  const [marketData, setMarketData] = useState<MarketData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // Simulate real-time market data
+    const generateMarketData = (): MarketData[] => {
+      const baseData = [
+        { index: 'S&P 500', baseValue: 4200, volatility: 50 },
+        { index: 'NASDAQ', baseValue: 13000, volatility: 200 },
+        { index: 'DOW', baseValue: 33000, volatility: 300 },
+        { index: 'Russell 2000', baseValue: 1900, volatility: 30 }
+      ];
+
+      return baseData.map(item => {
+        const change = (Math.random() - 0.5) * item.volatility;
+        const value = item.baseValue + change;
+        const changePercent = (change / item.baseValue) * 100;
+        
+        return {
+          index: item.index,
+          value: value.toLocaleString('en-US', { maximumFractionDigits: 2 }),
+          change: `${change >= 0 ? '+' : ''}${change.toFixed(2)}`,
+          changePercent: `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`,
+          isPositive: change >= 0
+        };
+      });
+    };
+
+    const updateMarketData = () => {
+      setMarketData(generateMarketData());
+      setIsLoading(false);
+    };
+
+    // Initial load
+    updateMarketData();
+
+    // Update every 30 seconds to simulate real-time data
+    const interval = setInterval(updateMarketData, 30000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Market Overview</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="animate-pulse space-y-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-12 bg-muted rounded"></div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
-      <CardHeader className="pb-2">
+      <CardHeader>
         <CardTitle>Market Overview</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {data.map((index) => (
-            <div key={index.symbol} className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm">
-              <div className="text-sm text-gray-500">{index.name}</div>
-              <div className="text-xl font-bold mt-1">{index.price}</div>
-              <div className={`text-sm mt-1 flex items-center ${index.change.isPositive ? 'text-finance-green' : 'text-finance-red'}`}>
-                {index.change.isPositive ? (
-                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                  </svg>
-                ) : (
-                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                )}
-                <span>{index.change.value} ({index.change.percentage})</span>
+        <div className="space-y-4">
+          {marketData.map((item) => (
+            <div key={item.index} className="flex items-center justify-between">
+              <div>
+                <div className="font-medium">{item.index}</div>
+                <div className="text-sm text-muted-foreground">{item.value}</div>
+              </div>
+              <div className={`text-right ${item.isPositive ? 'text-finance-green' : 'text-finance-red'}`}>
+                <div className="font-medium">{item.change}</div>
+                <div className="text-sm">{item.changePercent}</div>
               </div>
             </div>
           ))}
+        </div>
+        <div className="mt-4 text-xs text-muted-foreground">
+          Data updates every 30 seconds • Market data is simulated
         </div>
       </CardContent>
     </Card>
