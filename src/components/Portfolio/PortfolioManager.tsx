@@ -37,15 +37,15 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
 
   console.log("PortfolioManager - User:", user?.id, "Is Admin:", isAdmin);
 
-  // Use simple default subscription values
+  // Simplified subscription logic
   const subscription = {
     plan: isAdmin ? 'Professional' : 'Free',
     portfolio_limit: isAdmin ? 999 : 1,
     watchlist_limit: isAdmin ? 20 : 1
   };
 
-  // Fetch portfolios with timeout and better error handling
-  const { data: portfolios = [], isLoading, error } = useQuery({
+  // Fetch portfolios
+  const { data: portfolios = [], isLoading, error, refetch } = useQuery({
     queryKey: ['portfolios', user?.id],
     queryFn: async () => {
       if (!user?.id) {
@@ -64,18 +64,18 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
         
         if (error) {
           console.error("Portfolios query error:", error);
-          return [];
+          throw error;
         }
         
         console.log("Portfolios found:", data?.length || 0);
         return data || [];
       } catch (queryError) {
         console.error("Query error:", queryError);
-        return [];
+        throw queryError;
       }
     },
     enabled: !!user?.id,
-    retry: 1,
+    retry: 2,
     staleTime: 30000,
   });
 
@@ -90,33 +90,48 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
   // Create portfolio mutation
   const createPortfolioMutation = useMutation({
     mutationFn: async (portfolio: { name: string; description: string }) => {
-      if (!user?.id) throw new Error('User not authenticated');
+      console.log("Creating portfolio:", portfolio);
+      
+      if (!user?.id) {
+        throw new Error('User not authenticated');
+      }
       
       const currentCount = portfolios?.length || 0;
       const limit = subscription?.portfolio_limit || 1;
+      
+      console.log("Portfolio limit check:", currentCount, "/", limit);
       
       if (currentCount >= limit) {
         throw new Error(`You can only create ${limit} portfolio(s) with your current plan`);
       }
 
+      const portfolioData = {
+        user_id: user.id,
+        name: portfolio.name.trim(),
+        description: portfolio.description?.trim() || null,
+        is_default: portfolios.length === 0, // First portfolio is default
+      };
+
+      console.log("Inserting portfolio data:", portfolioData);
+
       const { data, error } = await supabase
         .from('portfolios')
-        .insert([
-          {
-            user_id: user.id,
-            name: portfolio.name,
-            description: portfolio.description,
-            is_default: portfolios.length === 0, // First portfolio is default
-          },
-        ])
+        .insert([portfolioData])
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error("Portfolio creation error:", error);
+        throw error;
+      }
+
+      console.log("Portfolio created successfully:", data);
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log("Portfolio creation mutation success:", data);
       queryClient.invalidateQueries({ queryKey: ['portfolios'] });
+      refetch();
       setNewPortfolio({ name: "", description: "" });
       setIsCreateDialogOpen(false);
       toast({
@@ -124,10 +139,11 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
         description: "Your portfolio has been created successfully.",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      console.error("Portfolio creation mutation error:", error);
       toast({
-        title: "Error",
-        description: error.message,
+        title: "Error creating portfolio",
+        description: error.message || "Failed to create portfolio. Please try again.",
         variant: "destructive",
       });
     },
@@ -136,28 +152,40 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
   // Update portfolio mutation
   const updatePortfolioMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: { name: string; description: string } }) => {
+      console.log("Updating portfolio:", id, updates);
+      
       const { data, error } = await supabase
         .from('portfolios')
-        .update(updates)
+        .update({
+          name: updates.name.trim(),
+          description: updates.description?.trim() || null,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', id)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error("Portfolio update error:", error);
+        throw error;
+      }
+      
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['portfolios'] });
+      refetch();
       setEditingPortfolio(null);
       toast({
         title: "Portfolio updated",
         description: "Your portfolio has been updated successfully.",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      console.error("Portfolio update mutation error:", error);
       toast({
-        title: "Error",
-        description: error.message,
+        title: "Error updating portfolio",
+        description: error.message || "Failed to update portfolio. Please try again.",
         variant: "destructive",
       });
     },
@@ -166,11 +194,18 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
   // Set default portfolio mutation
   const setDefaultMutation = useMutation({
     mutationFn: async (portfolioId: string) => {
+      console.log("Setting default portfolio:", portfolioId);
+      
       // First, unset all defaults
-      await supabase
+      const { error: unsetError } = await supabase
         .from('portfolios')
         .update({ is_default: false })
         .eq('user_id', user?.id);
+
+      if (unsetError) {
+        console.error("Error unsetting defaults:", unsetError);
+        throw unsetError;
+      }
 
       // Then set the new default
       const { data, error } = await supabase
@@ -180,20 +215,26 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error setting default:", error);
+        throw error;
+      }
+      
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['portfolios'] });
+      refetch();
       toast({
         title: "Default portfolio updated",
         description: "This portfolio is now your default.",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      console.error("Set default mutation error:", error);
       toast({
-        title: "Error",
-        description: error.message,
+        title: "Error setting default portfolio",
+        description: error.message || "Failed to set default portfolio. Please try again.",
         variant: "destructive",
       });
     },
@@ -202,24 +243,31 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
   // Delete portfolio mutation
   const deletePortfolioMutation = useMutation({
     mutationFn: async (portfolioId: string) => {
+      console.log("Deleting portfolio:", portfolioId);
+      
       const { error } = await supabase
         .from('portfolios')
         .delete()
         .eq('id', portfolioId);
 
-      if (error) throw error;
+      if (error) {
+        console.error("Portfolio deletion error:", error);
+        throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['portfolios'] });
+      refetch();
       toast({
         title: "Portfolio deleted",
         description: "Your portfolio has been deleted successfully.",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      console.error("Portfolio deletion mutation error:", error);
       toast({
-        title: "Error",
-        description: error.message,
+        title: "Error deleting portfolio",
+        description: error.message || "Failed to delete portfolio. Please try again.",
         variant: "destructive",
       });
     },
@@ -227,7 +275,6 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
 
   console.log("Portfolio Manager - Loading:", isLoading, "Portfolios:", portfolios?.length, "Error:", error);
   
-  // Handle loading and error states AFTER all hooks are called
   if (isLoading) {
     return (
       <Card>
@@ -244,7 +291,14 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
       <Card>
         <CardContent className="p-6">
           <div className="text-center text-red-500">
-            Error loading portfolios. Please try refreshing the page.
+            <p>Error loading portfolios: {error.message}</p>
+            <Button 
+              onClick={() => refetch()} 
+              className="mt-2"
+              variant="outline"
+            >
+              Try Again
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -255,7 +309,9 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
   const limit = subscription?.portfolio_limit || 1;
   const canCreateMore = currentCount < limit;
 
-  const handleCreatePortfolio = () => {
+  const handleCreatePortfolio = async () => {
+    console.log("handleCreatePortfolio called with:", newPortfolio);
+    
     if (!newPortfolio.name.trim()) {
       toast({
         title: "Error",
@@ -264,10 +320,15 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
       });
       return;
     }
-    createPortfolioMutation.mutate(newPortfolio);
+    
+    try {
+      await createPortfolioMutation.mutateAsync(newPortfolio);
+    } catch (error) {
+      console.error("Error in handleCreatePortfolio:", error);
+    }
   };
 
-  const handleCreateFromCSV = () => {
+  const handleCreateFromCSV = async () => {
     if (csvData.length === 0) {
       toast({
         title: "Error",
@@ -287,10 +348,14 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
     }
 
     const portfolioName = `Imported Portfolio ${new Date().toLocaleDateString()}`;
-    createPortfolioMutation.mutate({
-      name: portfolioName,
-      description: `Portfolio created from CSV with ${csvData.length} items`,
-    });
+    try {
+      await createPortfolioMutation.mutateAsync({
+        name: portfolioName,
+        description: `Portfolio created from CSV with ${csvData.length} items`,
+      });
+    } catch (error) {
+      console.error("Error in handleCreateFromCSV:", error);
+    }
   };
 
   const startEditing = (portfolio: any) => {
@@ -298,7 +363,7 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
     setEditValues({ name: portfolio.name, description: portfolio.description || "" });
   };
 
-  const handleUpdatePortfolio = (portfolioId: string) => {
+  const handleUpdatePortfolio = async (portfolioId: string) => {
     if (!editValues.name.trim()) {
       toast({
         title: "Error",
@@ -307,12 +372,21 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
       });
       return;
     }
-    updatePortfolioMutation.mutate({ id: portfolioId, updates: editValues });
+    
+    try {
+      await updatePortfolioMutation.mutateAsync({ id: portfolioId, updates: editValues });
+    } catch (error) {
+      console.error("Error in handleUpdatePortfolio:", error);
+    }
   };
 
-  const handleDeletePortfolio = (portfolioId: string) => {
+  const handleDeletePortfolio = async (portfolioId: string) => {
     if (confirm("Are you sure you want to delete this portfolio?")) {
-      deletePortfolioMutation.mutate(portfolioId);
+      try {
+        await deletePortfolioMutation.mutateAsync(portfolioId);
+      } catch (error) {
+        console.error("Error in handleDeletePortfolio:", error);
+      }
     }
   };
 
@@ -377,10 +451,17 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsCreateDialogOpen(false)}
+                  disabled={createPortfolioMutation.isPending}
+                >
                   Cancel
                 </Button>
-                <Button onClick={handleCreatePortfolio} disabled={createPortfolioMutation.isPending}>
+                <Button 
+                  onClick={handleCreatePortfolio} 
+                  disabled={createPortfolioMutation.isPending}
+                >
                   {createPortfolioMutation.isPending ? "Creating..." : "Create Portfolio"}
                 </Button>
               </DialogFooter>
