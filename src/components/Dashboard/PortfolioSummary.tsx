@@ -3,22 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import StatCard from "../StatCard";
 import { PortfolioSelector } from "@/components/ui/portfolio-selector";
 import { useState, useEffect } from "react";
-import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { usePortfolio } from "@/contexts/PortfolioContext";
 import { useToast } from "@/hooks/use-toast";
 
-interface Portfolio {
-  id: string;
-  name: string;
-  description?: string;
-  is_default: boolean;
-}
-
 const PortfolioSummary = () => {
-  const { user } = useAuth();
   const { toast } = useToast();
-  const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
-  const [selectedPortfolio, setSelectedPortfolio] = useState<string>('');
+  const { portfolios, selectedPortfolio, setSelectedPortfolio, isLoading } = usePortfolio();
   const [portfolioData, setPortfolioData] = useState({
     totalValue: "$0.00",
     todayChange: "$0.00",
@@ -26,45 +16,6 @@ const PortfolioSummary = () => {
     totalReturn: "$0.00",
     totalReturnPercentage: "0%"
   });
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Fetch user's portfolios
-  useEffect(() => {
-    const fetchPortfolios = async () => {
-      if (!user?.id) return;
-
-      try {
-        const { data, error } = await supabase
-          .from('portfolios')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('is_default', { ascending: false });
-
-        if (error) throw error;
-
-        setPortfolios(data || []);
-        
-        // Set default portfolio if available
-        const defaultPortfolio = data?.find(p => p.is_default);
-        if (defaultPortfolio) {
-          setSelectedPortfolio(defaultPortfolio.id);
-        } else if (data && data.length > 0) {
-          setSelectedPortfolio(data[0].id);
-        }
-      } catch (error: any) {
-        console.error('Error fetching portfolios:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load portfolios.",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchPortfolios();
-  }, [user?.id, toast]);
 
   // Simulate portfolio data based on selected portfolio
   useEffect(() => {
