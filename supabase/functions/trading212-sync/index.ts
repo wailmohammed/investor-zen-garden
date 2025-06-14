@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
             quantity: position.quantity,
             averagePrice: position.averagePrice,
             currentPrice: position.currentPrice,
-            marketValue: position.marketValue,
+            marketValue: position.marketValue || (position.quantity * position.currentPrice),
             unrealizedPnL: position.ppl,
             dividendInfo
           };
@@ -95,11 +95,18 @@ Deno.serve(async (req) => {
 
     } catch (error) {
       if (error.message === 'RATE_LIMITED') {
-        console.log('Trading212 API rate limit hit, returning mock data');
+        console.log('Trading212 API rate limit hit, returning realistic mock data');
         const mockData = Trading212ApiClient.getMockData();
         
+        // Add dividend metrics to mock data
+        const dividendMetrics = calculateDividendMetrics(mockData.positions);
+        const finalMockData = {
+          ...mockData,
+          dividendMetrics
+        };
+        
         return new Response(
-          JSON.stringify({ success: true, data: mockData }),
+          JSON.stringify({ success: true, data: finalMockData }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
