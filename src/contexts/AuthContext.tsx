@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -48,7 +47,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       if (error) {
         console.error("Error checking admin status:", error);
-        // Check if user email contains 'admin' as fallback
         const currentUser = await supabase.auth.getUser();
         if (currentUser.data.user?.email?.includes('admin')) {
           setIsAdmin(true);
@@ -78,12 +76,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         if (session?.user) {
           // Check admin status from database
-          await checkAdminStatus(session.user.id);
+          setTimeout(() => {
+            checkAdminStatus(session.user.id);
+          }, 0);
         } else {
           setIsAdmin(false);
           setDefaultCurrency('USD');
         }
         
+        // Always set loading to false after processing auth state change
         setIsLoading(false);
       }
     );
@@ -101,12 +102,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setUser(session?.user ?? null);
           
           if (session?.user) {
-            await checkAdminStatus(session.user.id);
+            setTimeout(() => {
+              checkAdminStatus(session.user.id);
+            }, 0);
           }
         }
       } catch (error) {
         console.error('Error in getInitialSession:', error);
       } finally {
+        // Ensure loading is set to false regardless of success or failure
         setIsLoading(false);
       }
     };
