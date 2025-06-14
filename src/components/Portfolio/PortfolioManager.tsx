@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -37,12 +36,61 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
 
   console.log("PortfolioManager - User:", user?.id, "Is Admin:", isAdmin);
 
-  // Simplified subscription logic
-  const subscription = {
-    plan: isAdmin ? 'Professional' : 'Free',
-    portfolio_limit: isAdmin ? 999 : 1,
-    watchlist_limit: isAdmin ? 20 : 1
-  };
+  // Fetch actual subscription data from database
+  const { data: subscription, isLoading: subscriptionLoading } = useQuery({
+    queryKey: ['user-subscription', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      
+      console.log("Fetching subscription for user:", user.id);
+      
+      const { data, error } = await supabase
+        .from('user_subscriptions')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (error) {
+        console.error("Subscription query error:", error);
+        // Fallback for admins - create Professional subscription if not exists
+        if (isAdmin) {
+          console.log("Creating Professional subscription for admin");
+          const { data: newSub, error: createError } = await supabase
+            .from('user_subscriptions')
+            .insert({
+              user_id: user.id,
+              plan: 'Professional',
+              portfolio_limit: 999,
+              watchlist_limit: 20
+            })
+            .select()
+            .single();
+          
+          if (createError) {
+            console.error("Error creating admin subscription:", createError);
+            return {
+              plan: 'Professional',
+              portfolio_limit: 999,
+              watchlist_limit: 20
+            };
+          }
+          return newSub;
+        }
+        
+        // Fallback for regular users
+        return {
+          plan: 'Free',
+          portfolio_limit: 1,
+          watchlist_limit: 1
+        };
+      }
+      
+      console.log("Subscription found:", data);
+      return data;
+    },
+    enabled: !!user?.id,
+    retry: 1,
+  });
 
   // Fetch portfolios
   const { data: portfolios = [], isLoading, error, refetch } = useQuery({
@@ -96,8 +144,12 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
         throw new Error('User not authenticated');
       }
       
+      if (!subscription) {
+        throw new Error('Subscription data not available');
+      }
+      
       const currentCount = portfolios?.length || 0;
-      const limit = subscription?.portfolio_limit || 1;
+      const limit = subscription.portfolio_limit || 1;
       
       console.log("Portfolio limit check:", currentCount, "/", limit);
       
@@ -273,9 +325,9 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
     },
   });
 
-  console.log("Portfolio Manager - Loading:", isLoading, "Portfolios:", portfolios?.length, "Error:", error);
+  console.log("Portfolio Manager - Loading:", isLoading, "Portfolios:", portfolios?.length, "Error:", error, "Subscription:", subscription);
   
-  if (isLoading) {
+  if (isLoading || subscriptionLoading) {
     return (
       <Card>
         <CardContent className="p-6">
@@ -307,6 +359,7 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
 
   const currentCount = portfolios?.length || 0;
   const limit = subscription?.portfolio_limit || 1;
+  const plan = subscription?.plan || 'Free';
   const canCreateMore = currentCount < limit;
 
   const handleCreatePortfolio = async () => {
@@ -395,7 +448,7 @@ const PortfolioManager = ({ csvData = [] }: PortfolioManagerProps) => {
       <CardHeader>
         <CardTitle>Portfolio Management</CardTitle>
         <CardDescription>
-          Manage your investment portfolios ({currentCount}/{limit} used)
+          Manage your investment portfolios • {plan} Plan ({currentCount}/{limit} used)
           {csvData.length > 0 && (
             <span className="block mt-1 text-primary">
               {csvData.length} items ready to import from CSV
