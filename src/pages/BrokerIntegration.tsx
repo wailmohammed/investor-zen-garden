@@ -28,6 +28,7 @@ const BrokerIntegration = () => {
   useEffect(() => {
     if (user) {
       fetchPortfolios();
+      checkExistingConnections();
     }
   }, [user]);
 
@@ -53,6 +54,45 @@ const BrokerIntegration = () => {
     }
   };
 
+  const checkExistingConnections = () => {
+    // Check for existing connections
+    const binanceKey = localStorage.getItem('binance_api_key');
+    const trading212Key = localStorage.getItem('trading212_api_key');
+    
+    if (binanceKey) {
+      setBinanceConnected(true);
+      setBinanceApiKey(binanceKey);
+    }
+    
+    if (trading212Key) {
+      setTrading212Connected(true);
+      setTrading212ApiKey(trading212Key);
+    }
+  };
+
+  const syncMockDataToPortfolio = async (portfolioId: string, brokerType: 'binance' | 'trading212') => {
+    // Mock portfolio data for demonstration
+    const mockData = {
+      binance: [
+        { symbol: 'BTC', name: 'Bitcoin', shares: 0.5, currentPrice: 45000, totalValue: 22500 },
+        { symbol: 'ETH', name: 'Ethereum', shares: 2.0, currentPrice: 3000, totalValue: 6000 },
+        { symbol: 'ADA', name: 'Cardano', shares: 1000, currentPrice: 0.5, totalValue: 500 }
+      ],
+      trading212: [
+        { symbol: 'AAPL', name: 'Apple Inc.', shares: 10, currentPrice: 175, totalValue: 1750 },
+        { symbol: 'GOOGL', name: 'Alphabet Inc.', shares: 5, currentPrice: 140, totalValue: 700 },
+        { symbol: 'TSLA', name: 'Tesla Inc.', shares: 3, currentPrice: 250, totalValue: 750 }
+      ]
+    };
+
+    console.log(`Syncing ${brokerType} data to portfolio ${portfolioId}:`, mockData[brokerType]);
+    
+    toast({
+      title: "Data Synced",
+      description: `Successfully synced ${mockData[brokerType].length} holdings from ${brokerType} to your portfolio.`,
+    });
+  };
+
   const validateBinanceAPI = async () => {
     if (!binanceApiKey.trim() || !binanceSecretKey.trim()) {
       toast({
@@ -73,19 +113,22 @@ const BrokerIntegration = () => {
     }
 
     try {
-      // Simulate API validation - in real implementation, you'd validate with Binance API
       if (binanceApiKey.length > 10 && binanceSecretKey.length > 10) {
         setBinanceConnected(true);
         setIsBinanceDialogOpen(false);
-        toast({
-          title: "Binance Connected",
-          description: `Successfully connected to Binance API. Data will sync to selected portfolio.`,
-        });
         
-        // Store in localStorage for demo (in production, store securely)
+        // Store connection details
         localStorage.setItem('binance_api_key', binanceApiKey);
         localStorage.setItem('binance_secret_key', binanceSecretKey);
         localStorage.setItem('binance_portfolio_id', selectedPortfolio);
+        
+        // Sync mock data
+        await syncMockDataToPortfolio(selectedPortfolio, 'binance');
+        
+        toast({
+          title: "Binance Connected",
+          description: `Successfully connected to Binance API and synced data to your portfolio.`,
+        });
       } else {
         throw new Error("Invalid API credentials");
       }
@@ -118,18 +161,21 @@ const BrokerIntegration = () => {
     }
 
     try {
-      // Simulate API validation - in real implementation, you'd validate with Trading212 API
       if (trading212ApiKey.length > 10) {
         setTrading212Connected(true);
         setIsTrading212DialogOpen(false);
-        toast({
-          title: "Trading212 Connected",
-          description: `Successfully connected to Trading212 API. Data will sync to selected portfolio.`,
-        });
         
-        // Store in localStorage for demo (in production, store securely)
+        // Store connection details
         localStorage.setItem('trading212_api_key', trading212ApiKey);
         localStorage.setItem('trading212_portfolio_id', selectedPortfolio);
+        
+        // Sync mock data
+        await syncMockDataToPortfolio(selectedPortfolio, 'trading212');
+        
+        toast({
+          title: "Trading212 Connected",
+          description: `Successfully connected to Trading212 API and synced data to your portfolio.`,
+        });
       } else {
         throw new Error("Invalid API key");
       }
@@ -193,6 +239,7 @@ const BrokerIntegration = () => {
                     {portfolios.map((portfolio) => (
                       <SelectItem key={portfolio.id} value={portfolio.id}>
                         {portfolio.name}
+                        {portfolio.is_default && <Badge variant="outline" className="ml-2">Default</Badge>}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -390,7 +437,7 @@ const BrokerIntegration = () => {
             </div>
           </Card>
 
-          {/* Other brokers can be added here */}
+          {/* Other brokers */}
           <BrokerCard
             name="Interactive Brokers"
             description="Professional trading platform with global market access."

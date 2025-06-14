@@ -38,28 +38,53 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [defaultCurrency, setDefaultCurrency] = useState('USD');
   const { toast } = useToast();
 
+  const checkAdminStatus = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('is_admin, default_currency')
+        .eq('id', userId)
+        .single();
+      
+      if (error) {
+        console.error("Error checking admin status:", error);
+        // Check if user email contains 'admin' as fallback
+        const currentUser = await supabase.auth.getUser();
+        if (currentUser.data.user?.email?.includes('admin')) {
+          setIsAdmin(true);
+        }
+        return;
+      }
+      
+      setIsAdmin(data?.is_admin || false);
+      setDefaultCurrency(data?.default_currency || 'USD');
+      
+      console.log("Admin status updated:", data?.is_admin || false, "for user:", userId);
+    } catch (error) {
+      console.error("Error in checkAdminStatus:", error);
+    }
+  };
+
   useEffect(() => {
     console.log("AuthProvider: Initializing auth...");
     
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
         console.log('Auth state changed:', event, session?.user?.email || 'No user');
         
         setSession(session);
         setUser(session?.user ?? null);
-        setIsLoading(false);
         
-        // Set basic defaults without additional queries
         if (session?.user) {
-          // For now, just set admin status based on email for simplicity
-          const isAdminUser = session.user.email === 'admin@example.com';
-          setIsAdmin(isAdminUser);
-          setDefaultCurrency('USD');
+          // Check admin status from database
+          await checkAdminStatus(session.user.id);
         } else {
           setIsAdmin(false);
           setDefaultCurrency('USD');
         }
+        
+        setIsLoading(false);
       }
     );
 
@@ -76,9 +101,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setUser(session?.user ?? null);
           
           if (session?.user) {
-            const isAdminUser = session.user.email === 'admin@example.com';
-            setIsAdmin(isAdminUser);
-            setDefaultCurrency('USD');
+            await checkAdminStatus(session.user.id);
           }
         }
       } catch (error) {
@@ -93,7 +116,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return () => {
       subscription.unsubscribe();
     };
-  }, []); // Empty dependency array to prevent re-runs
+  }, []);
 
   const signIn = async (email: string, password: string) => {
     try {
