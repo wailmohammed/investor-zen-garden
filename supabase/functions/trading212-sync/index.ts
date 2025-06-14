@@ -25,6 +25,72 @@ interface Trading212Position {
   fxPpl: number;
 }
 
+interface DividendData {
+  symbol: string;
+  amount: number;
+  exDate: string;
+  payDate: string;
+  frequency: string;
+  yield: number;
+}
+
+// Function to fetch dividend data from Alpha Vantage (free tier)
+async function fetchDividendData(symbol: string): Promise<DividendData | null> {
+  try {
+    // Clean symbol to remove Trading212 suffixes
+    const cleanSymbol = symbol.replace(/_US_EQ$|_EQ$/, '');
+    
+    // Using Alpha Vantage free API for dividend data
+    const response = await fetch(
+      `https://www.alphavantage.co/query?function=OVERVIEW&symbol=${cleanSymbol}&apikey=demo`
+    );
+    
+    if (!response.ok) return null;
+    
+    const data = await response.json();
+    
+    if (data.DividendPerShare && data.ExDividendDate) {
+      return {
+        symbol: cleanSymbol,
+        amount: parseFloat(data.DividendPerShare) || 0,
+        exDate: data.ExDividendDate || '',
+        payDate: data.ExDividendDate || '',
+        frequency: 'quarterly', // Default assumption
+        yield: parseFloat(data.DividendYield?.replace('%', '')) || 0
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error(`Error fetching dividend data for ${symbol}:`, error);
+    return null;
+  }
+}
+
+// Function to calculate dividend income
+function calculateDividendIncome(position: Trading212Position, dividendData: DividendData | null) {
+  if (!dividendData || !dividendData.amount || !position.quantity) {
+    return {
+      annualDividend: 0,
+      quarterlyDividend: 0,
+      nextPayment: 0,
+      yield: 0
+    };
+  }
+
+  const quarterlyDividend = dividendData.amount * position.quantity;
+  const annualDividend = quarterlyDividend * 4; // Assuming quarterly payments
+  const currentValue = position.currentPrice * position.quantity;
+  const yieldOnCost = currentValue > 0 ? (annualDividend / currentValue) * 100 : 0;
+
+  return {
+    annualDividend,
+    quarterlyDividend,
+    nextPayment: quarterlyDividend,
+    yield: yieldOnCost
+  };
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -100,7 +166,13 @@ Deno.serve(async (req) => {
                   averagePrice: 175.20,
                   currentPrice: 187.53,
                   marketValue: 4688.25,
-                  unrealizedPnL: 308.25
+                  unrealizedPnL: 308.25,
+                  dividendInfo: {
+                    annualDividend: 24.00,
+                    quarterlyDividend: 6.00,
+                    nextPayment: 6.00,
+                    yield: 0.51
+                  }
                 },
                 {
                   symbol: 'MSFT',
@@ -108,7 +180,13 @@ Deno.serve(async (req) => {
                   averagePrice: 395.40,
                   currentPrice: 404.87,
                   marketValue: 4858.44,
-                  unrealizedPnL: 113.64
+                  unrealizedPnL: 113.64,
+                  dividendInfo: {
+                    annualDividend: 36.00,
+                    quarterlyDividend: 9.00,
+                    nextPayment: 9.00,
+                    yield: 0.82
+                  }
                 }
               ]
             }
@@ -166,6 +244,30 @@ Deno.serve(async (req) => {
       positions = []; // Use empty array if positions fetch fails
     }
 
+    // Fetch dividend data for positions and calculate dividend income
+    const positionsWithDividends = await Promise.all(
+      positions.slice(0, 10).map(async (position) => { // Limit to 10 to avoid rate limits
+        const dividendData = await fetchDividendData(position.ticker);
+        const dividendInfo = calculateDividendIncome(position, dividendData);
+        
+        return {
+          symbol: position.ticker.replace(/_US_EQ$|_EQ$/, ''),
+          quantity: position.quantity,
+          averagePrice: position.averagePrice,
+          currentPrice: position.currentPrice,
+          marketValue: position.marketValue,
+          unrealizedPnL: position.ppl,
+          dividendInfo
+        };
+      })
+    );
+
+    // Calculate total dividend metrics
+    const totalAnnualDividends = positionsWithDividends.reduce((sum, pos) => sum + pos.dividendInfo.annualDividend, 0);
+    const totalQuarterlyDividends = positionsWithDividends.reduce((sum, pos) => sum + pos.dividendInfo.quarterlyDividend, 0);
+    const totalPortfolioValue = positionsWithDividends.reduce((sum, pos) => sum + (pos.marketValue || 0), 0);
+    const portfolioYield = totalPortfolioValue > 0 ? (totalAnnualDividends / totalPortfolioValue) * 100 : 0;
+
     // Safely calculate portfolio metrics with null checks
     const totalInvested = accountData?.cash?.invested || 0;
     const cashFree = accountData?.cash?.free || 0;
@@ -186,17 +288,17 @@ Deno.serve(async (req) => {
       holdingsCount: positions.length,
       netDeposits: totalInvested,
       cashBalance: cashFree,
-      positions: positions.map(pos => ({
-        symbol: pos.ticker,
-        quantity: pos.quantity,
-        averagePrice: pos.averagePrice,
-        currentPrice: pos.currentPrice,
-        marketValue: pos.marketValue,
-        unrealizedPnL: pos.ppl,
-      }))
+      positions: positionsWithDividends,
+      dividendMetrics: {
+        annualIncome: totalAnnualDividends,
+        quarterlyIncome: totalQuarterlyDividends,
+        monthlyAverage: totalAnnualDividends / 12,
+        portfolioYield: portfolioYield,
+        dividendPayingStocks: positionsWithDividends.filter(p => p.dividendInfo.annualDividend > 0).length
+      }
     };
 
-    console.log('Trading212 portfolio data processed:', portfolioData);
+    console.log('Trading212 portfolio data with dividends processed:', portfolioData);
 
     return new Response(
       JSON.stringify({ success: true, data: portfolioData }),
