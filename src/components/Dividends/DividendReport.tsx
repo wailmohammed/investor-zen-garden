@@ -1,264 +1,396 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PieChart, Pie, Cell, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Download, Printer, Mail } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
-import { getDividendPortfolio } from "@/services/dividendService";
-import { DividendPortfolio } from "@/models/dividend";
-import { toast } from "@/hooks/use-toast";
+import { usePortfolio } from "@/contexts/PortfolioContext";
+import { supabase } from "@/integrations/supabase/client";
+import { calculateDividendIncome, getActualDividendPayingStocks } from "@/services/dividendCalculator";
+import { FileText, Download, TrendingUp, AlertCircle, CheckCircle, Target } from "lucide-react";
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
+interface ReportData {
+  totalAnnualIncome: number;
+  portfolioYield: number;
+  dividendStocks: number;
+  totalStocks: number;
+  avgSafetyScore: number;
+  projectedGrowth: number;
+  recommendations: string[];
+  strengths: string[];
+  risks: string[];
+}
 
-export function DividendReport() {
+const DividendReport = () => {
   const { user } = useAuth();
-  const [portfolioData, setPortfolioData] = useState<DividendPortfolio | null>(null);
+  const { selectedPortfolio } = usePortfolio();
+  const [reportData, setReportData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!user) return;
+  const fetchReportData = async () => {
+    if (!user || !selectedPortfolio) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
       
-      try {
-        const data = await getDividendPortfolio(user.id);
-        setPortfolioData(data);
-      } catch (error) {
-        console.error('Error fetching dividend portfolio:', error);
-      } finally {
-        setLoading(false);
+      if (selectedPortfolio === trading212PortfolioId) {
+        console.log('Generating Trading212 dividend report');
+        
+        const { data, error } = await supabase.functions.invoke('trading212-sync', {
+          body: { portfolioId: selectedPortfolio }
+        });
+
+        if (error) {
+          console.error('Error fetching Trading212 data:', error);
+          setReportData(null);
+          return;
+        }
+
+        if (data?.success && data.data?.positions) {
+          const positions = data.data.positions;
+          const dividendResults = calculateDividendIncome(positions);
+          
+          const report: ReportData = {
+            totalAnnualIncome: dividendResults.totalAnnualIncome,
+            portfolioYield: dividendResults.portfolioYield,
+            dividendStocks: dividendResults.dividendPayingStocks.length,
+            totalStocks: positions.length,
+            avgSafetyScore: 88, // Mock average safety score
+            projectedGrowth: 9.2, // Mock projected growth
+            recommendations: generateRecommendations(dividendResults),
+            strengths: generateStrengths(dividendResults),
+            risks: generateRisks(dividendResults)
+          };
+          
+          setReportData(report);
+        } else {
+          setReportData(null);
+        }
+      } else {
+        setReportData(null);
       }
-    };
+    } catch (error) {
+      console.error("Error generating dividend report:", error);
+      setReportData(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchData();
-  }, [user]);
+  useEffect(() => {
+    fetchReportData();
+  }, [user, selectedPortfolio]);
 
-  const handleExport = (type: string) => {
-    toast({
-      title: `${type} export started`,
-      description: `Your dividend report is being exported as ${type}.`,
-    });
+  const generateRecommendations = (dividendResults: any): string[] => {
+    const recommendations = [];
+    
+    if (dividendResults.portfolioYield < 3) {
+      recommendations.push("Consider adding higher-yielding dividend stocks to improve portfolio yield");
+    }
+    
+    if (dividendResults.dividendPayingStocks.length < 10) {
+      recommendations.push("Diversify by adding more dividend-paying stocks across different sectors");
+    }
+    
+    recommendations.push("Set up automatic dividend reinvestment to compound your returns");
+    recommendations.push("Monitor payout ratios to ensure dividend sustainability");
+    recommendations.push("Consider adding REITs for monthly dividend income");
+    
+    return recommendations;
+  };
+
+  const generateStrengths = (dividendResults: any): string[] => {
+    const strengths = [];
+    
+    if (dividendResults.portfolioYield > 2) {
+      strengths.push("Solid portfolio yield above market average");
+    }
+    
+    if (dividendResults.dividendPayingStocks.length > 5) {
+      strengths.push("Good diversification across dividend-paying stocks");
+    }
+    
+    strengths.push("Focus on established dividend-paying companies");
+    strengths.push("Mix of growth and income-oriented positions");
+    
+    return strengths;
+  };
+
+  const generateRisks = (dividendResults: any): string[] => {
+    const risks = [];
+    
+    if (dividendResults.portfolioYield > 6) {
+      risks.push("High yield may indicate dividend sustainability concerns");
+    }
+    
+    if (dividendResults.dividendPayingStocks.length < 5) {
+      risks.push("Limited diversification in dividend holdings");
+    }
+    
+    risks.push("Market volatility may impact dividend payments");
+    risks.push("Interest rate changes could affect dividend stock valuations");
+    
+    return risks;
+  };
+
+  const generateReport = () => {
+    if (!reportData) return;
+    
+    const reportContent = `
+DIVIDEND PORTFOLIO PERFORMANCE REPORT
+Generated on: ${new Date().toLocaleDateString()}
+
+EXECUTIVE SUMMARY
+================
+Total Annual Dividend Income: $${reportData.totalAnnualIncome.toFixed(2)}
+Portfolio Dividend Yield: ${reportData.portfolioYield.toFixed(2)}%
+Dividend-Paying Stocks: ${reportData.dividendStocks} of ${reportData.totalStocks}
+Average Safety Score: ${reportData.avgSafetyScore}/100
+Projected Growth: ${reportData.projectedGrowth}%
+
+PORTFOLIO STRENGTHS
+==================
+${reportData.strengths.map(strength => `• ${strength}`).join('\n')}
+
+IDENTIFIED RISKS
+===============
+${reportData.risks.map(risk => `• ${risk}`).join('\n')}
+
+RECOMMENDATIONS
+===============
+${reportData.recommendations.map(rec => `• ${rec}`).join('\n')}
+
+PERFORMANCE ANALYSIS
+===================
+Your dividend portfolio demonstrates solid fundamentals with room for improvement. 
+The current yield of ${reportData.portfolioYield.toFixed(2)}% provides steady income while 
+maintaining focus on quality dividend-paying companies.
+
+NEXT STEPS
+==========
+1. Review recommendations and prioritize implementation
+2. Monitor dividend announcements and payout ratios
+3. Consider rebalancing based on sector allocation
+4. Set up automatic dividend reinvestment plans
+5. Schedule quarterly portfolio reviews
+
+This report is generated based on current portfolio data and market conditions.
+Past performance does not guarantee future results.
+    `;
+    
+    const blob = new Blob([reportContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dividend-report-${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="animate-pulse space-y-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-64 bg-muted rounded-lg"></div>
-          ))}
-        </div>
+        <Card className="animate-pulse">
+          <CardHeader>
+            <div className="h-6 bg-gray-200 rounded w-1/3"></div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="h-4 bg-gray-200 rounded w-full"></div>
+              <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
-  if (!portfolioData) {
+  if (!reportData || !selectedPortfolio) {
     return (
-      <div className="text-center py-8">
-        <p className="text-muted-foreground">No dividend data available. Connect your Trading212 account to see the dividend report.</p>
-      </div>
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center">
+            <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <p className="text-muted-foreground">No dividend report data available</p>
+            <p className="text-sm text-muted-foreground mt-2">
+              {!selectedPortfolio ? 'Select a portfolio to generate dividend report' : 'Unable to generate dividend report'}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
     );
   }
-
-  // Generate sector allocation based on real dividend data
-  const generateSectorAllocation = () => {
-    const sectors = ['Technology', 'Healthcare', 'Consumer Staples', 'Financials', 'Industrials', 'Utilities', 'Energy'];
-    const totalIncome = portfolioData.annualIncome;
-    
-    return sectors.map((sector, index) => {
-      const percentage = Math.max(5, Math.random() * 25);
-      return {
-        name: sector,
-        value: Number(percentage.toFixed(1)),
-        income: Number((totalIncome * percentage / 100).toFixed(2))
-      };
-    }).sort((a, b) => b.value - a.value).slice(0, 6);
-  };
-
-  // Generate monthly comparison data
-  const generateMonthlyComparison = () => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const monthlyAverage = portfolioData.annualIncome / 12;
-    
-    return months.map(month => ({
-      month,
-      thisYear: Number((monthlyAverage * (0.8 + Math.random() * 0.4)).toFixed(2)),
-      lastYear: Number((monthlyAverage * 0.9 * (0.8 + Math.random() * 0.4)).toFixed(2))
-    }));
-  };
-
-  // Get top holdings based on real dividend data
-  const getTopHoldings = () => {
-    return portfolioData.dividends
-      .filter(d => d.amount > 0)
-      .sort((a, b) => (b.amount * 4) - (a.amount * 4)) // Sort by annual dividend
-      .slice(0, 5)
-      .map(dividend => ({
-        symbol: dividend.symbol,
-        name: dividend.company,
-        income: dividend.amount * 4, // Annualized
-        percentage: ((dividend.amount * 4) / portfolioData.annualIncome) * 100
-      }));
-  };
-
-  const sectorAllocation = generateSectorAllocation();
-  const monthlyComparisonData = generateMonthlyComparison();
-  const topHoldings = getTopHoldings();
-  
-  const totalThisYear = monthlyComparisonData.reduce((sum, data) => sum + data.thisYear, 0);
-  const totalLastYear = monthlyComparisonData.reduce((sum, data) => sum + data.lastYear, 0);
-  const yearOverYearGrowth = ((totalThisYear - totalLastYear) / totalLastYear * 100).toFixed(1);
 
   return (
     <div className="space-y-6">
+      {/* Report Header */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle>Annual Report Summary</CardTitle>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => handleExport('PDF')}>
-              <Download className="h-4 w-4 mr-2" />
-              Export PDF
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => handleExport('Print')}>
-              <Printer className="h-4 w-4 mr-2" />
-              Print
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => handleExport('Email')}>
-              <Mail className="h-4 w-4 mr-2" />
-              Email
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <FileText className="h-6 w-6" />
+              <div>
+                <CardTitle>Dividend Portfolio Performance Report</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Generated on {new Date().toLocaleDateString()}
+                </p>
+              </div>
+            </div>
+            <Button onClick={generateReport} className="flex items-center gap-2">
+              <Download className="h-4 w-4" />
+              Download Report
             </Button>
           </div>
         </CardHeader>
+      </Card>
+
+      {/* Executive Summary */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" />
+            Executive Summary
+          </CardTitle>
+        </CardHeader>
         <CardContent>
-          <div className="space-y-6">
-            <div className="bg-muted p-4 rounded-md">
-              <h3 className="font-medium mb-2">Annual Summary 2024</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                  <div className="text-sm text-muted-foreground">Total Income</div>
-                  <div className="font-bold text-lg">${portfolioData.annualIncome.toFixed(2)}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">YoY Growth</div>
-                  <div className="font-bold text-lg text-finance-green">+{yearOverYearGrowth}%</div>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Portfolio Yield</div>
-                  <div className="font-bold text-lg">{portfolioData.yieldOnCost.toFixed(1)}%</div>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Dividend Stocks</div>
-                  <div className="font-bold text-lg">{portfolioData.dividends.filter(d => d.amount > 0).length}</div>
-                </div>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Annual Dividend Income</p>
+              <p className="text-2xl font-bold text-green-600">${reportData.totalAnnualIncome.toFixed(2)}</p>
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="font-medium mb-2">Income by Sector</h3>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={sectorAllocation}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                      >
-                        {sectorAllocation.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value, name, props) => [`${value}% ($${props.payload.income})`, 'Allocation']} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-              
-              <div>
-                <h3 className="font-medium mb-2">Monthly Comparison (2023 vs 2024)</h3>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={monthlyComparisonData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month" />
-                      <YAxis />
-                      <Tooltip formatter={(value) => [`$${value}`, 'Income']} />
-                      <Legend />
-                      <Bar dataKey="lastYear" name="2023" fill="#8884d8" />
-                      <Bar dataKey="thisYear" name="2024" fill="#82ca9d" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Portfolio Yield</p>
+              <p className="text-2xl font-bold">{reportData.portfolioYield.toFixed(2)}%</p>
             </div>
-            
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Dividend Coverage</p>
+              <p className="text-2xl font-bold">
+                {reportData.dividendStocks}/{reportData.totalStocks}
+              </p>
+              <Badge variant="outline">
+                {((reportData.dividendStocks / reportData.totalStocks) * 100).toFixed(0)}% Coverage
+              </Badge>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Portfolio Analysis */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-green-600">
+              <CheckCircle className="h-5 w-5" />
+              Portfolio Strengths
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {reportData.strengths.map((strength, index) => (
+                <li key={index} className="flex items-start gap-2 text-sm">
+                  <div className="w-2 h-2 bg-green-500 rounded-full mt-2 flex-shrink-0"></div>
+                  {strength}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-600">
+              <AlertCircle className="h-5 w-5" />
+              Identified Risks
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {reportData.risks.map((risk, index) => (
+                <li key={index} className="flex items-start gap-2 text-sm">
+                  <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
+                  {risk}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-blue-600">
+              <Target className="h-5 w-5" />
+              Recommendations
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {reportData.recommendations.slice(0, 4).map((recommendation, index) => (
+                <li key={index} className="flex items-start gap-2 text-sm">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+                  {recommendation}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Performance Metrics */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Performance Metrics</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <h3 className="font-medium mb-2">Top Income Contributors</h3>
-              {topHoldings.length > 0 ? (
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Stock</TableHead>
-                        <TableHead>Annual Income</TableHead>
-                        <TableHead>% of Income</TableHead>
-                        <TableHead>Income Graph</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {topHoldings.map((stock) => (
-                        <TableRow key={stock.symbol}>
-                          <TableCell>
-                            <div className="font-medium">{stock.symbol}</div>
-                            <div className="text-xs text-muted-foreground">{stock.name}</div>
-                          </TableCell>
-                          <TableCell>${stock.income.toFixed(2)}</TableCell>
-                          <TableCell>{stock.percentage.toFixed(1)}%</TableCell>
-                          <TableCell>
-                            <div className="w-24 h-2 bg-gray-200 rounded-full">
-                              <div 
-                                className="h-full bg-blue-500 rounded-full" 
-                                style={{ width: `${Math.min(stock.percentage * 2, 100)}%` }}
-                              />
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+              <h4 className="font-medium mb-3">Current Performance</h4>
+              <div className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Monthly Average Income:</span>
+                  <span className="font-medium">${(reportData.totalAnnualIncome / 12).toFixed(2)}</span>
                 </div>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  No dividend-paying stocks found in your portfolio.
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Safety Score:</span>
+                  <span className="font-medium">{reportData.avgSafetyScore}/100</span>
                 </div>
-              )}
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Yield vs S&P 500:</span>
+                  <span className="font-medium text-green-600">
+                    +{(reportData.portfolioYield - 1.8).toFixed(1)}%
+                  </span>
+                </div>
+              </div>
             </div>
-            
-            <div className="bg-muted p-4 rounded-md">
-              <h3 className="font-medium mb-2">Recommendations</h3>
-              <ul className="text-sm space-y-1">
-                {portfolioData.yieldOnCost < 2 && (
-                  <li>• Consider increasing allocation to higher-yielding stocks</li>
-                )}
-                {portfolioData.dividends.filter(d => d.amount > 0).length < 5 && (
-                  <li>• Diversify your dividend portfolio with more dividend-paying stocks</li>
-                )}
-                <li>• Your portfolio shows solid income potential with current holdings</li>
-                <li>• Monitor dividend safety and growth rates regularly</li>
-                {portfolioData.annualIncome > 1000 && (
-                  <li>• Consider tax-efficient dividend investment strategies</li>
-                )}
-              </ul>
+            <div>
+              <h4 className="font-medium mb-3">Growth Projections</h4>
+              <div className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">1-Year Target:</span>
+                  <span className="font-medium">${(reportData.totalAnnualIncome * 1.092).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">3-Year Target:</span>
+                  <span className="font-medium">${(reportData.totalAnnualIncome * 1.31).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Expected CAGR:</span>
+                  <span className="font-medium text-blue-600">{reportData.projectedGrowth}%</span>
+                </div>
+              </div>
             </div>
           </div>
         </CardContent>
       </Card>
     </div>
   );
-}
+};
+
+export { DividendReport };
