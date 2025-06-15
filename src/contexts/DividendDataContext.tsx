@@ -26,13 +26,10 @@ interface DividendDataState {
   apiCallsToday: number;
   maxApiCallsPerDay: number;
   canMakeApiCall: boolean;
-  autoSyncEnabled: boolean;
 }
 
 interface DividendDataContextType extends DividendDataState {
   refreshDividendData: () => Promise<void>;
-  toggleAutoSync: () => void;
-  forceSyncData: () => Promise<void>;
   getDividendSummary: () => {
     totalAnnualIncome: number;
     totalStocks: number;
@@ -61,8 +58,7 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     lastSync: null,
     apiCallsToday: 0,
     maxApiCallsPerDay: 4,
-    canMakeApiCall: true,
-    autoSyncEnabled: true
+    canMakeApiCall: true
   });
 
   // Check API call limits
@@ -125,7 +121,7 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   };
 
-  // Refresh dividend data with API sync (respects limits)
+  // Manual refresh dividend data with API sync (respects limits)
   const refreshDividendData = async () => {
     if (!user?.id || !selectedPortfolio) return;
 
@@ -182,55 +178,6 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   };
 
-  // Force sync (ignores limits, for admin use)
-  const forceSyncData = async () => {
-    if (!user?.id || !selectedPortfolio) return;
-
-    try {
-      setState(prev => ({ ...prev, loading: true }));
-
-      const { data, error } = await supabase.functions.invoke('dividend-detection', {
-        body: {
-          portfolioId: selectedPortfolio,
-          userId: user.id,
-          autoSave: true
-        }
-      });
-
-      if (error) throw error;
-
-      if (data?.success) {
-        const currentTime = new Date().toLocaleString();
-        localStorage.setItem(`dividend_last_sync_${selectedPortfolio}`, currentTime);
-        setState(prev => ({ ...prev, lastSync: currentTime }));
-
-        toast({
-          title: "Force Sync Complete",
-          description: `Found ${data.dividendStocksFound || 0} dividend stocks`,
-        });
-
-        await loadSavedDividendData();
-      }
-
-    } catch (error: any) {
-      console.error('Error in force sync:', error);
-      toast({
-        title: "Force Sync Failed",
-        description: error.message || 'Failed to force sync data',
-        variant: "destructive",
-      });
-    } finally {
-      setState(prev => ({ ...prev, loading: false }));
-    }
-  };
-
-  // Toggle auto sync
-  const toggleAutoSync = () => {
-    const newAutoSync = !state.autoSyncEnabled;
-    setState(prev => ({ ...prev, autoSyncEnabled: newAutoSync }));
-    localStorage.setItem('dividend_auto_sync_enabled', newAutoSync.toString());
-  };
-
   // Get dividend summary
   const getDividendSummary = () => {
     const totalAnnualIncome = state.dividends.reduce((sum, d) => sum + d.estimated_annual_income, 0);
@@ -242,24 +189,22 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return { totalAnnualIncome, totalStocks, averageYield };
   };
 
-  // Auto-sync on portfolio change or initial load
+  // Auto-load on portfolio change
   useEffect(() => {
     if (user?.id && selectedPortfolio) {
       checkApiLimits();
       loadSavedDividendData();
 
-      // Auto-sync if enabled and within limits
-      const autoSyncEnabled = localStorage.getItem('dividend_auto_sync_enabled') !== 'false';
-      setState(prev => ({ ...prev, autoSyncEnabled }));
+      // Auto-sync if no recent data (automatic background behavior)
+      const lastSync = localStorage.getItem(`dividend_last_sync_${selectedPortfolio}`);
+      const shouldAutoSync = !lastSync || 
+        (Date.now() - new Date(lastSync).getTime()) > 6 * 60 * 60 * 1000; // 6 hours
 
-      if (autoSyncEnabled && state.canMakeApiCall) {
-        const lastSync = localStorage.getItem(`dividend_last_sync_${selectedPortfolio}`);
-        const shouldAutoSync = !lastSync || 
-          (Date.now() - new Date(lastSync).getTime()) > 6 * 60 * 60 * 1000; // 6 hours
-
-        if (shouldAutoSync) {
+      if (shouldAutoSync && state.canMakeApiCall) {
+        // Auto-sync silently in background
+        setTimeout(() => {
           refreshDividendData();
-        }
+        }, 1000);
       }
     }
   }, [user?.id, selectedPortfolio]);
@@ -272,8 +217,6 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const contextValue: DividendDataContextType = {
     ...state,
     refreshDividendData,
-    toggleAutoSync,
-    forceSyncData,
     getDividendSummary
   };
 

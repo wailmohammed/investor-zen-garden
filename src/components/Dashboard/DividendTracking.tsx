@@ -12,8 +12,6 @@ import { Shield, Calendar, TrendingUp, Percent, RefreshCw, DollarSign, Database,
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 
 const DividendTracking = () => {
   const { user } = useAuth();
@@ -26,10 +24,7 @@ const DividendTracking = () => {
     apiCallsToday,
     maxApiCallsPerDay,
     canMakeApiCall,
-    autoSyncEnabled,
     refreshDividendData,
-    forceSyncData,
-    toggleAutoSync,
     getDividendSummary
   } = useDividendData();
 
@@ -58,13 +53,13 @@ const DividendTracking = () => {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>🚀 Enhanced Dividend Tracker with Auto-Save</CardTitle>
+          <CardTitle>🚀 Enhanced Dividend Tracker</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col justify-center items-center h-48 space-y-2">
             <RefreshCw className="h-8 w-8 animate-spin text-blue-500" />
-            <p>Loading saved dividend data...</p>
-            <p className="text-sm text-muted-foreground">Using comprehensive API detection with smart limits...</p>
+            <p>Loading dividend data...</p>
+            <p className="text-sm text-muted-foreground">Automatic detection with smart API limits...</p>
           </div>
         </CardContent>
       </Card>
@@ -90,49 +85,22 @@ const DividendTracking = () => {
     <Card className="h-full">
       <CardHeader className="pb-2">
         <div className="flex justify-between items-center">
-          <CardTitle>🌟 Enhanced Dividend Tracker with Smart API Limits</CardTitle>
-          <div className="flex items-center gap-4">
-            {/* Auto-Save Toggle */}
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="auto-save"
-                checked={autoSyncEnabled}
-                onCheckedChange={toggleAutoSync}
-              />
-              <Label htmlFor="auto-save" className="text-sm">
-                Auto-Sync
-              </Label>
-            </div>
-            
-            <div className="flex gap-2">
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={refreshDividendData}
-                disabled={loading || !canMakeApiCall}
-              >
-                <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                {loading ? 'Syncing...' : `Sync (${maxApiCallsPerDay - apiCallsToday} left)`}
-              </Button>
-
-              {isAdmin && (
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={forceSyncData}
-                  disabled={loading}
-                  className="border-orange-300 text-orange-600 hover:bg-orange-50"
-                >
-                  <Database className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                  Admin Force Sync
-                </Button>
-              )}
-            </div>
+          <CardTitle>🌟 Enhanced Dividend Tracker</CardTitle>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={refreshDividendData}
+              disabled={loading || !canMakeApiCall}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              {loading ? 'Syncing...' : `Manual Sync (${maxApiCallsPerDay - apiCallsToday} left)`}
+            </Button>
           </div>
         </div>
 
         <p className="text-sm text-muted-foreground">
-          Saved Data: {totalStocks} dividend stocks • API Limit: {apiCallsToday}/{maxApiCallsPerDay} calls today
+          Auto-managed data: {totalStocks} dividend stocks • API Limit: {apiCallsToday}/{maxApiCallsPerDay} calls today
           {lastSync && ` • Last sync: ${new Date(lastSync).toLocaleString()}`}
         </p>
 
@@ -175,7 +143,7 @@ const DividendTracking = () => {
                 label="Dividend Stocks" 
                 value={`${totalStocks}`} 
                 change={{
-                  value: "Saved",
+                  value: "Auto-saved",
                   percentage: "Database",
                   isPositive: true
                 }}
@@ -199,9 +167,9 @@ const DividendTracking = () => {
               className="space-y-4"
             >
               <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="holdings">Saved Holdings</TabsTrigger>
+                <TabsTrigger value="holdings">Holdings</TabsTrigger>
                 <TabsTrigger value="projections">Monthly Projections</TabsTrigger>
-                <TabsTrigger value="analysis">API Management</TabsTrigger>
+                <TabsTrigger value="analysis">API Status</TabsTrigger>
               </TabsList>
               
               <TabsContent value="holdings" className="space-y-4">
@@ -253,7 +221,7 @@ const DividendTracking = () => {
                   </BarChart>
                 </ResponsiveContainer>
                 <div className="text-center text-sm text-muted-foreground">
-                  Projected annual dividend income: ${totalAnnualIncome.toFixed(2)} from saved data
+                  Projected annual dividend income: ${totalAnnualIncome.toFixed(2)} from auto-managed data
                 </div>
               </TabsContent>
               
@@ -266,13 +234,13 @@ const DividendTracking = () => {
                   </div>
                   <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
                     <TrendingUp className="h-8 w-8 mb-2 text-finance-blue" />
-                    <div className="text-xs uppercase text-muted-foreground">Saved Stocks</div>
+                    <div className="text-xs uppercase text-muted-foreground">Auto-Saved Stocks</div>
                     <div className="text-2xl font-bold mt-1">{totalStocks}</div>
                   </div>
                   <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
                     <Shield className="h-8 w-8 mb-2 text-finance-blue" />
-                    <div className="text-xs uppercase text-muted-foreground">Auto-sync</div>
-                    <div className="text-2xl font-bold mt-1">{autoSyncEnabled ? 'ON' : 'OFF'}</div>
+                    <div className="text-xs uppercase text-muted-foreground">Auto-Detection</div>
+                    <div className="text-2xl font-bold mt-1">ON</div>
                   </div>
                   <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
                     <Percent className="h-8 w-8 mb-2 text-finance-blue" />
@@ -281,9 +249,9 @@ const DividendTracking = () => {
                   </div>
                 </div>
                 <div className="text-sm text-center text-muted-foreground mt-4">
-                  🌟 Smart API management with 4 calls per day limit. Data is automatically saved and persisted across sessions.
+                  🌟 Smart API management with automatic detection. Data is auto-saved and persisted across sessions.
                   <br />
-                  {isAdmin && 'Admin users can force sync without limits using the Force Sync button.'}
+                  Use Manual Sync to update your dividend data when needed.
                 </div>
               </TabsContent>
             </Tabs>
@@ -292,17 +260,17 @@ const DividendTracking = () => {
           <div className="flex flex-col items-center justify-center h-48 text-center">
             <Database className="h-12 w-12 text-blue-500 mb-4" />
             <p className="text-muted-foreground mb-2">
-              No saved dividend data found
+              No dividend data found
             </p>
             <p className="text-sm text-muted-foreground mb-4">
-              Click "Sync" to detect and save dividend data from your portfolio
+              Click "Manual Sync" to detect and auto-save dividend data from your portfolio
             </p>
             <Button 
               onClick={refreshDividendData}
               disabled={loading || !canMakeApiCall}
             >
               <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              {loading ? 'Detecting...' : 'Detect & Save Dividends'}
+              {loading ? 'Detecting...' : 'Manual Sync'}
             </Button>
           </div>
         )}
