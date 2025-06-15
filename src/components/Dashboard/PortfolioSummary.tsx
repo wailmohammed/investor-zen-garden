@@ -64,7 +64,6 @@ const PortfolioSummary = () => {
 
       try {
         setIsLoadingData(true);
-        setHasRealData(false);
         console.log('Fetching data for portfolio:', selectedPortfolio, 'Type:', portfolioType);
         
         // Check if this is a Trading212 or Binance connected portfolio
@@ -93,24 +92,30 @@ const PortfolioSummary = () => {
               const realData = data.data;
               console.log('Real Trading212 data received:', realData);
               
-              // Validate and sanitize the data
+              // Extract and validate the data - DON'T default to zero for valid API responses
               const totalValue = realData.totalValue || 0;
               const todayChange = realData.todayChange || 0;
               const todayPercentage = realData.todayPercentage || 0;
               const totalReturn = realData.totalReturn || 0;
               const totalReturnPercentage = realData.totalReturnPercentage || 0;
-              const netDeposits = realData.netDeposits || 0;
+              const netDeposits = realData.netDeposits || realData.cashBalance || 0;
               const holdingsCount = realData.holdingsCount || 0;
 
-              // Ensure data consistency - if total value is 0, other values should be 0 too
-              const isEmptyPortfolio = totalValue === 0;
-              
+              // Calculate proper portfolio value from positions if totalValue is 0 but we have positions
+              let calculatedTotalValue = totalValue;
+              if (calculatedTotalValue === 0 && realData.positions && realData.positions.length > 0) {
+                calculatedTotalValue = realData.positions.reduce((sum: number, pos: any) => 
+                  sum + (pos.marketValue || 0), 0
+                ) + (realData.cashBalance || 0);
+              }
+
+              // Display the actual data without forcing zeros
               setPortfolioData({
-                totalValue: formatCurrency(totalValue),
-                todayChange: isEmptyPortfolio ? "$0.00" : formatChangeWithSign(todayChange),
-                todayPercentage: isEmptyPortfolio ? "0%" : formatPercentage(todayPercentage),
-                totalReturn: isEmptyPortfolio ? "$0.00" : formatChangeWithSign(totalReturn),
-                totalReturnPercentage: isEmptyPortfolio ? "0%" : formatPercentage(totalReturnPercentage),
+                totalValue: formatCurrency(calculatedTotalValue),
+                todayChange: formatChangeWithSign(todayChange),
+                todayPercentage: formatPercentage(todayPercentage),
+                totalReturn: formatChangeWithSign(totalReturn),
+                totalReturnPercentage: formatPercentage(totalReturnPercentage),
                 holdingsCount: holdingsCount,
                 netDeposits: formatCurrency(netDeposits)
               });
@@ -125,7 +130,7 @@ const PortfolioSummary = () => {
                 variant: "default",
               });
             } else if (data?.error === 'RATE_LIMITED') {
-              console.warn('Trading212 API rate limited');
+              console.warn('Trading212 API rate limited, trying cached data');
               setDataSource('Trading212 API (Rate Limited)');
               
               // Try to use cached data
@@ -138,17 +143,22 @@ const PortfolioSummary = () => {
                   const todayPercentage = cachedRealData.todayPercentage || 0;
                   const totalReturn = cachedRealData.totalReturn || 0;
                   const totalReturnPercentage = cachedRealData.totalReturnPercentage || 0;
-                  const netDeposits = cachedRealData.netDeposits || 0;
+                  const netDeposits = cachedRealData.netDeposits || cachedRealData.cashBalance || 0;
                   const holdingsCount = cachedRealData.holdingsCount || 0;
 
-                  const isEmptyPortfolio = totalValue === 0;
+                  let calculatedTotalValue = totalValue;
+                  if (calculatedTotalValue === 0 && cachedRealData.positions && cachedRealData.positions.length > 0) {
+                    calculatedTotalValue = cachedRealData.positions.reduce((sum: number, pos: any) => 
+                      sum + (pos.marketValue || 0), 0
+                    ) + (cachedRealData.cashBalance || 0);
+                  }
                   
                   setPortfolioData({
-                    totalValue: formatCurrency(totalValue),
-                    todayChange: isEmptyPortfolio ? "$0.00" : formatChangeWithSign(todayChange),
-                    todayPercentage: isEmptyPortfolio ? "0%" : formatPercentage(todayPercentage),
-                    totalReturn: isEmptyPortfolio ? "$0.00" : formatChangeWithSign(totalReturn),
-                    totalReturnPercentage: isEmptyPortfolio ? "0%" : formatPercentage(totalReturnPercentage),
+                    totalValue: formatCurrency(calculatedTotalValue),
+                    todayChange: formatChangeWithSign(todayChange),
+                    todayPercentage: formatPercentage(todayPercentage),
+                    totalReturn: formatChangeWithSign(totalReturn),
+                    totalReturnPercentage: formatPercentage(totalReturnPercentage),
                     holdingsCount: holdingsCount,
                     netDeposits: formatCurrency(netDeposits)
                   });
@@ -233,15 +243,13 @@ const PortfolioSummary = () => {
             const totalReturnPercentage = realData.totalReturnPercentage || 0;
             const netDeposits = realData.netDeposits || 0;
             const holdingsCount = realData.holdingsCount || 0;
-
-            const isEmptyPortfolio = totalValue === 0;
             
             setPortfolioData({
               totalValue: formatCurrency(totalValue),
-              todayChange: isEmptyPortfolio ? "$0.00" : formatChangeWithSign(todayChange),
-              todayPercentage: isEmptyPortfolio ? "0%" : formatPercentage(todayPercentage),
-              totalReturn: isEmptyPortfolio ? "$0.00" : formatChangeWithSign(totalReturn),
-              totalReturnPercentage: isEmptyPortfolio ? "0%" : formatPercentage(totalReturnPercentage),
+              todayChange: formatChangeWithSign(todayChange),
+              todayPercentage: formatPercentage(todayPercentage),
+              totalReturn: formatChangeWithSign(totalReturn),
+              totalReturnPercentage: formatPercentage(totalReturnPercentage),
               holdingsCount: holdingsCount,
               netDeposits: formatCurrency(netDeposits)
             });
@@ -312,7 +320,7 @@ const PortfolioSummary = () => {
       } catch (error) {
         console.error('Error fetching portfolio data:', error);
         
-        // Always show consistent zero values on error for connected portfolios
+        // Only show zero values for non-connected portfolios or critical errors
         if (selectedPortfolio === localStorage.getItem('trading212_portfolio_id') || 
             selectedPortfolio === localStorage.getItem('binance_portfolio_id')) {
           setPortfolioData({
