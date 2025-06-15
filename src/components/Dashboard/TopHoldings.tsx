@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ExternalLink } from "lucide-react";
@@ -26,8 +25,63 @@ const TopHoldings = () => {
       const binancePortfolioId = localStorage.getItem('binance_portfolio_id');
 
       if (selectedPortfolio === trading212PortfolioId) {
-        // Trading212 holdings - keep existing logic
-        setHoldings([]);
+        // Fetch real Trading212 holdings
+        try {
+          setIsLoading(true);
+          
+          // Check for cached data first
+          const cachedData = localStorage.getItem('trading212_data');
+          if (cachedData) {
+            try {
+              const realData = JSON.parse(cachedData);
+              if (realData.positions && realData.positions.length > 0) {
+                const formattedHoldings = realData.positions.slice(0, 10).map((position: any) => ({
+                  symbol: position.symbol,
+                  name: position.symbol,
+                  value: `$${position.marketValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                  allocation: `${((position.marketValue / realData.totalValue) * 100).toFixed(1)}%`,
+                  change: `${position.unrealizedPnL >= 0 ? '+' : ''}$${position.unrealizedPnL.toFixed(2)}`,
+                  quantity: position.quantity,
+                  avgPrice: position.averagePrice,
+                  currentPrice: position.currentPrice
+                }));
+                setHoldings(formattedHoldings);
+                return;
+              }
+            } catch (parseError) {
+              console.error('Error parsing cached Trading212 data:', parseError);
+            }
+          }
+
+          // Fetch fresh data if no cached data
+          const { data, error } = await supabase.functions.invoke('trading212-sync', {
+            body: { portfolioId: selectedPortfolio }
+          });
+
+          if (error) throw error;
+
+          if (data?.success && data.data?.positions) {
+            const formattedHoldings = data.data.positions.slice(0, 10).map((position: any) => ({
+              symbol: position.symbol,
+              name: position.symbol,
+              value: `$${position.marketValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              allocation: `${((position.marketValue / data.data.totalValue) * 100).toFixed(1)}%`,
+              change: `${position.unrealizedPnL >= 0 ? '+' : ''}$${position.unrealizedPnL.toFixed(2)}`,
+              quantity: position.quantity,
+              avgPrice: position.averagePrice,
+              currentPrice: position.currentPrice
+            }));
+            setHoldings(formattedHoldings);
+            
+            // Cache the data
+            localStorage.setItem('trading212_data', JSON.stringify(data.data));
+          }
+        } catch (error) {
+          console.error('Error fetching Trading212 holdings:', error);
+          setHoldings([]);
+        } finally {
+          setIsLoading(false);
+        }
       } else if (selectedPortfolio === binancePortfolioId) {
         // Fetch real Binance holdings
         try {
@@ -117,29 +171,6 @@ const TopHoldings = () => {
   const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
   const isTrading212 = selectedPortfolio === trading212PortfolioId;
 
-  if (isTrading212 && holdings.length === 0) {
-    return (
-      <Card className="w-full">
-        <CardHeader className="pb-2">
-          <CardTitle>Top Holdings</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-4">
-            <p className="text-muted-foreground mb-4">
-              No holdings found in your Trading212 account.
-            </p>
-            <Button asChild>
-              <a href="/broker-integration" className="inline-flex items-center gap-2">
-                Go to Broker Integration
-                <ExternalLink className="h-4 w-4" />
-              </a>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <Card className="w-full">
       <CardHeader className="pb-2">
@@ -151,8 +182,18 @@ const TopHoldings = () => {
             Loading holdings...
           </div>
         ) : holdings.length === 0 ? (
-          <div className="text-center py-4 text-muted-foreground">
-            No holdings data available
+          <div className="text-center py-4">
+            <p className="text-muted-foreground mb-4">
+              {isTrading212 ? "No holdings data available from Trading212." : "No holdings data available"}
+            </p>
+            {isTrading212 && (
+              <Button asChild>
+                <a href="/broker-integration" className="inline-flex items-center gap-2">
+                  Refresh Trading212 Data
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </Button>
+            )}
           </div>
         ) : (
           <div className="space-y-4">
@@ -161,6 +202,11 @@ const TopHoldings = () => {
                 <div className="flex-1">
                   <div className="font-medium">{holding.symbol}</div>
                   <div className="text-sm text-muted-foreground">{holding.name}</div>
+                  {isTrading212 && holding.quantity && (
+                    <div className="text-xs text-muted-foreground">
+                      {holding.quantity} shares @ ${holding.currentPrice?.toFixed(2)}
+                    </div>
+                  )}
                   {(portfolioType === 'crypto' || selectedPortfolio === localStorage.getItem('binance_portfolio_id')) && holding.amount && (
                     <div className="text-xs text-muted-foreground">
                       {holding.amount} @ {holding.price}

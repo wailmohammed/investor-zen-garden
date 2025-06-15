@@ -37,8 +37,60 @@ const AssetAllocation = () => {
       const binancePortfolioId = localStorage.getItem('binance_portfolio_id');
 
       if (selectedPortfolio === trading212PortfolioId) {
-        // Trading212 allocation - keep existing logic
-        setAllocationData([]);
+        // Fetch real Trading212 allocation
+        try {
+          setIsLoading(true);
+          
+          // Check for cached data first
+          const cachedData = localStorage.getItem('trading212_data');
+          if (cachedData) {
+            try {
+              const realData = JSON.parse(cachedData);
+              if (realData.positions && realData.positions.length > 0) {
+                const totalValue = realData.totalValue || realData.positions.reduce((sum: number, pos: any) => sum + pos.marketValue, 0);
+                if (totalValue > 0) {
+                  const formattedAllocation = realData.positions.slice(0, 10).map((position: any) => ({
+                    name: position.symbol,
+                    value: Number(((position.marketValue / totalValue) * 100).toFixed(1)),
+                    amount: `$${position.marketValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  }));
+                  setAllocationData(formattedAllocation);
+                  setIsLoading(false);
+                  return;
+                }
+              }
+            } catch (parseError) {
+              console.error('Error parsing cached Trading212 data:', parseError);
+            }
+          }
+
+          // Fetch fresh data if no cached data
+          const { data, error } = await supabase.functions.invoke('trading212-sync', {
+            body: { portfolioId: selectedPortfolio }
+          });
+
+          if (error) throw error;
+
+          if (data?.success && data.data?.positions) {
+            const totalValue = data.data.totalValue || data.data.positions.reduce((sum: number, pos: any) => sum + pos.marketValue, 0);
+            if (totalValue > 0) {
+              const formattedAllocation = data.data.positions.slice(0, 10).map((position: any) => ({
+                name: position.symbol,
+                value: Number(((position.marketValue / totalValue) * 100).toFixed(1)),
+                amount: `$${position.marketValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              }));
+              setAllocationData(formattedAllocation);
+              
+              // Cache the data
+              localStorage.setItem('trading212_data', JSON.stringify(data.data));
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching Trading212 allocation:', error);
+          setAllocationData([]);
+        } finally {
+          setIsLoading(false);
+        }
       } else if (selectedPortfolio === binancePortfolioId) {
         // Fetch real Binance allocation
         try {
@@ -122,29 +174,6 @@ const AssetAllocation = () => {
   const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
   const isTrading212 = selectedPortfolio === trading212PortfolioId;
 
-  if (isTrading212 && allocationData.length === 0) {
-    return (
-      <Card className="w-full">
-        <CardHeader className="pb-2">
-          <CardTitle>Asset Allocation</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-4">
-            <p className="text-muted-foreground mb-4">
-              No allocation data available.
-            </p>
-            <Button asChild>
-              <a href="/broker-integration" className="inline-flex items-center gap-2">
-                Go to Broker Integration to connect your Trading212 account.
-                <ExternalLink className="h-4 w-4" />
-              </a>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <Card className="w-full">
       <CardHeader className="pb-2">
@@ -156,8 +185,18 @@ const AssetAllocation = () => {
             Loading allocation data...
           </div>
         ) : allocationData.length === 0 ? (
-          <div className="text-center py-4 text-muted-foreground">
-            No allocation data available
+          <div className="text-center py-4">
+            <p className="text-muted-foreground mb-4">
+              {isTrading212 ? "No allocation data available from Trading212." : "No allocation data available"}
+            </p>
+            {isTrading212 && (
+              <Button asChild>
+                <a href="/broker-integration" className="inline-flex items-center gap-2">
+                  Refresh Trading212 Data
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </Button>
+            )}
           </div>
         ) : (
           <div className="h-[300px]">
