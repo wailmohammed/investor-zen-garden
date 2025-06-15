@@ -41,12 +41,14 @@ export const calculateDividendIncome = async (positions: Position[]): Promise<{
   );
   
   const dividendPayingStocks = [];
+  const allStocksWithData = [];
   let totalAnnualIncome = 0;
   let totalQuarterlyIncome = 0;
   let totalPortfolioValue = 0;
   let dividendPayingStocksCount = 0;
   let symbolsProcessed = 0;
   let symbolsMatched = 0;
+  let zeroPayerCount = 0;
 
   for (const position of positions) {
     symbolsProcessed++;
@@ -76,16 +78,22 @@ export const calculateDividendIncome = async (positions: Position[]): Promise<{
         const annualDividendForPosition = dividendInfo.annual * position.quantity;
         const quarterlyDividendForPosition = dividendInfo.quarterly * position.quantity;
         
-        // Only count if there are actual dividends
-        if (dividendInfo.annual > 0) {
+        // Check if this stock actually pays dividends
+        const actuallyPaysDividends = dividendInfo.annual > 0;
+        
+        if (actuallyPaysDividends) {
           totalAnnualIncome += annualDividendForPosition;
           totalQuarterlyIncome += quarterlyDividendForPosition;
           dividendPayingStocksCount++;
           
-          console.log(`${matchedSymbol}: ${position.quantity} shares × $${dividendInfo.annual} = $${annualDividendForPosition.toFixed(2)} annual`);
+          console.log(`✓ DIVIDEND PAYER: ${matchedSymbol}: ${position.quantity} shares × $${dividendInfo.annual} = $${annualDividendForPosition.toFixed(2)} annual`);
+        } else {
+          zeroPayerCount++;
+          console.log(`✗ NON-DIVIDEND: ${matchedSymbol}: $${dividendInfo.annual} annual dividend`);
         }
         
-        dividendPayingStocks.push({
+        // Add all stocks with data to the comprehensive list
+        allStocksWithData.push({
           symbol: matchedSymbol || position.symbol,
           originalSymbol: position.symbol,
           company: getCompanyName(matchedSymbol || position.symbol),
@@ -100,13 +108,19 @@ export const calculateDividendIncome = async (positions: Position[]): Promise<{
           exDate: getNextExDate(),
           paymentDate: getNextPaymentDate(),
           currentValue: positionValue,
-          hasDiv: dividendInfo.annual > 0,
-          isNewlyAdded: !findDividendSymbol(position.symbol, DIVIDEND_DATABASE) // Mark if this was dynamically added
+          hasDiv: actuallyPaysDividends,
+          isNewlyAdded: !findDividendSymbol(position.symbol, DIVIDEND_DATABASE)
         });
+        
+        // Only add to dividend paying stocks if it actually pays dividends
+        if (actuallyPaysDividends) {
+          dividendPayingStocks.push(allStocksWithData[allStocksWithData.length - 1]);
+        }
+      } else {
+        console.log(`⚠️ NO DATA: ${position.symbol} - could not find or fetch dividend data`);
       }
     } catch (error) {
       console.error(`Error processing position ${position.symbol}:`, error);
-      // Continue processing other positions even if one fails
     }
   }
 
@@ -124,18 +138,20 @@ export const calculateDividendIncome = async (positions: Position[]): Promise<{
     processingErrors: holdingsProcessing.errors
   };
 
-  console.log('Enhanced dividend calculation results:', {
-    ...stats,
-    totalAnnualIncome: totalAnnualIncome.toFixed(2),
-    totalQuarterlyIncome: totalQuarterlyIncome.toFixed(2),
-    portfolioValue: totalPortfolioValue.toFixed(2),
-    portfolioYield: portfolioYield.toFixed(2) + '%'
-  });
+  console.log('📊 ENHANCED DIVIDEND ANALYSIS RESULTS:');
+  console.log(`   Total positions: ${symbolsProcessed}`);
+  console.log(`   Symbols matched: ${symbolsMatched}`);
+  console.log(`   Dividend payers: ${dividendPayingStocksCount}`);
+  console.log(`   Zero dividend stocks: ${zeroPayerCount}`);
+  console.log(`   No data found: ${symbolsProcessed - symbolsMatched}`);
+  console.log(`   Total annual income: $${totalAnnualIncome.toFixed(2)}`);
+  console.log(`   Portfolio yield: ${portfolioYield.toFixed(2)}%`);
+  console.log(`   Database size: ${dbStats.totalStocks} stocks`);
 
   return {
     totalAnnualIncome,
     totalQuarterlyIncome,
-    dividendPayingStocks: dividendPayingStocks.filter(stock => stock.hasDiv),
+    dividendPayingStocks: dividendPayingStocks,
     portfolioYield,
     stats
   };
