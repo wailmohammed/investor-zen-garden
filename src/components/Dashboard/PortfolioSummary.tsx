@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import StatCard from "../StatCard";
 import { PortfolioSelector } from "@/components/ui/portfolio-selector";
@@ -21,6 +20,10 @@ const PortfolioSummary = () => {
   });
   const [isLoadingData, setIsLoadingData] = useState(false);
 
+  // Get current portfolio type
+  const currentPortfolio = portfolios.find(p => p.id === selectedPortfolio);
+  const portfolioType = currentPortfolio?.portfolio_type || 'stock';
+
   // Fetch portfolio-specific data
   useEffect(() => {
     const fetchPortfolioData = async () => {
@@ -40,9 +43,9 @@ const PortfolioSummary = () => {
 
       try {
         setIsLoadingData(true);
-        console.log('Fetching data for portfolio:', selectedPortfolio);
+        console.log('Fetching data for portfolio:', selectedPortfolio, 'Type:', portfolioType);
         
-        // Check if this is a Trading212 connected portfolio
+        // Check if this is a Trading212 or Binance connected portfolio
         const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
         const binancePortfolioId = localStorage.getItem('binance_portfolio_id');
         
@@ -138,7 +141,7 @@ const PortfolioSummary = () => {
             });
           }
         } else if (selectedPortfolio === binancePortfolioId) {
-          console.log('Loading Binance portfolio data');
+          console.log('Loading Binance crypto portfolio data');
           setPortfolioData({
             totalValue: "$29,000.00",
             todayChange: "+$1,250.00",
@@ -148,9 +151,21 @@ const PortfolioSummary = () => {
             holdingsCount: 3,
             netDeposits: "$20,500.00"
           });
+        } else if (portfolioType === 'crypto') {
+          console.log('Loading crypto portfolio data');
+          // Show crypto-specific mock data for regular crypto portfolios
+          setPortfolioData({
+            totalValue: "$15,420.85",
+            todayChange: "+$825.40",
+            todayPercentage: "+5.67%",
+            totalReturn: "+$3,920.85",
+            totalReturnPercentage: "+34.08%",
+            holdingsCount: 5,
+            netDeposits: "$11,500.00"
+          });
         } else {
-          console.log('Loading default portfolio data');
-          // Default mock data for other portfolios
+          console.log('Loading stock portfolio data');
+          // Default stock portfolio data
           setPortfolioData({
             totalValue: "$254,872.65",
             todayChange: "+$1,243.32",
@@ -174,7 +189,7 @@ const PortfolioSummary = () => {
     };
 
     fetchPortfolioData();
-  }, [selectedPortfolio, toast]);
+  }, [selectedPortfolio, portfolioType, toast]);
 
   if (isLoading) {
     return (
@@ -251,11 +266,15 @@ const PortfolioSummary = () => {
               {portfolioData.holdingsCount} holdings
             </div>
             
-            {/* Show which portfolio is selected */}
+            {/* Show which portfolio is selected with type indicator */}
             <div className="mt-2 p-2 bg-muted rounded-md">
               <p className="text-xs text-muted-foreground">Selected Portfolio:</p>
-              <p className="text-sm font-medium">
+              <p className="text-sm font-medium flex items-center gap-1">
+                {portfolioType === 'crypto' ? '🪙' : '📈'}
                 {portfolios.find(p => p.id === selectedPortfolio)?.name || 'Unknown Portfolio'}
+                <span className="text-xs text-muted-foreground ml-1">
+                  ({portfolioType === 'crypto' ? 'Crypto' : 'Stock'})
+                </span>
               </p>
               {selectedPortfolio === localStorage.getItem('trading212_portfolio_id') && (
                 <p className="text-xs text-blue-600">✓ Connected to Trading212 (Real Data)</p>
