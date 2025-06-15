@@ -28,7 +28,6 @@ const DIVIDEND_DATA_SOURCES = {
     'TXN': { annual: 5.20, quarterly: 1.30, yield: 2.8, frequency: 'quarterly' as const },
     'QCOM': { annual: 3.04, quarterly: 0.76, yield: 2.2, frequency: 'quarterly' as const },
     'AVGO': { annual: 20.40, quarterly: 5.10, yield: 1.9, frequency: 'quarterly' as const },
-    'CRM': { annual: 0, quarterly: 0, yield: 0, frequency: 'quarterly' as const },
     'ADBE': { annual: 0, quarterly: 0, yield: 0, frequency: 'quarterly' as const },
     
     // Healthcare & Pharmaceuticals
@@ -42,6 +41,15 @@ const DIVIDEND_DATA_SOURCES = {
     'GSK': { annual: 2.04, quarterly: 0.51, yield: 4.1, frequency: 'quarterly' as const },
     'BMY': { annual: 2.04, quarterly: 0.51, yield: 4.8, frequency: 'quarterly' as const },
     'GILD': { annual: 3.04, quarterly: 0.76, yield: 4.2, frequency: 'quarterly' as const },
+    'LLY': { annual: 4.40, quarterly: 1.10, yield: 1.2, frequency: 'quarterly' as const },
+    'ABBV': { annual: 6.20, quarterly: 1.55, yield: 3.4, frequency: 'quarterly' as const },
+    'AMGN': { annual: 8.08, quarterly: 2.02, yield: 3.1, frequency: 'quarterly' as const },
+    'CVS': { annual: 2.20, quarterly: 0.55, yield: 3.2, frequency: 'quarterly' as const },
+    'MDT': { annual: 2.72, quarterly: 0.68, yield: 3.8, frequency: 'quarterly' as const },
+    'DHR': { annual: 1.00, quarterly: 0.25, yield: 0.4, frequency: 'quarterly' as const },
+    'ISRG': { annual: 0, quarterly: 0, yield: 0, frequency: 'quarterly' as const },
+    'VRTX': { annual: 0, quarterly: 0, yield: 0, frequency: 'quarterly' as const },
+    'REGN': { annual: 0, quarterly: 0, yield: 0, frequency: 'quarterly' as const },
     
     // Consumer Goods & Services
     'PG': { annual: 3.76, quarterly: 0.94, yield: 2.4, frequency: 'quarterly' as const },
@@ -57,6 +65,12 @@ const DIVIDEND_DATA_SOURCES = {
     'GIS': { annual: 2.04, quarterly: 0.51, yield: 3.1, frequency: 'quarterly' as const },
     'K': { annual: 2.32, quarterly: 0.58, yield: 4.2, frequency: 'quarterly' as const },
     'CPB': { annual: 1.48, quarterly: 0.37, yield: 3.3, frequency: 'quarterly' as const },
+    'KHC': { annual: 1.60, quarterly: 0.40, yield: 4.8, frequency: 'quarterly' as const },
+    'MDLZ': { annual: 1.58, quarterly: 0.395, yield: 2.2, frequency: 'quarterly' as const },
+    'HSY': { annual: 4.08, quarterly: 1.02, yield: 2.1, frequency: 'quarterly' as const },
+    'KR': { annual: 1.04, quarterly: 0.26, yield: 2.2, frequency: 'quarterly' as const },
+    'SYY': { annual: 2.00, quarterly: 0.50, yield: 2.5, frequency: 'quarterly' as const },
+    'YUM': { annual: 2.20, quarterly: 0.55, yield: 1.6, frequency: 'quarterly' as const },
     
     // Financial Services
     'JPM': { annual: 4.80, quarterly: 1.20, yield: 2.4, frequency: 'quarterly' as const },
@@ -70,6 +84,13 @@ const DIVIDEND_DATA_SOURCES = {
     'MA': { annual: 2.24, quarterly: 0.56, yield: 0.5, frequency: 'quarterly' as const },
     'BLK': { annual: 20.20, quarterly: 5.05, yield: 2.4, frequency: 'quarterly' as const },
     'SPG': { annual: 5.60, quarterly: 1.40, yield: 4.1, frequency: 'quarterly' as const },
+    'USB': { annual: 1.76, quarterly: 0.44, yield: 4.1, frequency: 'quarterly' as const },
+    'TFC': { annual: 2.08, quarterly: 0.52, yield: 5.2, frequency: 'quarterly' as const },
+    'PNC': { annual: 5.60, quarterly: 1.40, yield: 3.8, frequency: 'quarterly' as const },
+    'COF': { annual: 2.40, quarterly: 0.60, yield: 1.8, frequency: 'quarterly' as const },
+    'SCHW': { annual: 0.88, quarterly: 0.22, yield: 1.3, frequency: 'quarterly' as const },
+    'BK': { annual: 1.52, quarterly: 0.38, yield: 2.7, frequency: 'quarterly' as const },
+    'STT': { annual: 2.28, quarterly: 0.57, yield: 3.2, frequency: 'quarterly' as const },
     
     // Utilities & Infrastructure
     'VZ': { annual: 2.56, quarterly: 0.64, yield: 6.8, frequency: 'quarterly' as const },
@@ -80,6 +101,12 @@ const DIVIDEND_DATA_SOURCES = {
     'NEE': { annual: 1.85, quarterly: 0.4625, yield: 2.8, frequency: 'quarterly' as const },
     'AEP': { annual: 3.28, quarterly: 0.82, yield: 3.7, frequency: 'quarterly' as const },
     'EXC': { annual: 1.61, quarterly: 0.4025, yield: 4.1, frequency: 'quarterly' as const },
+    'XEL': { annual: 1.88, quarterly: 0.47, yield: 2.8, frequency: 'quarterly' as const },
+    'ED': { annual: 3.12, quarterly: 0.78, yield: 3.5, frequency: 'quarterly' as const },
+    'ETR': { annual: 4.16, quarterly: 1.04, yield: 3.8, frequency: 'quarterly' as const },
+    'ES': { annual: 1.68, quarterly: 0.42, yield: 2.1, frequency: 'quarterly' as const },
+    'FE': { annual: 1.56, quarterly: 0.39, yield: 4.0, frequency: 'quarterly' as const },
+    'PPL': { annual: 0.84, quarterly: 0.21, yield: 3.1, frequency: 'quarterly' as const },
     
     // Energy
     'XOM': { annual: 3.64, quarterly: 0.91, yield: 5.8, frequency: 'quarterly' as const },
@@ -90,18 +117,29 @@ const DIVIDEND_DATA_SOURCES = {
     'ENB': { annual: 1.55, quarterly: 0.3875, yield: 6.2, frequency: 'quarterly' as const },
     'TC': { annual: 3.48, quarterly: 0.87, yield: 6.1, frequency: 'quarterly' as const },
     'SLB': { annual: 0.80, quarterly: 0.20, yield: 1.8, frequency: 'quarterly' as const },
+    'TRP': { annual: 3.48, quarterly: 0.87, yield: 5.9, frequency: 'quarterly' as const },
+    'WMB': { annual: 1.74, quarterly: 0.435, yield: 5.4, frequency: 'quarterly' as const },
+    'OKE': { annual: 4.02, quarterly: 1.005, yield: 6.8, frequency: 'quarterly' as const },
+    'EPD': { annual: 1.20, quarterly: 0.30, yield: 8.2, frequency: 'quarterly' as const },
+    'ET': { annual: 1.22, quarterly: 0.305, yield: 8.9, frequency: 'quarterly' as const },
+    'MMP': { annual: 2.94, quarterly: 0.735, yield: 6.1, frequency: 'quarterly' as const },
     
     // Industrial
     'MMM': { annual: 6.00, quarterly: 1.50, yield: 4.8, frequency: 'quarterly' as const },
     'CAT': { annual: 4.80, quarterly: 1.20, yield: 1.8, frequency: 'quarterly' as const },
     'HON': { annual: 4.04, quarterly: 1.01, yield: 1.9, frequency: 'quarterly' as const },
     'GE': { annual: 0.16, quarterly: 0.04, yield: 0.1, frequency: 'quarterly' as const },
-    'BA': { annual: 0, quarterly: 0, yield: 0, frequency: 'quarterly' as const },
     'LMT': { annual: 12.00, quarterly: 3.00, yield: 2.8, frequency: 'quarterly' as const },
     'RTX': { annual: 2.04, quarterly: 0.51, yield: 2.3, frequency: 'quarterly' as const },
     'UPS': { annual: 5.52, quarterly: 1.38, yield: 3.9, frequency: 'quarterly' as const },
     'FDX': { annual: 3.00, quarterly: 0.75, yield: 1.2, frequency: 'quarterly' as const },
     'EMR': { annual: 2.04, quarterly: 0.51, yield: 2.0, frequency: 'quarterly' as const },
+    'ITW': { annual: 4.88, quarterly: 1.22, yield: 2.0, frequency: 'quarterly' as const },
+    'DE': { annual: 4.90, quarterly: 1.225, yield: 1.2, frequency: 'quarterly' as const },
+    'BA': { annual: 0, quarterly: 0, yield: 0, frequency: 'quarterly' as const },
+    'NOC': { annual: 7.40, quarterly: 1.85, yield: 1.5, frequency: 'quarterly' as const },
+    'GD': { annual: 4.88, quarterly: 1.22, yield: 1.8, frequency: 'quarterly' as const },
+    'LHX': { annual: 4.00, quarterly: 1.00, yield: 1.8, frequency: 'quarterly' as const },
     
     // Consumer Discretionary
     'HD': { annual: 8.36, quarterly: 2.09, yield: 2.3, frequency: 'quarterly' as const },
@@ -112,6 +150,12 @@ const DIVIDEND_DATA_SOURCES = {
     'MO': { annual: 3.76, quarterly: 0.94, yield: 8.1, frequency: 'quarterly' as const },
     'PM': { annual: 5.20, quarterly: 1.30, yield: 5.1, frequency: 'quarterly' as const },
     'BTI': { annual: 2.96, quarterly: 0.74, yield: 8.4, frequency: 'quarterly' as const },
+    'F': { annual: 0.60, quarterly: 0.15, yield: 5.1, frequency: 'quarterly' as const },
+    'GM': { annual: 1.52, quarterly: 0.38, yield: 4.2, frequency: 'quarterly' as const },
+    'TSLA': { annual: 0, quarterly: 0, yield: 0, frequency: 'quarterly' as const },
+    'TJX': { annual: 1.20, quarterly: 0.30, yield: 1.2, frequency: 'quarterly' as const },
+    'RCL': { annual: 2.60, quarterly: 0.65, yield: 1.4, frequency: 'quarterly' as const },
+    'CCL': { annual: 0, quarterly: 0, yield: 0, frequency: 'quarterly' as const },
     
     // Materials
     'DD': { annual: 1.28, quarterly: 0.32, yield: 1.6, frequency: 'quarterly' as const },
@@ -119,6 +163,13 @@ const DIVIDEND_DATA_SOURCES = {
     'LYB': { annual: 4.20, quarterly: 1.05, yield: 4.8, frequency: 'quarterly' as const },
     'FCX': { annual: 2.00, quarterly: 0.50, yield: 4.9, frequency: 'quarterly' as const },
     'NEM': { annual: 1.60, quarterly: 0.40, yield: 4.2, frequency: 'quarterly' as const },
+    'NUE': { annual: 2.00, quarterly: 0.50, yield: 1.2, frequency: 'quarterly' as const },
+    'STLD': { annual: 1.20, quarterly: 0.30, yield: 0.9, frequency: 'quarterly' as const },
+    'PKG': { annual: 4.00, quarterly: 1.00, yield: 2.6, frequency: 'quarterly' as const },
+    'IP': { annual: 2.20, quarterly: 0.55, yield: 6.8, frequency: 'quarterly' as const },
+    'APD': { annual: 6.24, quarterly: 1.56, yield: 2.1, frequency: 'quarterly' as const },
+    'LIN': { annual: 5.20, quarterly: 1.30, yield: 1.2, frequency: 'quarterly' as const },
+    'ECL': { annual: 2.04, quarterly: 0.51, yield: 0.9, frequency: 'quarterly' as const },
     
     // Real Estate & REITs
     'ARCC': { annual: 2.64, quarterly: 0.66, yield: 12.0, frequency: 'quarterly' as const },
@@ -130,6 +181,21 @@ const DIVIDEND_DATA_SOURCES = {
     'PSA': { annual: 8.00, quarterly: 2.00, yield: 2.8, frequency: 'quarterly' as const },
     'AMT': { annual: 6.16, quarterly: 1.54, yield: 3.1, frequency: 'quarterly' as const },
     'CCI': { annual: 5.68, quarterly: 1.42, yield: 4.8, frequency: 'quarterly' as const },
+    'EQIX': { annual: 12.32, quarterly: 3.08, yield: 1.5, frequency: 'quarterly' as const },
+    'DLR': { annual: 4.88, quarterly: 1.22, yield: 3.2, frequency: 'quarterly' as const },
+    'VTR': { annual: 1.88, quarterly: 0.47, yield: 4.5, frequency: 'quarterly' as const },
+    'WELL': { annual: 2.44, quarterly: 0.61, yield: 2.9, frequency: 'quarterly' as const },
+    'AVB': { annual: 6.28, quarterly: 1.57, yield: 2.8, frequency: 'quarterly' as const },
+    'EQR': { annual: 2.58, quarterly: 0.645, yield: 3.5, frequency: 'quarterly' as const },
+    'MAA': { annual: 4.40, quarterly: 1.10, yield: 3.2, frequency: 'quarterly' as const },
+    'ESS': { annual: 11.00, quarterly: 2.75, yield: 3.8, frequency: 'quarterly' as const },
+    'UDR': { annual: 1.52, quarterly: 0.38, yield: 3.6, frequency: 'quarterly' as const },
+    'CPT': { annual: 1.52, quarterly: 0.38, yield: 1.1, frequency: 'quarterly' as const },
+    'HST': { annual: 0.84, quarterly: 0.21, yield: 4.9, frequency: 'quarterly' as const },
+    'FRT': { annual: 3.36, quarterly: 0.84, yield: 2.8, frequency: 'quarterly' as const },
+    'REG': { annual: 2.52, quarterly: 0.63, yield: 3.7, frequency: 'quarterly' as const },
+    'BXP': { annual: 4.20, quarterly: 1.05, yield: 5.8, frequency: 'quarterly' as const },
+    'KIM': { annual: 0.92, quarterly: 0.23, yield: 4.3, frequency: 'quarterly' as const },
     
     // European Dividend Stocks (common on Trading212)
     'ASML': { annual: 6.40, quarterly: 1.60, yield: 0.9, frequency: 'quarterly' as const },
@@ -142,13 +208,22 @@ const DIVIDEND_DATA_SOURCES = {
     'VOD': { annual: 0.09, quarterly: 0.0225, yield: 10.2, frequency: 'quarterly' as const },
     'RDS.A': { annual: 2.68, quarterly: 0.67, yield: 5.4, frequency: 'quarterly' as const },
     'RDSA': { annual: 2.68, quarterly: 0.67, yield: 5.4, frequency: 'quarterly' as const },
+    'UNVR': { annual: 1.96, quarterly: 0.49, yield: 3.4, frequency: 'quarterly' as const },
+    'TTE': { annual: 3.20, quarterly: 0.80, yield: 5.2, frequency: 'quarterly' as const },
+    'ENGI': { annual: 0.85, quarterly: 0.2125, yield: 6.8, frequency: 'quarterly' as const },
+    'OR': { annual: 3.20, quarterly: 0.80, yield: 4.1, frequency: 'quarterly' as const },
+    'SAN': { annual: 0.40, quarterly: 0.10, yield: 8.9, frequency: 'quarterly' as const },
+    'BBVA': { annual: 0.29, quarterly: 0.0725, yield: 4.2, frequency: 'quarterly' as const },
+    'BNP': { annual: 3.68, quarterly: 0.92, yield: 5.8, frequency: 'quarterly' as const },
+    'ING': { annual: 0.72, quarterly: 0.18, yield: 4.9, frequency: 'quarterly' as const },
+    'DTE': { annual: 0.64, quarterly: 0.16, yield: 3.1, frequency: 'quarterly' as const },
+    'ENI': { annual: 0.88, quarterly: 0.22, yield: 6.2, frequency: 'quarterly' as const },
     
     // Additional Growth Stocks (many don't pay dividends)
     'BRK.B': { annual: 0, quarterly: 0, yield: 0, frequency: 'quarterly' as const },
     'GOOGL': { annual: 0, quarterly: 0, yield: 0, frequency: 'quarterly' as const },
     'GOOG': { annual: 0, quarterly: 0, yield: 0, frequency: 'quarterly' as const },
     'AMZN': { annual: 0, quarterly: 0, yield: 0, frequency: 'quarterly' as const },
-    'TSLA': { annual: 0, quarterly: 0, yield: 0, frequency: 'quarterly' as const },
     'META': { annual: 2.00, quarterly: 0.50, yield: 0.4, frequency: 'quarterly' as const },
     'NVDA': { annual: 0.16, quarterly: 0.04, yield: 0.02, frequency: 'quarterly' as const },
     'NFLX': { annual: 0, quarterly: 0, yield: 0, frequency: 'quarterly' as const },
@@ -160,6 +235,12 @@ const DIVIDEND_DATA_SOURCES = {
     'SPOT': { annual: 0, quarterly: 0, yield: 0, frequency: 'quarterly' as const },
     'SQ': { annual: 0, quarterly: 0, yield: 0, frequency: 'quarterly' as const },
     'PYPL': { annual: 0, quarterly: 0, yield: 0, frequency: 'quarterly' as const },
+    'SHOP': { annual: 0, quarterly: 0, yield: 0, frequency: 'quarterly' as const },
+    'ROKU': { annual: 0, quarterly: 0, yield: 0, frequency: 'quarterly' as const },
+    'TWLO': { annual: 0, quarterly: 0, yield: 0, frequency: 'quarterly' as const },
+    'OKTA': { annual: 0, quarterly: 0, yield: 0, frequency: 'quarterly' as const },
+    'SNOW': { annual: 0, quarterly: 0, yield: 0, frequency: 'quarterly' as const },
+    'PLTR': { annual: 0, quarterly: 0, yield: 0, frequency: 'quarterly' as const },
     
     // ETFs (many pay dividends)
     'SPY': { annual: 6.57, quarterly: 1.6425, yield: 1.3, frequency: 'quarterly' as const },
@@ -178,6 +259,15 @@ const DIVIDEND_DATA_SOURCES = {
     'DGRO': { annual: 1.42, quarterly: 0.355, yield: 1.9, frequency: 'quarterly' as const },
     'HDV': { annual: 3.65, quarterly: 0.9125, yield: 3.4, frequency: 'quarterly' as const },
     'DVY': { annual: 3.89, quarterly: 0.9725, yield: 3.4, frequency: 'quarterly' as const },
+    'SPHD': { annual: 1.87, quarterly: 0.4675, yield: 4.1, frequency: 'quarterly' as const },
+    'SCHY': { annual: 1.42, quarterly: 0.355, yield: 2.8, frequency: 'quarterly' as const },
+    'SPYD': { annual: 1.84, quarterly: 0.46, yield: 4.9, frequency: 'quarterly' as const },
+    'DIVO': { annual: 0.45, quarterly: 0.1125, yield: 3.8, frequency: 'quarterly' as const },
+    'JEPI': { annual: 2.87, quarterly: 0.7175, yield: 5.2, frequency: 'quarterly' as const },
+    'JEPQ': { annual: 2.15, quarterly: 0.5375, yield: 4.1, frequency: 'quarterly' as const },
+    'SPLG': { annual: 1.82, quarterly: 0.455, yield: 1.3, frequency: 'quarterly' as const },
+    'VT': { annual: 2.08, quarterly: 0.52, yield: 1.9, frequency: 'quarterly' as const },
+    'VXUS': { annual: 1.85, quarterly: 0.4625, yield: 3.1, frequency: 'quarterly' as const }
   }
 };
 
