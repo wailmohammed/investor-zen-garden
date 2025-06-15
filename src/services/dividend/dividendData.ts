@@ -5,6 +5,9 @@ export interface DividendInfo {
   quarterly: number;
   yield: number;
   frequency: 'quarterly' | 'annual' | 'monthly' | 'semi-annual';
+  nextExDate?: string;
+  paymentDate?: string;
+  isETF?: boolean;
 }
 
 export const DIVIDEND_DATABASE: Record<string, DividendInfo> = {
