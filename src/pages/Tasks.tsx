@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 
 interface ScheduledTask {
   id: string;
@@ -19,10 +20,22 @@ interface ScheduledTask {
   created_at: string;
 }
 
+interface DividendDetectionJob {
+  id: string;
+  portfolio_id: string;
+  status: string;
+  stocks_analyzed: number;
+  dividend_stocks_found: number;
+  last_run_at: string | null;
+  next_run_at: string;
+  created_at: string;
+}
+
 const Tasks = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [tasks, setTasks] = useState<ScheduledTask[]>([]);
+  const [dividendJobs, setDividendJobs] = useState<DividendDetectionJob[]>([]);
   const [loading, setLoading] = useState(false);
   const [taskName, setTaskName] = useState('');
   const [frequency, setFrequency] = useState('daily');
@@ -76,6 +89,33 @@ const Tasks = () => {
       fetchTasks();
     }
   }, [user?.id, toast]);
+
+  // Fetch dividend detection jobs
+  useEffect(() => {
+    const fetchDividendJobs = async () => {
+      if (!user?.id) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('dividend_detection_jobs')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+        
+        if (error) {
+          console.error('Error fetching dividend jobs:', error);
+        } else {
+          setDividendJobs(data || []);
+        }
+      } catch (error) {
+        console.error('Error fetching dividend jobs:', error);
+      }
+    };
+    
+    if (user?.id) {
+      fetchDividendJobs();
+    }
+  }, [user?.id]);
 
   const handleCreateTask = async () => {
     if (!taskName.trim()) {
@@ -173,15 +213,48 @@ const Tasks = () => {
     }
   };
 
+  const handleRunDividendDetection = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('dividend-detection', {
+        body: { runAll: true }
+      });
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Dividend detection started",
+        description: `Analyzing portfolios for dividend stocks...`,
+      });
+      
+      // Refresh dividend jobs
+      const { data: updatedJobs } = await supabase
+        .from('dividend_detection_jobs')
+        .select('*')
+        .eq('user_id', user?.id)
+        .order('created_at', { ascending: false });
+        
+      if (updatedJobs) {
+        setDividendJobs(updatedJobs);
+      }
+    } catch (error: any) {
+      console.error('Error running dividend detection:', error);
+      toast({
+        title: "Failed to run dividend detection",
+        description: error.message || "An error occurred while running dividend detection.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Scheduled Tasks</h1>
-          <p className="text-muted-foreground">Manage automated scheduled tasks</p>
+          <p className="text-muted-foreground">Manage automated scheduled tasks and dividend detection</p>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* New Task Form */}
           <Card>
             <CardHeader>
@@ -218,20 +291,23 @@ const Tasks = () => {
                 </Select>
               </div>
             </CardContent>
-            <CardFooter className="flex justify-between">
-              <Button onClick={handleCreateTask} disabled={isCreating}>
+            <CardFooter className="flex flex-col gap-2">
+              <Button onClick={handleCreateTask} disabled={isCreating} className="w-full">
                 {isCreating ? "Creating..." : "Create Task"}
               </Button>
-              <Button onClick={handleRunTasksManually} variant="outline">
+              <Button onClick={handleRunTasksManually} variant="outline" className="w-full">
                 Run Tasks Now
+              </Button>
+              <Button onClick={handleRunDividendDetection} variant="secondary" className="w-full">
+                Run Dividend Detection
               </Button>
             </CardFooter>
           </Card>
           
           {/* Task List */}
-          <Card>
+          <Card className="lg:col-span-2">
             <CardHeader>
-              <CardTitle>Tasks</CardTitle>
+              <CardTitle>System Tasks</CardTitle>
               <CardDescription>
                 View and manage scheduled tasks
               </CardDescription>
@@ -252,14 +328,23 @@ const Tasks = () => {
                       <TableRow>
                         <TableHead>Task</TableHead>
                         <TableHead>Frequency</TableHead>
+                        <TableHead>Last Run</TableHead>
                         <TableHead>Next Run</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {tasks.map((task) => (
                         <TableRow key={task.id}>
-                          <TableCell className="font-medium">{task.name}</TableCell>
+                          <TableCell className="font-medium">
+                            {task.name}
+                            {task.name === 'dividend-detection-scan' && (
+                              <Badge variant="secondary" className="ml-2">Auto</Badge>
+                            )}
+                          </TableCell>
                           <TableCell>{task.frequency}</TableCell>
+                          <TableCell>
+                            {task.last_run ? new Date(task.last_run).toLocaleString() : 'Never'}
+                          </TableCell>
                           <TableCell>
                             {new Date(task.next_run).toLocaleString()}
                           </TableCell>
@@ -272,6 +357,54 @@ const Tasks = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Dividend Detection Jobs */}
+        {dividendJobs.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Dividend Detection Jobs</CardTitle>
+              <CardDescription>
+                Track dividend detection progress for your portfolios
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Portfolio ID</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Stocks Analyzed</TableHead>
+                      <TableHead>Dividend Stocks Found</TableHead>
+                      <TableHead>Last Run</TableHead>
+                      <TableHead>Next Run</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {dividendJobs.map((job) => (
+                      <TableRow key={job.id}>
+                        <TableCell className="font-medium">{job.portfolio_id.slice(0, 8)}...</TableCell>
+                        <TableCell>
+                          <Badge variant={job.status === 'completed' ? 'default' : job.status === 'failed' ? 'destructive' : 'secondary'}>
+                            {job.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{job.stocks_analyzed}</TableCell>
+                        <TableCell>{job.dividend_stocks_found}</TableCell>
+                        <TableCell>
+                          {job.last_run_at ? new Date(job.last_run_at).toLocaleString() : 'Never'}
+                        </TableCell>
+                        <TableCell>
+                          {new Date(job.next_run_at).toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </DashboardLayout>
   );

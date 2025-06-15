@@ -33,6 +33,23 @@ const executeTask = async (taskName: string): Promise<string> => {
       console.log('Sending payment reminders')
       return 'Payment reminders sent'
       
+    case 'dividend-detection-scan':
+      // Run dividend detection for all eligible portfolios
+      console.log('Running dividend detection scan')
+      try {
+        const { data, error } = await supabase.functions.invoke('dividend-detection', {
+          body: { runAll: true }
+        });
+        
+        if (error) throw error;
+        
+        console.log('Dividend detection completed:', data);
+        return `Dividend detection completed: ${data.results?.length || 0} portfolios processed`;
+      } catch (error) {
+        console.error('Error in dividend detection:', error);
+        return `Dividend detection failed: ${error.message}`;
+      }
+      
     default:
       console.log(`Unknown task: ${taskName}`)
       return `Unknown task: ${taskName}`
@@ -87,6 +104,9 @@ Deno.serve(async (req) => {
           break
         case 'monthly':
           nextRun.setMonth(nextRun.getMonth() + 1)
+          break
+        case 'every-6-hours':
+          nextRun.setHours(nextRun.getHours() + 6)
           break
         default:
           // Default to daily
