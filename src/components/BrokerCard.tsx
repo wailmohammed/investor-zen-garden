@@ -13,6 +13,7 @@ interface BrokerCardProps {
   status: BrokerStatus;
   onConnect?: () => void;
   onDisconnect?: () => void;
+  isLoading?: boolean;
 }
 
 export function BrokerCard({ 
@@ -21,7 +22,8 @@ export function BrokerCard({
   logo, 
   status,
   onConnect,
-  onDisconnect
+  onDisconnect,
+  isLoading = false
 }: BrokerCardProps) {
   const handleConnect = () => {
     onConnect?.();
@@ -58,6 +60,11 @@ export function BrokerCard({
                 Error
               </Badge>
             )}
+            {status === 'not_connected' && (
+              <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
+                Not Connected
+              </Badge>
+            )}
           </div>
         </div>
       </CardHeader>
@@ -67,12 +74,13 @@ export function BrokerCard({
       <CardFooter className="border-t bg-gray-50 py-2">
         {status === 'connected' ? (
           <Button 
-            variant="outline" 
+            variant="destructive" 
             size="sm" 
             className="w-full"
             onClick={handleDisconnect}
+            disabled={isLoading}
           >
-            Disconnect
+            {isLoading ? 'Disconnecting...' : 'Disconnect'}
           </Button>
         ) : (
           <Button 
@@ -80,8 +88,9 @@ export function BrokerCard({
             size="sm" 
             className="w-full"
             onClick={handleConnect}
+            disabled={isLoading}
           >
-            Connect
+            {isLoading ? 'Connecting...' : 'Connect'}
           </Button>
         )}
       </CardFooter>

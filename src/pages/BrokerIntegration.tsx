@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +26,7 @@ const BrokerIntegrationContent = () => {
   const [binanceTestResult, setBinanceTestResult] = useState<'success' | 'error' | null>(null);
   const [csvData, setCsvData] = useState<any[]>([]);
   const [selectedApiPortfolio, setSelectedApiPortfolio] = useState<string>('');
+  const [connectionLoading, setConnectionLoading] = useState<{ [key: string]: boolean }>({});
   const { user } = useAuth();
   const { portfolios } = usePortfolio();
 
@@ -38,6 +38,98 @@ const BrokerIntegrationContent = () => {
       title: "CSV Data Loaded",
       description: `${data.length} items ready to import`,
     });
+  };
+
+  // Trading212 connection handlers
+  const handleTrading212Connect = () => {
+    if (!selectedApiPortfolio) {
+      toast({
+        title: "Portfolio Required",
+        description: "Please select a portfolio to connect Trading212 to",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setConnectionLoading(prev => ({ ...prev, trading212: true }));
+    
+    // Store the portfolio connection
+    localStorage.setItem('trading212_portfolio_id', selectedApiPortfolio);
+    
+    setTimeout(() => {
+      setConnectionLoading(prev => ({ ...prev, trading212: false }));
+      toast({
+        title: "Trading212 Connected",
+        description: `Trading212 has been connected to your portfolio: ${portfolios.find(p => p.id === selectedApiPortfolio)?.name}`,
+      });
+    }, 2000);
+  };
+
+  const handleTrading212Disconnect = () => {
+    setConnectionLoading(prev => ({ ...prev, trading212: true }));
+    
+    // Remove the portfolio connection
+    localStorage.removeItem('trading212_portfolio_id');
+    
+    setTimeout(() => {
+      setConnectionLoading(prev => ({ ...prev, trading212: false }));
+      toast({
+        title: "Trading212 Disconnected",
+        description: "Trading212 has been disconnected from your portfolio",
+      });
+    }, 1000);
+  };
+
+  // Binance connection handlers
+  const handleBinanceConnect = () => {
+    const apiKey = localStorage.getItem('binance_api_key');
+    const secretKey = localStorage.getItem('binance_secret_api_key');
+    
+    if (!apiKey || !secretKey) {
+      toast({
+        title: "API Keys Missing",
+        description: "Please configure your Binance API keys first in the API Configuration tab",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!selectedApiPortfolio) {
+      toast({
+        title: "Portfolio Required",
+        description: "Please select a portfolio to connect Binance to",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setConnectionLoading(prev => ({ ...prev, binance: true }));
+    
+    // Store the portfolio connection
+    localStorage.setItem('binance_portfolio_id', selectedApiPortfolio);
+    
+    setTimeout(() => {
+      setConnectionLoading(prev => ({ ...prev, binance: false }));
+      toast({
+        title: "Binance Connected",
+        description: `Binance has been connected to your portfolio: ${portfolios.find(p => p.id === selectedApiPortfolio)?.name}`,
+      });
+    }, 2000);
+  };
+
+  const handleBinanceDisconnect = () => {
+    setConnectionLoading(prev => ({ ...prev, binance: true }));
+    
+    // Remove the portfolio connection
+    localStorage.removeItem('binance_portfolio_id');
+    
+    setTimeout(() => {
+      setConnectionLoading(prev => ({ ...prev, binance: false }));
+      toast({
+        title: "Binance Disconnected", 
+        description: "Binance has been disconnected from your portfolio",
+      });
+    }, 1000);
   };
 
   // Test Binance API connection
@@ -100,6 +192,10 @@ const BrokerIntegrationContent = () => {
 
   const hasPortfolios = portfolios && portfolios.length > 0;
 
+  // Get connection statuses
+  const trading212Connected = !!localStorage.getItem('trading212_portfolio_id');
+  const binanceConnected = !!localStorage.getItem('binance_portfolio_id');
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -149,19 +245,29 @@ const BrokerIntegrationContent = () => {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
-                  <CheckCircle className="h-5 w-5 text-green-600" />
+                <div className={`flex items-center gap-3 p-3 rounded-lg ${trading212Connected ? 'bg-green-50' : 'bg-gray-50'}`}>
+                  {trading212Connected ? (
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                  ) : (
+                    <XCircle className="h-5 w-5 text-gray-600" />
+                  )}
                   <div>
                     <p className="font-medium">Trading212</p>
-                    <p className="text-sm text-muted-foreground">Connected & Active</p>
+                    <p className="text-sm text-muted-foreground">
+                      {trading212Connected ? 'Connected & Active' : 'Not Connected'}
+                    </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 p-3 bg-yellow-50 rounded-lg">
-                  <AlertCircle className="h-5 w-5 text-yellow-600" />
+                <div className={`flex items-center gap-3 p-3 rounded-lg ${binanceConnected ? 'bg-orange-50' : 'bg-gray-50'}`}>
+                  {binanceConnected ? (
+                    <CheckCircle className="h-5 w-5 text-orange-600" />
+                  ) : (
+                    <XCircle className="h-5 w-5 text-gray-600" />
+                  )}
                   <div>
                     <p className="font-medium">Binance</p>
                     <p className="text-sm text-muted-foreground">
-                      {localStorage.getItem('binance_portfolio_id') ? 'Connected to Portfolio' : 'API Keys Set'}
+                      {binanceConnected ? 'Connected to Portfolio' : 'Not Connected'}
                     </p>
                   </div>
                 </div>
@@ -206,16 +312,20 @@ const BrokerIntegrationContent = () => {
               name="Trading212"
               logo="/trading212-logo.svg"
               description="Connect your Trading212 account to automatically sync your portfolio and dividend data with real-time portfolio sync, dividend tracking, and performance analytics."
-              status={!!localStorage.getItem('trading212_portfolio_id') ? 'connected' : 'not_connected'}
-              onConnect={() => console.log('Trading212 connection')}
+              status={trading212Connected ? 'connected' : 'not_connected'}
+              onConnect={handleTrading212Connect}
+              onDisconnect={handleTrading212Disconnect}
+              isLoading={connectionLoading.trading212}
             />
 
             <BrokerCard
               name="Binance"
               logo="/binance-logo.svg"
               description="Connect your Binance account to track your cryptocurrency portfolio with crypto portfolio tracking, real-time prices, and transaction history."
-              status={!!localStorage.getItem('binance_portfolio_id') ? 'connected' : 'not_connected'}
-              onConnect={() => console.log('Binance connection')}
+              status={binanceConnected ? 'connected' : 'not_connected'}
+              onConnect={handleBinanceConnect}
+              onDisconnect={handleBinanceDisconnect}
+              isLoading={connectionLoading.binance}
             />
 
             <BrokerCard
