@@ -1,3 +1,4 @@
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import StatCard from "../StatCard";
 import { PortfolioSelector } from "@/components/ui/portfolio-selector";
@@ -152,17 +153,62 @@ const PortfolioSummary = () => {
             netDeposits: "$20,500.00"
           });
         } else if (portfolioType === 'crypto') {
-          console.log('Loading crypto portfolio data');
-          // Show crypto-specific mock data for regular crypto portfolios
-          setPortfolioData({
-            totalValue: "$15,420.85",
-            todayChange: "+$825.40",
-            todayPercentage: "+5.67%",
-            totalReturn: "+$3,920.85",
-            totalReturnPercentage: "+34.08%",
-            holdingsCount: 5,
-            netDeposits: "$11,500.00"
-          });
+          console.log('Fetching real crypto portfolio data');
+          
+          try {
+            // Call the crypto API function to get real data
+            const { data, error } = await supabase.functions.invoke('crypto-api', {
+              body: { portfolioId: selectedPortfolio }
+            });
+
+            if (error) {
+              console.error('Error fetching crypto data:', error);
+              throw error;
+            }
+
+            if (data?.success) {
+              // Use real crypto data
+              const realData = data.data;
+              setPortfolioData({
+                totalValue: `$${realData.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                todayChange: `${realData.todayChange >= 0 ? '+' : ''}$${Math.abs(realData.todayChange).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                todayPercentage: `${realData.todayPercentage >= 0 ? '+' : ''}${realData.todayPercentage.toFixed(2)}%`,
+                totalReturn: `${realData.totalReturn >= 0 ? '+' : ''}$${Math.abs(realData.totalReturn).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                totalReturnPercentage: `${realData.totalReturnPercentage >= 0 ? '+' : ''}${realData.totalReturnPercentage.toFixed(2)}%`,
+                holdingsCount: realData.holdingsCount,
+                netDeposits: `$${realData.netDeposits.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              });
+              
+              console.log('Real crypto data loaded:', realData);
+              
+              toast({
+                title: "Live Crypto Data",
+                description: "Portfolio data updated with real-time cryptocurrency prices",
+                variant: "default",
+              });
+            } else {
+              throw new Error(data?.error || 'Failed to fetch crypto data');
+            }
+          } catch (cryptoError) {
+            console.error('Crypto API error:', cryptoError);
+            
+            // Fall back to mock crypto data
+            setPortfolioData({
+              totalValue: "$15,420.85",
+              todayChange: "+$825.40",
+              todayPercentage: "+5.67%",
+              totalReturn: "+$3,920.85",
+              totalReturnPercentage: "+34.08%",
+              holdingsCount: 5,
+              netDeposits: "$11,500.00"
+            });
+            
+            toast({
+              title: "Using Mock Data",
+              description: "Crypto API temporarily unavailable. Showing sample data.",
+              variant: "default",
+            });
+          }
         } else {
           console.log('Loading stock portfolio data');
           // Default stock portfolio data
