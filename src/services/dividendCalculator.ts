@@ -1,9 +1,10 @@
 
-// Main calculator function
+// Main calculator function with dynamic dividend data fetching
 import { DIVIDEND_DATABASE, DividendInfo } from './dividend/dividendData';
 import { findDividendSymbol } from './dividend/symbolMatcher';
 import { getCompanyName } from './dividend/companyNames';
 import { getNextExDate, getNextPaymentDate } from './dividend/dateUtils';
+import { ensureDividendDataForHoldings, addStockToDividendDatabase, getDatabaseStats } from './dividend/dynamicDividendManager';
 
 interface Position {
   symbol: string;
@@ -12,7 +13,7 @@ interface Position {
   marketValue: number;
 }
 
-export const calculateDividendIncome = (positions: Position[]): {
+export const calculateDividendIncome = async (positions: Position[]): Promise<{
   totalAnnualIncome: number;
   totalQuarterlyIncome: number;
   dividendPayingStocks: any[];
@@ -23,9 +24,21 @@ export const calculateDividendIncome = (positions: Position[]): {
     dividendPayingStocks: number;
     databaseSize: number;
     coveragePercentage: number;
+    newStocksAdded: number;
+    processingErrors: number;
   };
-} => {
-  console.log('Calculating dividend income for positions:', positions.length);
+}> => {
+  console.log('Starting enhanced dividend calculation for positions:', positions.length);
+  
+  // First, ensure all holdings have dividend data
+  const holdingsProcessing = await ensureDividendDataForHoldings(
+    positions.map(p => ({
+      symbol: p.symbol,
+      quantity: p.quantity,
+      currentPrice: p.currentPrice,
+      marketValue: p.marketValue
+    }))
+  );
   
   const dividendPayingStocks = [];
   let totalAnnualIncome = 0;
@@ -39,9 +52,20 @@ export const calculateDividendIncome = (positions: Position[]): {
     symbolsProcessed++;
     
     try {
-      // Enhanced symbol matching with error handling
-      const matchedSymbol = findDividendSymbol(position.symbol, DIVIDEND_DATABASE);
-      const dividendInfo = matchedSymbol ? DIVIDEND_DATABASE[matchedSymbol] : null;
+      // Enhanced symbol matching with dynamic data
+      let matchedSymbol = findDividendSymbol(position.symbol, DIVIDEND_DATABASE);
+      let dividendInfo = matchedSymbol ? DIVIDEND_DATABASE[matchedSymbol] : null;
+      
+      // If not found, try to add it dynamically
+      if (!dividendInfo) {
+        const cleanSymbol = position.symbol.replace(/_US_EQ$|_EQ$|\.L$|\.TO$/, '').toUpperCase();
+        try {
+          dividendInfo = await addStockToDividendDatabase(cleanSymbol);
+          matchedSymbol = cleanSymbol;
+        } catch (error) {
+          console.error(`Failed to add ${cleanSymbol} to database:`, error);
+        }
+      }
       
       // Calculate portfolio value for all positions
       const positionValue = position.marketValue || (position.quantity * position.currentPrice);
@@ -62,9 +86,9 @@ export const calculateDividendIncome = (positions: Position[]): {
         }
         
         dividendPayingStocks.push({
-          symbol: matchedSymbol,
+          symbol: matchedSymbol || position.symbol,
           originalSymbol: position.symbol,
-          company: getCompanyName(matchedSymbol),
+          company: getCompanyName(matchedSymbol || position.symbol),
           shares: position.quantity,
           annualDividend: dividendInfo.annual,
           quarterlyDividend: dividendInfo.quarterly,
@@ -76,13 +100,9 @@ export const calculateDividendIncome = (positions: Position[]): {
           exDate: getNextExDate(),
           paymentDate: getNextPaymentDate(),
           currentValue: positionValue,
-          hasDiv: dividendInfo.annual > 0
+          hasDiv: dividendInfo.annual > 0,
+          isNewlyAdded: !findDividendSymbol(position.symbol, DIVIDEND_DATABASE) // Mark if this was dynamically added
         });
-      } else {
-        // Log symbols that couldn't be matched for debugging
-        if (!dividendInfo && symbolsProcessed <= 50) { // Limit logging to first 50 for performance
-          console.log(`No dividend data found for: ${position.symbol}`);
-        }
       }
     } catch (error) {
       console.error(`Error processing position ${position.symbol}:`, error);
@@ -92,13 +112,16 @@ export const calculateDividendIncome = (positions: Position[]): {
 
   const portfolioYield = totalPortfolioValue > 0 ? (totalAnnualIncome / totalPortfolioValue) * 100 : 0;
   const coveragePercentage = symbolsProcessed > 0 ? (symbolsMatched / symbolsProcessed) * 100 : 0;
+  const dbStats = getDatabaseStats();
 
   const stats = {
     totalPositions: symbolsProcessed,
     symbolsMatched: symbolsMatched,
     dividendPayingStocks: dividendPayingStocksCount,
-    databaseSize: Object.keys(DIVIDEND_DATABASE).length,
-    coveragePercentage: Math.round(coveragePercentage * 100) / 100
+    databaseSize: dbStats.totalStocks,
+    coveragePercentage: Math.round(coveragePercentage * 100) / 100,
+    newStocksAdded: holdingsProcessing.newStocksAdded,
+    processingErrors: holdingsProcessing.errors
   };
 
   console.log('Enhanced dividend calculation results:', {
