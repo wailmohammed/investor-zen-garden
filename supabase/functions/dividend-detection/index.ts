@@ -89,13 +89,60 @@ const detectDividendsForPortfolio = async (portfolioId: string, userId: string) 
   }
 };
 
+// Save dividend data directly
+const saveDividendData = async (userId: string, portfolioId: string, dividendData: any[]) => {
+  console.log(`Saving ${dividendData.length} dividend records for portfolio: ${portfolioId}`);
+  
+  try {
+    for (const dividend of dividendData) {
+      await supabase
+        .from('detected_dividends')
+        .upsert({
+          user_id: userId,
+          portfolio_id: portfolioId,
+          symbol: dividend.symbol,
+          company_name: dividend.company || dividend.symbol,
+          annual_dividend: dividend.annualDividend,
+          dividend_yield: dividend.yield,
+          frequency: dividend.frequency || 'quarterly',
+          ex_dividend_date: dividend.exDate || null,
+          payment_date: dividend.paymentDate || null,
+          shares_owned: dividend.shares || null,
+          estimated_annual_income: dividend.totalAnnualIncome,
+          detection_source: dividend.apiSource || 'manual',
+          detected_at: new Date().toISOString(),
+          is_active: true
+        }, {
+          onConflict: 'user_id,portfolio_id,symbol'
+        });
+    }
+
+    return {
+      success: true,
+      savedCount: dividendData.length
+    };
+  } catch (error) {
+    console.error('Error saving dividend data:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { portfolioId, userId, runAll } = await req.json();
+    const { portfolioId, userId, runAll, saveData, dividendData } = await req.json();
+
+    if (saveData && dividendData) {
+      // Save dividend data directly
+      const result = await saveDividendData(userId, portfolioId, dividendData);
+      
+      return new Response(JSON.stringify(result), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
 
     if (runAll) {
       // Run detection for all active users' portfolios
