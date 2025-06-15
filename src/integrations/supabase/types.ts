@@ -9,6 +9,87 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      api_sync_logs: {
+        Row: {
+          broker_type: string
+          created_at: string
+          error_message: string | null
+          id: string
+          portfolio_id: string
+          positions_added: number | null
+          positions_updated: number | null
+          status: string
+          sync_type: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          broker_type: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          portfolio_id: string
+          positions_added?: number | null
+          positions_updated?: number | null
+          status?: string
+          sync_type: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          broker_type?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          portfolio_id?: string
+          positions_added?: number | null
+          positions_updated?: number | null
+          status?: string
+          sync_type?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      auto_sync_schedule: {
+        Row: {
+          broker_type: string
+          created_at: string
+          id: string
+          is_enabled: boolean | null
+          last_auto_sync: string | null
+          portfolio_id: string
+          sync_count_today: number | null
+          sync_date: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          broker_type: string
+          created_at?: string
+          id?: string
+          is_enabled?: boolean | null
+          last_auto_sync?: string | null
+          portfolio_id: string
+          sync_count_today?: number | null
+          sync_date?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          broker_type?: string
+          created_at?: string
+          id?: string
+          is_enabled?: boolean | null
+          last_auto_sync?: string | null
+          portfolio_id?: string
+          sync_count_today?: number | null
+          sync_date?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       chat_history: {
         Row: {
           created_at: string
@@ -220,6 +301,105 @@ export type Database = {
           id?: string
           updated_at?: string | null
           updated_by?: string | null
+        }
+        Relationships: []
+      }
+      portfolio_metadata: {
+        Row: {
+          broker_type: string
+          cash_balance: number | null
+          created_at: string
+          holdings_count: number | null
+          id: string
+          last_sync_at: string
+          portfolio_id: string
+          today_change: number | null
+          today_change_percentage: number | null
+          total_return: number | null
+          total_return_percentage: number | null
+          total_value: number
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          broker_type: string
+          cash_balance?: number | null
+          created_at?: string
+          holdings_count?: number | null
+          id?: string
+          last_sync_at?: string
+          portfolio_id: string
+          today_change?: number | null
+          today_change_percentage?: number | null
+          total_return?: number | null
+          total_return_percentage?: number | null
+          total_value?: number
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          broker_type?: string
+          cash_balance?: number | null
+          created_at?: string
+          holdings_count?: number | null
+          id?: string
+          last_sync_at?: string
+          portfolio_id?: string
+          today_change?: number | null
+          today_change_percentage?: number | null
+          total_return?: number | null
+          total_return_percentage?: number | null
+          total_value?: number
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      portfolio_positions: {
+        Row: {
+          average_price: number
+          broker_type: string
+          created_at: string
+          current_price: number
+          id: string
+          last_updated: string
+          market_value: number
+          portfolio_id: string
+          quantity: number
+          symbol: string
+          unrealized_pnl: number | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          average_price?: number
+          broker_type: string
+          created_at?: string
+          current_price?: number
+          id?: string
+          last_updated?: string
+          market_value?: number
+          portfolio_id: string
+          quantity?: number
+          symbol: string
+          unrealized_pnl?: number | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          average_price?: number
+          broker_type?: string
+          created_at?: string
+          current_price?: number
+          id?: string
+          last_updated?: string
+          market_value?: number
+          portfolio_id?: string
+          quantity?: number
+          symbol?: string
+          unrealized_pnl?: number | null
+          updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }

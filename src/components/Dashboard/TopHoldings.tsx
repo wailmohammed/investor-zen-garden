@@ -9,6 +9,8 @@ const TopHoldings = () => {
   const { selectedPortfolio, portfolios } = usePortfolio();
   const [holdings, setHoldings] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [lastSync, setLastSync] = useState<string | null>(null);
+  const [dataSource, setDataSource] = useState<'live' | 'cached' | 'mock'>('mock');
 
   // Get current portfolio type
   const currentPortfolio = portfolios.find(p => p.id === selectedPortfolio);
@@ -25,35 +27,10 @@ const TopHoldings = () => {
       const binancePortfolioId = localStorage.getItem('binance_portfolio_id');
 
       if (selectedPortfolio === trading212PortfolioId) {
-        // Fetch real Trading212 holdings
+        // Fetch Trading212 holdings with database fallback
         try {
           setIsLoading(true);
           
-          // Check for cached data first
-          const cachedData = localStorage.getItem('trading212_data');
-          if (cachedData) {
-            try {
-              const realData = JSON.parse(cachedData);
-              if (realData.positions && realData.positions.length > 0) {
-                const formattedHoldings = realData.positions.slice(0, 10).map((position: any) => ({
-                  symbol: position.symbol,
-                  name: position.symbol,
-                  value: `$${position.marketValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                  allocation: `${((position.marketValue / realData.totalValue) * 100).toFixed(1)}%`,
-                  change: `${position.unrealizedPnL >= 0 ? '+' : ''}$${position.unrealizedPnL.toFixed(2)}`,
-                  quantity: position.quantity,
-                  avgPrice: position.averagePrice,
-                  currentPrice: position.currentPrice
-                }));
-                setHoldings(formattedHoldings);
-                return;
-              }
-            } catch (parseError) {
-              console.error('Error parsing cached Trading212 data:', parseError);
-            }
-          }
-
-          // Fetch fresh data if no cached data
           const { data, error } = await supabase.functions.invoke('trading212-sync', {
             body: { portfolioId: selectedPortfolio }
           });
@@ -71,10 +48,48 @@ const TopHoldings = () => {
               avgPrice: position.averagePrice,
               currentPrice: position.currentPrice
             }));
-            setHoldings(formattedHoldings);
             
-            // Cache the data
-            localStorage.setItem('trading212_data', JSON.stringify(data.data));
+            setHoldings(formattedHoldings);
+            setLastSync(data.data.lastSync || new Date().toISOString());
+            setDataSource(data.fromCache ? 'cached' : 'live');
+          } else {
+            // Fallback to database data
+            const { data: dbData, error: dbError } = await supabase
+              .from('portfolio_positions')
+              .select('*')
+              .eq('portfolio_id', selectedPortfolio)
+              .eq('broker_type', 'trading212')
+              .limit(10);
+
+            if (dbError) throw dbError;
+
+            if (dbData && dbData.length > 0) {
+              const { data: metadata } = await supabase
+                .from('portfolio_metadata')
+                .select('total_value, last_sync_at')
+                .eq('portfolio_id', selectedPortfolio)
+                .eq('broker_type', 'trading212')
+                .single();
+
+              const totalValue = metadata?.total_value || 1;
+              
+              const formattedHoldings = dbData.map((position: any) => ({
+                symbol: position.symbol,
+                name: position.symbol,
+                value: `$${position.market_value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                allocation: `${((position.market_value / totalValue) * 100).toFixed(1)}%`,
+                change: `${position.unrealized_pnl >= 0 ? '+' : ''}$${position.unrealized_pnl.toFixed(2)}`,
+                quantity: position.quantity,
+                avgPrice: position.average_price,
+                currentPrice: position.current_price
+              }));
+              
+              setHoldings(formattedHoldings);
+              setLastSync(metadata?.last_sync_at || null);
+              setDataSource('cached');
+            } else {
+              setHoldings([]);
+            }
           }
         } catch (error) {
           console.error('Error fetching Trading212 holdings:', error);
@@ -103,6 +118,7 @@ const TopHoldings = () => {
               price: `$${holding.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}`
             }));
             setHoldings(formattedHoldings);
+            setDataSource('live');
           }
         } catch (error) {
           console.error('Error fetching Binance holdings:', error);
@@ -131,6 +147,7 @@ const TopHoldings = () => {
               price: `$${holding.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
             }));
             setHoldings(formattedHoldings);
+            setDataSource('live');
           }
         } catch (error) {
           console.error('Error fetching crypto holdings:', error);
@@ -139,7 +156,7 @@ const TopHoldings = () => {
           setIsLoading(false);
         }
       } else {
-        // Stock portfolio holdings
+        // Stock portfolio holdings (mock data)
         setHoldings([
           { symbol: 'AAPL', name: 'Apple Inc.', value: '$45,231.00', allocation: '18%', change: '+1.2%' },
           { symbol: 'MSFT', name: 'Microsoft', value: '$38,950.00', allocation: '15%', change: '+0.8%' },
@@ -147,6 +164,7 @@ const TopHoldings = () => {
           { symbol: 'AMZN', name: 'Amazon', value: '$28,750.00', allocation: '11%', change: '-0.5%' },
           { symbol: 'TSLA', name: 'Tesla', value: '$25,900.00', allocation: '10%', change: '+3.4%' }
         ]);
+        setDataSource('mock');
       }
     };
 
@@ -171,10 +189,29 @@ const TopHoldings = () => {
   const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
   const isTrading212 = selectedPortfolio === trading212PortfolioId;
 
+  const getDataSourceBadge = () => {
+    switch (dataSource) {
+      case 'live':
+        return <Badge variant="default" className="bg-green-100 text-green-800">Live Data</Badge>;
+      case 'cached':
+        return <Badge variant="secondary" className="bg-blue-100 text-blue-800">Cached Data</Badge>;
+      default:
+        return <Badge variant="outline">Demo Data</Badge>;
+    }
+  };
+
   return (
     <Card className="w-full">
       <CardHeader className="pb-2">
-        <CardTitle>Top Holdings</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle>Top Holdings</CardTitle>
+          {getDataSourceBadge()}
+        </div>
+        {lastSync && (
+          <p className="text-xs text-muted-foreground">
+            Last updated: {new Date(lastSync).toLocaleString()}
+          </p>
+        )}
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -189,7 +226,7 @@ const TopHoldings = () => {
             {isTrading212 && (
               <Button asChild>
                 <a href="/broker-integration" className="inline-flex items-center gap-2">
-                  Refresh Trading212 Data
+                  Manage Data Sync
                   <ExternalLink className="h-4 w-4" />
                 </a>
               </Button>

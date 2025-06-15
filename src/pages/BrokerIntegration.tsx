@@ -20,6 +20,7 @@ import { PortfolioSelector } from "@/components/ui/portfolio-selector";
 import { toast } from "@/hooks/use-toast";
 import { PortfolioProvider, usePortfolio } from "@/contexts/PortfolioContext";
 import { useAuth } from "@/contexts/AuthContext";
+import SyncManager from "@/components/SyncManager";
 
 const BrokerIntegrationContent = () => {
   const [isTestingBinance, setIsTestingBinance] = useState(false);
@@ -242,8 +243,9 @@ const BrokerIntegrationContent = () => {
       )}
 
       <Tabs defaultValue="brokers" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-7">
+        <TabsList className="grid w-full grid-cols-8">
           <TabsTrigger value="brokers">🏢 Brokers</TabsTrigger>
+          <TabsTrigger value="sync" disabled={!hasPortfolios}>🔄 Sync</TabsTrigger>
           <TabsTrigger value="portfolios">📊 Portfolios</TabsTrigger>
           <TabsTrigger value="holdings" disabled={!hasPortfolios}>💼 Holdings</TabsTrigger>
           <TabsTrigger value="dividends" disabled={!hasPortfolios}>💰 Dividends</TabsTrigger>
@@ -251,6 +253,19 @@ const BrokerIntegrationContent = () => {
           <TabsTrigger value="api-config">🔑 API Keys</TabsTrigger>
           <TabsTrigger value="testing" disabled={!hasPortfolios}>🧪 Testing</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="sync" className="space-y-6">
+          {selectedApiPortfolio ? (
+            <SyncManager portfolioId={selectedApiPortfolio} />
+          ) : (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Please select a portfolio first to manage data synchronization.
+              </AlertDescription>
+            </Alert>
+          )}
+        </TabsContent>
 
         <TabsContent value="brokers" className="space-y-6">
           {/* Connection Status Overview */}
@@ -311,7 +326,7 @@ const BrokerIntegrationContent = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Select which portfolio you want to connect your API integrations to. This determines where your API data will be imported.
+                  Select which portfolio you want to connect your API integrations to. This determines where your API data will be imported and stored.
                 </p>
                 <PortfolioSelector
                   portfolios={portfolios}
@@ -320,6 +335,16 @@ const BrokerIntegrationContent = () => {
                   label="Portfolio for API Connections"
                   placeholder="Select a portfolio for API connections"
                 />
+                {selectedApiPortfolio && (
+                  <Alert>
+                    <CheckCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      Selected portfolio: <strong>{portfolios.find(p => p.id === selectedApiPortfolio)?.name}</strong>
+                      <br />
+                      All API data will be synced to this portfolio and stored in the database for offline access.
+                    </AlertDescription>
+                  </Alert>
+                )}
               </CardContent>
             </Card>
           )}
@@ -546,7 +571,7 @@ const BrokerIntegrationContent = () => {
                 <Alert>
                   <CheckCircle className="h-4 w-4" />
                   <AlertDescription>
-                    Trading212 connection is active and working properly. Portfolio data is being synced successfully.
+                    Trading212 connection is active and working properly. Portfolio data is being synced successfully with database storage.
                   </AlertDescription>
                 </Alert>
               </div>
@@ -575,6 +600,10 @@ const BrokerIntegrationContent = () => {
                   <div className="flex items-start gap-2">
                     <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
                     <p className="text-sm">Monitor your API usage regularly</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
+                    <p className="text-sm">Data is automatically stored in database for offline access</p>
                   </div>
                 </CardContent>
               </Card>
