@@ -32,20 +32,30 @@ const TopHoldings = () => {
         // Fetch Trading212 holdings with database fallback
         try {
           setIsLoading(true);
+          console.log('Fetching Trading212 holdings for portfolio:', selectedPortfolio);
           
           const { data, error } = await supabase.functions.invoke('trading212-sync', {
             body: { portfolioId: selectedPortfolio }
           });
 
-          if (error) throw error;
+          console.log('Trading212 sync response:', data, error);
 
-          if (data?.success && data.data?.positions) {
+          if (error) {
+            console.error('Trading212 sync error:', error);
+            throw error;
+          }
+
+          // Handle both success response and error response structures
+          if (data?.success && data.data?.positions && Array.isArray(data.data.positions)) {
+            console.log('Processing Trading212 positions:', data.data.positions.length);
+            
+            const totalValue = data.data.totalValue || 1;
             const formattedHoldings = data.data.positions.slice(0, 10).map((position: any) => ({
               symbol: position.symbol,
               name: position.symbol,
-              value: `$${position.marketValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-              allocation: `${((position.marketValue / data.data.totalValue) * 100).toFixed(1)}%`,
-              change: `${position.unrealizedPnL >= 0 ? '+' : ''}$${position.unrealizedPnL.toFixed(2)}`,
+              value: `$${(position.marketValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              allocation: `${(((position.marketValue || 0) / totalValue) * 100).toFixed(1)}%`,
+              change: `${(position.unrealizedPnL || 0) >= 0 ? '+' : ''}$${(position.unrealizedPnL || 0).toFixed(2)}`,
               quantity: position.quantity,
               avgPrice: position.averagePrice,
               currentPrice: position.currentPrice
@@ -54,48 +64,18 @@ const TopHoldings = () => {
             setHoldings(formattedHoldings);
             setLastSync(data.data.lastSync || new Date().toISOString());
             setDataSource(data.fromCache ? 'cached' : 'live');
+            console.log('Set holdings:', formattedHoldings.length, 'positions');
+          } else if (data?.error) {
+            console.log('Trading212 API error:', data.error, data.message);
+            // Try to fallback to database data
+            await fetchDatabaseFallback();
           } else {
-            // Fallback to database data
-            const { data: dbData, error: dbError } = await supabase
-              .from('portfolio_positions')
-              .select('*')
-              .eq('portfolio_id', selectedPortfolio)
-              .eq('broker_type', 'trading212')
-              .limit(10);
-
-            if (dbError) throw dbError;
-
-            if (dbData && dbData.length > 0) {
-              const { data: metadata } = await supabase
-                .from('portfolio_metadata')
-                .select('total_value, last_sync_at')
-                .eq('portfolio_id', selectedPortfolio)
-                .eq('broker_type', 'trading212')
-                .single();
-
-              const totalValue = metadata?.total_value || 1;
-              
-              const formattedHoldings = dbData.map((position: any) => ({
-                symbol: position.symbol,
-                name: position.symbol,
-                value: `$${position.market_value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                allocation: `${((position.market_value / totalValue) * 100).toFixed(1)}%`,
-                change: `${position.unrealized_pnl >= 0 ? '+' : ''}$${position.unrealized_pnl.toFixed(2)}`,
-                quantity: position.quantity,
-                avgPrice: position.average_price,
-                currentPrice: position.current_price
-              }));
-              
-              setHoldings(formattedHoldings);
-              setLastSync(metadata?.last_sync_at || null);
-              setDataSource('cached');
-            } else {
-              setHoldings([]);
-            }
+            console.log('Unexpected response structure, trying database fallback');
+            await fetchDatabaseFallback();
           }
         } catch (error) {
           console.error('Error fetching Trading212 holdings:', error);
-          setHoldings([]);
+          await fetchDatabaseFallback();
         } finally {
           setIsLoading(false);
         }
@@ -167,6 +147,56 @@ const TopHoldings = () => {
           { symbol: 'TSLA', name: 'Tesla', value: '$25,900.00', allocation: '10%', change: '+3.4%' }
         ]);
         setDataSource('mock');
+      }
+    };
+
+    const fetchDatabaseFallback = async () => {
+      try {
+        console.log('Attempting database fallback for Trading212 data');
+        
+        const { data: dbData, error: dbError } = await supabase
+          .from('portfolio_positions')
+          .select('*')
+          .eq('portfolio_id', selectedPortfolio)
+          .eq('broker_type', 'trading212')
+          .limit(10);
+
+        if (dbError) throw dbError;
+
+        if (dbData && dbData.length > 0) {
+          console.log('Found database positions:', dbData.length);
+          
+          const { data: metadata } = await supabase
+            .from('portfolio_metadata')
+            .select('total_value, last_sync_at')
+            .eq('portfolio_id', selectedPortfolio)
+            .eq('broker_type', 'trading212')
+            .single();
+
+          const totalValue = metadata?.total_value || 1;
+          
+          const formattedHoldings = dbData.map((position: any) => ({
+            symbol: position.symbol,
+            name: position.symbol,
+            value: `$${(position.market_value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            allocation: `${(((position.market_value || 0) / totalValue) * 100).toFixed(1)}%`,
+            change: `${(position.unrealized_pnl || 0) >= 0 ? '+' : ''}$${(position.unrealized_pnl || 0).toFixed(2)}`,
+            quantity: position.quantity,
+            avgPrice: position.average_price,
+            currentPrice: position.current_price
+          }));
+          
+          setHoldings(formattedHoldings);
+          setLastSync(metadata?.last_sync_at || null);
+          setDataSource('cached');
+          console.log('Set database fallback holdings:', formattedHoldings.length);
+        } else {
+          console.log('No database positions found');
+          setHoldings([]);
+        }
+      } catch (error) {
+        console.error('Error fetching database fallback:', error);
+        setHoldings([]);
       }
     };
 
