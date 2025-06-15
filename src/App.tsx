@@ -1,11 +1,11 @@
 
 import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { ThemeProvider } from "@/components/theme-provider"
+import { ThemeProvider } from "@/contexts/ThemeContext"
 import Dashboard from './pages/Dashboard';
 import Portfolio from './pages/Portfolio';
 import Settings from './pages/Settings';
-import { QueryClient } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from "@/components/ui/toaster"
 import { AuthProvider } from './contexts/AuthContext';
 import Dividends from './pages/Dividends';
@@ -13,11 +13,14 @@ import { PortfolioProvider } from './contexts/PortfolioContext';
 import { DividendDataProvider } from "@/contexts/DividendDataContext";
 import DividendStats from './pages/DividendStats';
 
+// Create QueryClient instance
+const queryClient = new QueryClient();
+
 function App() {
   return (
     <BrowserRouter>
       <ThemeProvider>
-        <QueryClient>
+        <QueryClientProvider client={queryClient}>
           <Toaster />
           <AuthProvider>
             <PortfolioProvider>
@@ -33,7 +36,7 @@ function App() {
               </DividendDataProvider>
             </PortfolioProvider>
           </AuthProvider>
-        </QueryClient>
+        </QueryClientProvider>
       </ThemeProvider>
     </BrowserRouter>
   );
