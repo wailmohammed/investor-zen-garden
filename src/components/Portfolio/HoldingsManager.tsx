@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { PortfolioSelector } from '@/components/ui/portfolio-selector';
 import {
   Dialog,
   DialogContent,
@@ -45,12 +46,13 @@ interface Holding {
 
 const HoldingsManager = () => {
   const { user } = useAuth();
-  const { selectedPortfolio } = usePortfolio();
+  const { selectedPortfolio, portfolios } = usePortfolio();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingHolding, setEditingHolding] = useState<string | null>(null);
+  const [selectedPortfolioForAdd, setSelectedPortfolioForAdd] = useState<string>('');
   const [newHolding, setNewHolding] = useState({
     symbol: '',
     company_name: '',
@@ -65,6 +67,13 @@ const HoldingsManager = () => {
     average_cost: 0,
     current_price: 0,
   });
+
+  // Set default portfolio when dialog opens
+  React.useEffect(() => {
+    if (isAddDialogOpen && selectedPortfolio && !selectedPortfolioForAdd) {
+      setSelectedPortfolioForAdd(selectedPortfolio);
+    }
+  }, [isAddDialogOpen, selectedPortfolio, selectedPortfolioForAdd]);
 
   // Fetch holdings for selected portfolio
   const { data: holdings = [], isLoading, refetch } = useQuery({
@@ -100,15 +109,15 @@ const HoldingsManager = () => {
 
   // Add holding mutation
   const addHoldingMutation = useMutation({
-    mutationFn: async (holding: typeof newHolding) => {
-      if (!selectedPortfolio || !user?.id) {
-        throw new Error('No portfolio selected or user not authenticated');
+    mutationFn: async (holding: typeof newHolding & { portfolio_id: string }) => {
+      if (!user?.id) {
+        throw new Error('User not authenticated');
       }
 
       const { data, error } = await supabase
         .from('holdings')
         .insert([{
-          portfolio_id: selectedPortfolio,
+          portfolio_id: holding.portfolio_id,
           user_id: user.id,
           symbol: holding.symbol.toUpperCase(),
           company_name: holding.company_name || null,
@@ -126,6 +135,7 @@ const HoldingsManager = () => {
       queryClient.invalidateQueries({ queryKey: ['holdings'] });
       refetch();
       setNewHolding({ symbol: '', company_name: '', shares: 0, average_cost: 0, current_price: 0 });
+      setSelectedPortfolioForAdd('');
       setIsAddDialogOpen(false);
       toast({
         title: 'Holding added',
@@ -207,6 +217,15 @@ const HoldingsManager = () => {
   });
 
   const handleAddHolding = () => {
+    if (!selectedPortfolioForAdd) {
+      toast({
+        title: 'Portfolio required',
+        description: 'Please select a portfolio to add the holding to.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
     if (!newHolding.symbol || newHolding.shares <= 0 || newHolding.average_cost <= 0) {
       toast({
         title: 'Invalid input',
@@ -215,17 +234,10 @@ const HoldingsManager = () => {
       });
       return;
     }
-    addHoldingMutation.mutate(newHolding);
-  };
-
-  const startEditing = (holding: Holding) => {
-    setEditingHolding(holding.id);
-    setEditValues({
-      symbol: holding.symbol,
-      company_name: holding.company_name || '',
-      shares: holding.shares,
-      average_cost: holding.average_cost,
-      current_price: holding.current_price || holding.average_cost,
+    
+    addHoldingMutation.mutate({
+      ...newHolding,
+      portfolio_id: selectedPortfolioForAdd,
     });
   };
 
@@ -290,6 +302,13 @@ const HoldingsManager = () => {
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
+                <PortfolioSelector
+                  portfolios={portfolios}
+                  value={selectedPortfolioForAdd}
+                  onValueChange={setSelectedPortfolioForAdd}
+                  label="Portfolio *"
+                  placeholder="Select portfolio to add holding to"
+                />
                 <div>
                   <Label htmlFor="symbol">Symbol *</Label>
                   <Input
