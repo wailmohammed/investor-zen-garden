@@ -76,9 +76,11 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Fetch dividend data for positions and calculate dividend income
+      console.log(`Processing ${positions.length} positions for dividend analysis`);
+
+      // Fetch dividend data for ALL positions and calculate dividend income
       const positionsWithDividends = await Promise.all(
-        positions.slice(0, 50).map(async (position) => {
+        positions.map(async (position) => {
           const dividendData = await fetchDividendData(position.ticker);
           const dividendInfo = calculateDividendIncome(position, dividendData);
           
@@ -101,10 +103,11 @@ Deno.serve(async (req) => {
       const portfolioData = {
         ...portfolioMetrics,
         positions: positionsWithDividends,
-        dividendMetrics
+        dividendMetrics,
+        totalPositionsProcessed: positions.length
       };
 
-      console.log('Trading212 portfolio data with dividends processed:', portfolioData);
+      console.log(`Trading212 portfolio data with dividends processed: ${positions.length} positions analyzed`);
 
       return new Response(
         JSON.stringify({ success: true, data: portfolioData }),
