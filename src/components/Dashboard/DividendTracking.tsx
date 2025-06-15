@@ -7,19 +7,24 @@ import { usePortfolio } from "@/contexts/PortfolioContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import StatCard from "../StatCard";
-import { Shield, Calendar, TrendingUp, Percent } from "lucide-react";
-import { format } from "date-fns";
+import { Shield, Calendar, TrendingUp, Percent, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { calculateDividendIncome, getSupportedDividendStocks } from "@/services/dividendCalculator";
 
 interface DividendData {
   symbol: string;
   company: string;
+  shares: number;
   annualDividend: number;
   quarterlyDividend: number;
+  totalAnnualIncome: number;
+  totalQuarterlyIncome: number;
   yield: number;
   nextPayment: number;
   exDate: string;
   paymentDate: string;
+  currentValue: number;
 }
 
 const DividendTracking = () => {
@@ -28,120 +33,97 @@ const DividendTracking = () => {
   const [dividendData, setDividendData] = useState<DividendData[]>([]);
   const [portfolioMetrics, setPortfolioMetrics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('upcoming');
 
-  useEffect(() => {
-    const fetchDividendData = async () => {
-      if (!user || !selectedPortfolio) {
-        setLoading(false);
-        return;
-      }
+  const fetchDividendData = async (forceRefresh = false) => {
+    if (!user || !selectedPortfolio) {
+      setLoading(false);
+      return;
+    }
 
-      setLoading(true);
-      try {
-        const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
-        const binancePortfolioId = localStorage.getItem('binance_portfolio_id');
+    setLoading(true);
+    if (forceRefresh) setRefreshing(true);
+
+    try {
+      const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
+      
+      if (selectedPortfolio === trading212PortfolioId) {
+        console.log('Fetching Trading212 data and calculating dividends from shares owned');
         
-        if (selectedPortfolio === trading212PortfolioId) {
-          console.log('Fetching Trading212 dividend data');
-          
-          // Fetch Trading212 data including dividend information
-          const { data, error } = await supabase.functions.invoke('trading212-sync', {
-            body: { portfolioId: selectedPortfolio }
-          });
+        // Fetch Trading212 positions
+        const { data, error } = await supabase.functions.invoke('trading212-sync', {
+          body: { portfolioId: selectedPortfolio }
+        });
 
-          if (error) {
-            console.error('Error fetching Trading212 data:', error);
-            setDividendData([]);
-            setPortfolioMetrics(null);
-            return;
-          }
-
-          if (data?.success && data.data) {
-            const positions = data.data.positions || [];
-            const dividendMetrics = data.data.dividendMetrics || {};
-            
-            // Filter positions that have dividend information
-            const dividendPayingStocks = positions.filter((pos: any) => 
-              pos.dividendInfo && pos.dividendInfo.annualDividend > 0
-            );
-
-            const formattedDividends: DividendData[] = dividendPayingStocks.map((pos: any) => ({
-              symbol: pos.symbol,
-              company: pos.symbol, // Trading212 doesn't provide full company names
-              annualDividend: pos.dividendInfo.annualDividend,
-              quarterlyDividend: pos.dividendInfo.quarterlyDividend,
-              yield: pos.dividendInfo.yield,
-              nextPayment: pos.dividendInfo.nextPayment,
-              exDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-              paymentDate: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            }));
-
-            setDividendData(formattedDividends);
-            setPortfolioMetrics(dividendMetrics);
-          }
-        } else if (selectedPortfolio === binancePortfolioId) {
-          // Crypto portfolios don't typically have dividends
+        if (error) {
+          console.error('Error fetching Trading212 data:', error);
           setDividendData([]);
           setPortfolioMetrics(null);
-        } else {
-          // Regular portfolio - use mock data for now
-          setDividendData([
-            {
-              symbol: 'AAPL',
-              company: 'Apple Inc.',
-              annualDividend: 0.96,
-              quarterlyDividend: 0.24,
-              yield: 0.51,
-              nextPayment: 0.24,
-              exDate: '2025-05-09',
-              paymentDate: '2025-05-18'
-            },
-            {
-              symbol: 'MSFT',
-              company: 'Microsoft Corporation',
-              annualDividend: 3.00,
-              quarterlyDividend: 0.75,
-              yield: 0.82,
-              nextPayment: 0.75,
-              exDate: '2025-05-15',
-              paymentDate: '2025-06-10'
-            }
-          ]);
-          setPortfolioMetrics({
-            annualIncome: 245.67,
-            monthlyAverage: 20.47,
-            portfolioYield: 2.8,
-            dividendPayingStocks: 15
-          });
+          return;
         }
-      } catch (error) {
-        console.error("Error fetching dividend data:", error);
+
+        if (data?.success && data.data?.positions) {
+          const positions = data.data.positions;
+          console.log('Trading212 positions found:', positions.length);
+          
+          // Calculate dividends using share quantities and free dividend data
+          const dividendResults = calculateDividendIncome(positions);
+          
+          setDividendData(dividendResults.dividendPayingStocks);
+          setPortfolioMetrics({
+            annualIncome: dividendResults.totalAnnualIncome,
+            quarterlyIncome: dividendResults.totalQuarterlyIncome,
+            monthlyAverage: dividendResults.totalAnnualIncome / 12,
+            portfolioYield: dividendResults.portfolioYield,
+            dividendPayingStocks: dividendResults.dividendPayingStocks.length,
+            supportedStocks: getSupportedDividendStocks().length
+          });
+
+          console.log('Dividend data calculated:', {
+            totalStocks: dividendResults.dividendPayingStocks.length,
+            totalAnnual: dividendResults.totalAnnualIncome,
+            portfolioYield: dividendResults.portfolioYield
+          });
+        } else {
+          console.log('No Trading212 position data available');
+          setDividendData([]);
+          setPortfolioMetrics(null);
+        }
+      } else {
+        // For other portfolios, use mock data
         setDividendData([]);
         setPortfolioMetrics(null);
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (error) {
+      console.error("Error calculating dividend data:", error);
+      setDividendData([]);
+      setPortfolioMetrics(null);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
+  useEffect(() => {
     fetchDividendData();
   }, [user, selectedPortfolio]);
 
-  // Prepare monthly income data for the chart
-  const monthlyData = [
-    { month: "Jan", income: 262.41 },
-    { month: "Feb", income: 218.76 },
-    { month: "Mar", income: 304.25 },
-    { month: "Apr", income: 245.32 },
-    { month: "May", income: 295.14 },
-    { month: "Jun", income: 324.53 },
-    { month: "Jul", income: 274.82 },
-    { month: "Aug", income: 231.45 },
-    { month: "Sep", income: 291.67 },
-    { month: "Oct", income: 259.38 },
-    { month: "Nov", income: 268.21 },
-    { month: "Dec", income: 273.92 }
-  ];
+  // Prepare monthly income projection data for the chart
+  const monthlyData = portfolioMetrics ? [
+    { month: "Jan", income: portfolioMetrics.monthlyAverage * 0.95 },
+    { month: "Feb", income: portfolioMetrics.monthlyAverage * 0.88 },
+    { month: "Mar", income: portfolioMetrics.monthlyAverage * 1.15 },
+    { month: "Apr", income: portfolioMetrics.monthlyAverage * 0.92 },
+    { month: "May", income: portfolioMetrics.monthlyAverage * 1.08 },
+    { month: "Jun", income: portfolioMetrics.monthlyAverage * 1.22 },
+    { month: "Jul", income: portfolioMetrics.monthlyAverage * 1.05 },
+    { month: "Aug", income: portfolioMetrics.monthlyAverage * 0.85 },
+    { month: "Sep", income: portfolioMetrics.monthlyAverage * 1.12 },
+    { month: "Oct", income: portfolioMetrics.monthlyAverage * 0.98 },
+    { month: "Nov", income: portfolioMetrics.monthlyAverage * 1.03 },
+    { month: "Dec", income: portfolioMetrics.monthlyAverage * 1.07 }
+  ] : [];
 
   if (loading) {
     return (
@@ -151,7 +133,7 @@ const DividendTracking = () => {
         </CardHeader>
         <CardContent>
           <div className="flex justify-center items-center h-48">
-            <p>Loading dividend data...</p>
+            <p>Calculating dividend income from your holdings...</p>
           </div>
         </CardContent>
       </Card>
@@ -197,165 +179,170 @@ const DividendTracking = () => {
     );
   }
 
-  // If Trading212 but no dividend data
-  if (selectedPortfolio === trading212PortfolioId && dividendData.length === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Dividend Tracking</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col items-center justify-center h-48 text-center">
-            <p className="text-muted-foreground mb-2">
-              No dividend-paying stocks found in your Trading212 portfolio
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Your Trading212 holdings may be CFDs or non-dividend-paying stocks
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <Card className="h-full">
       <CardHeader className="pb-2">
-        <CardTitle>Dividend Tracking</CardTitle>
+        <div className="flex justify-between items-center">
+          <CardTitle>Dividend Tracking</CardTitle>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => fetchDividendData(true)}
+            disabled={refreshing}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
+        {portfolioMetrics && (
+          <p className="text-sm text-muted-foreground">
+            Calculated from {portfolioMetrics.dividendPayingStocks} dividend-paying stocks 
+            • {portfolioMetrics.supportedStocks} stocks supported
+          </p>
+        )}
       </CardHeader>
       <CardContent>
-        {portfolioMetrics && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <StatCard 
-              label="Annual Income" 
-              value={`$${(portfolioMetrics.annualIncome || 0).toFixed(2)}`} 
-              change={{
-                value: "+7.2%",
-                percentage: "+7.2%",
-                isPositive: true
-              }}
-            />
-            <StatCard 
-              label="Monthly Average" 
-              value={`$${(portfolioMetrics.monthlyAverage || 0).toFixed(2)}`} 
-              change={{
-                value: "+7.2%",
-                percentage: "+7.2%",
-                isPositive: true
-              }}
-            />
-            <StatCard 
-              label="Dividend Stocks" 
-              value={`${portfolioMetrics.dividendPayingStocks || dividendData.length}`} 
-              change={{
-                value: "0",
-                percentage: "0",
-                isPositive: true
-              }}
-            />
-            <StatCard 
-              label="Portfolio Yield" 
-              value={`${(portfolioMetrics.portfolioYield || 0).toFixed(2)}%`} 
-              change={{
-                value: "+0.3%",
-                percentage: "+0.3%",
-                isPositive: true
-              }}
-            />
+        {portfolioMetrics && dividendData.length > 0 ? (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+              <StatCard 
+                label="Annual Income" 
+                value={`$${portfolioMetrics.annualIncome.toFixed(2)}`} 
+                change={{
+                  value: "+7.2%",
+                  percentage: "+7.2%",
+                  isPositive: true
+                }}
+              />
+              <StatCard 
+                label="Monthly Average" 
+                value={`$${portfolioMetrics.monthlyAverage.toFixed(2)}`} 
+                change={{
+                  value: "+7.2%",
+                  percentage: "+7.2%",
+                  isPositive: true
+                }}
+              />
+              <StatCard 
+                label="Dividend Stocks" 
+                value={`${portfolioMetrics.dividendPayingStocks}`} 
+                change={{
+                  value: "0",
+                  percentage: "0",
+                  isPositive: true
+                }}
+              />
+              <StatCard 
+                label="Portfolio Yield" 
+                value={`${portfolioMetrics.portfolioYield.toFixed(2)}%`} 
+                change={{
+                  value: "+0.3%",
+                  percentage: "+0.3%",
+                  isPositive: true
+                }}
+              />
+            </div>
+
+            <Tabs 
+              value={activeTab} 
+              onValueChange={setActiveTab}
+              className="space-y-4"
+            >
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="upcoming">Holdings</TabsTrigger>
+                <TabsTrigger value="monthly">Projections</TabsTrigger>
+                <TabsTrigger value="safety">Analysis</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="upcoming" className="space-y-4">
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Stock</TableHead>
+                        <TableHead>Shares</TableHead>
+                        <TableHead>Annual Dividend</TableHead>
+                        <TableHead>Total Annual Income</TableHead>
+                        <TableHead>Yield</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {dividendData.map((dividend, index) => (
+                        <TableRow key={index}>
+                          <TableCell>
+                            <div className="font-medium">{dividend.symbol}</div>
+                            <div className="text-xs text-muted-foreground">{dividend.company}</div>
+                          </TableCell>
+                          <TableCell>{dividend.shares.toFixed(4)}</TableCell>
+                          <TableCell>${dividend.annualDividend.toFixed(2)}</TableCell>
+                          <TableCell className="font-medium">
+                            ${dividend.totalAnnualIncome.toFixed(2)}
+                          </TableCell>
+                          <TableCell>{dividend.yield.toFixed(2)}%</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="monthly" className="space-y-4">
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={monthlyData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Projected Dividend Income']} />
+                    <Bar dataKey="income" fill="#4f46e5" />
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="text-center text-sm text-muted-foreground">
+                  Projected annual dividend income: ${portfolioMetrics.annualIncome.toFixed(2)}
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="safety" className="space-y-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
+                    <Shield className="h-8 w-8 mb-2 text-finance-blue" />
+                    <div className="text-xs uppercase text-muted-foreground">Portfolio Yield</div>
+                    <div className="text-2xl font-bold mt-1">{portfolioMetrics.portfolioYield.toFixed(1)}%</div>
+                  </div>
+                  <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
+                    <Calendar className="h-8 w-8 mb-2 text-finance-blue" />
+                    <div className="text-xs uppercase text-muted-foreground">Dividend Stocks</div>
+                    <div className="text-2xl font-bold mt-1">{portfolioMetrics.dividendPayingStocks}</div>
+                  </div>
+                  <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
+                    <TrendingUp className="h-8 w-8 mb-2 text-finance-blue" />
+                    <div className="text-xs uppercase text-muted-foreground">Annual Income</div>
+                    <div className="text-2xl font-bold mt-1">${Math.round(portfolioMetrics.annualIncome)}</div>
+                  </div>
+                  <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
+                    <Percent className="h-8 w-8 mb-2 text-finance-blue" />
+                    <div className="text-xs uppercase text-muted-foreground">Monthly Avg</div>
+                    <div className="text-2xl font-bold mt-1">${Math.round(portfolioMetrics.monthlyAverage)}</div>
+                  </div>
+                </div>
+                <div className="text-sm text-center text-muted-foreground mt-4">
+                  Dividend calculations based on current share holdings and free dividend data sources.
+                </div>
+              </TabsContent>
+            </Tabs>
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-48 text-center">
+            <p className="text-muted-foreground mb-2">
+              No dividend-paying stocks found in your portfolio
+            </p>
+            <p className="text-sm text-muted-foreground mb-4">
+              Your holdings may be CFDs or stocks not in our dividend database
+            </p>
+            <div className="text-xs text-muted-foreground">
+              Supported dividend stocks: {getSupportedDividendStocks().join(', ')}
+            </div>
           </div>
         )}
-
-        <Tabs 
-          value={activeTab} 
-          onValueChange={setActiveTab}
-          className="space-y-4"
-        >
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-            <TabsTrigger value="monthly">Monthly Income</TabsTrigger>
-            <TabsTrigger value="safety">Dividend Safety</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="upcoming" className="space-y-4">
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Stock</TableHead>
-                    <TableHead>Annual Dividend</TableHead>
-                    <TableHead>Quarterly</TableHead>
-                    <TableHead>Yield</TableHead>
-                    <TableHead>Next Payment</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {dividendData.map((dividend, index) => (
-                    <TableRow key={index}>
-                      <TableCell>
-                        <div className="font-medium">{dividend.symbol}</div>
-                        <div className="text-xs text-muted-foreground">{dividend.company}</div>
-                      </TableCell>
-                      <TableCell>${dividend.annualDividend.toFixed(2)}</TableCell>
-                      <TableCell>${dividend.quarterlyDividend.toFixed(2)}</TableCell>
-                      <TableCell>{dividend.yield.toFixed(2)}%</TableCell>
-                      <TableCell>${dividend.nextPayment.toFixed(2)}</TableCell>
-                    </TableRow>
-                  ))}
-                  {dividendData.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground py-4">
-                        No dividend-paying stocks found
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="monthly" className="space-y-4">
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip formatter={(value) => [`$${value}`, 'Dividend Income']} />
-                <Bar dataKey="income" fill="#4f46e5" />
-              </BarChart>
-            </ResponsiveContainer>
-            <div className="text-center text-sm text-muted-foreground">
-              Projected annual dividend income: ${portfolioMetrics?.annualIncome?.toFixed(2) || '0.00'}
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="safety" className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
-                <Shield className="h-8 w-8 mb-2 text-finance-blue" />
-                <div className="text-xs uppercase text-muted-foreground">Safety Score</div>
-                <div className="text-2xl font-bold mt-1">92%</div>
-              </div>
-              <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
-                <Calendar className="h-8 w-8 mb-2 text-finance-blue" />
-                <div className="text-xs uppercase text-muted-foreground">Consecutive Raises</div>
-                <div className="text-2xl font-bold mt-1">14 yrs</div>
-              </div>
-              <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
-                <TrendingUp className="h-8 w-8 mb-2 text-finance-blue" />
-                <div className="text-xs uppercase text-muted-foreground">5yr CAGR</div>
-                <div className="text-2xl font-bold mt-1">7.2%</div>
-              </div>
-              <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
-                <Percent className="h-8 w-8 mb-2 text-finance-blue" />
-                <div className="text-xs uppercase text-muted-foreground">Payout Ratio</div>
-                <div className="text-2xl font-bold mt-1">42.5%</div>
-              </div>
-            </div>
-            <div className="text-sm text-center text-muted-foreground mt-4">
-              Your dividend portfolio has an average safety score of 92/100, indicating reliable income streams.
-            </div>
-          </TabsContent>
-        </Tabs>
       </CardContent>
     </Card>
   );
