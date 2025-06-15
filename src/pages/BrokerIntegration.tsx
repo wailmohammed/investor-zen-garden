@@ -26,30 +26,11 @@ const BrokerIntegrationContent = () => {
   const [isTestingBinance, setIsTestingBinance] = useState(false);
   const [binanceTestResult, setBinanceTestResult] = useState<'success' | 'error' | null>(null);
   const [csvData, setCsvData] = useState<any[]>([]);
-  const [selectedApiPortfolio, setSelectedApiPortfolio] = useState<string>('');
   const [connectionLoading, setConnectionLoading] = useState<{ [key: string]: boolean }>({});
   const { user } = useAuth();
-  const { portfolios } = usePortfolio();
+  const { portfolios, selectedPortfolio, setSelectedPortfolio } = usePortfolio();
 
   console.log("Data Integration page - User:", user?.email);
-
-  // Load selected API portfolio from localStorage on component mount
-  useEffect(() => {
-    const savedApiPortfolio = localStorage.getItem('selected_api_portfolio');
-    if (savedApiPortfolio && portfolios.some(p => p.id === savedApiPortfolio)) {
-      setSelectedApiPortfolio(savedApiPortfolio);
-    }
-  }, [portfolios]);
-
-  // Save selected API portfolio to localStorage whenever it changes
-  const handleApiPortfolioChange = (portfolioId: string) => {
-    setSelectedApiPortfolio(portfolioId);
-    if (portfolioId) {
-      localStorage.setItem('selected_api_portfolio', portfolioId);
-    } else {
-      localStorage.removeItem('selected_api_portfolio');
-    }
-  };
 
   const handleCSVUpload = (data: any[]) => {
     setCsvData(data);
@@ -61,7 +42,7 @@ const BrokerIntegrationContent = () => {
 
   // Trading212 connection handlers
   const handleTrading212Connect = () => {
-    if (!selectedApiPortfolio) {
+    if (!selectedPortfolio) {
       toast({
         title: "Portfolio Required",
         description: "Please select a portfolio to connect Trading212 to",
@@ -73,13 +54,13 @@ const BrokerIntegrationContent = () => {
     setConnectionLoading(prev => ({ ...prev, trading212: true }));
     
     // Store the portfolio connection
-    localStorage.setItem('trading212_portfolio_id', selectedApiPortfolio);
+    localStorage.setItem('trading212_portfolio_id', selectedPortfolio);
     
     setTimeout(() => {
       setConnectionLoading(prev => ({ ...prev, trading212: false }));
       toast({
         title: "Trading212 Connected",
-        description: `Trading212 has been connected to your portfolio: ${portfolios.find(p => p.id === selectedApiPortfolio)?.name}`,
+        description: `Trading212 has been connected to your portfolio: ${portfolios.find(p => p.id === selectedPortfolio)?.name}`,
       });
     }, 2000);
   };
@@ -113,7 +94,7 @@ const BrokerIntegrationContent = () => {
       return;
     }
 
-    if (!selectedApiPortfolio) {
+    if (!selectedPortfolio) {
       toast({
         title: "Portfolio Required",
         description: "Please select a portfolio to connect Binance to",
@@ -125,13 +106,13 @@ const BrokerIntegrationContent = () => {
     setConnectionLoading(prev => ({ ...prev, binance: true }));
     
     // Store the portfolio connection
-    localStorage.setItem('binance_portfolio_id', selectedApiPortfolio);
+    localStorage.setItem('binance_portfolio_id', selectedPortfolio);
     
     setTimeout(() => {
       setConnectionLoading(prev => ({ ...prev, binance: false }));
       toast({
         title: "Binance Connected",
-        description: `Binance has been connected to your portfolio: ${portfolios.find(p => p.id === selectedApiPortfolio)?.name}`,
+        description: `Binance has been connected to your portfolio: ${portfolios.find(p => p.id === selectedPortfolio)?.name}`,
       });
     }, 2000);
   };
@@ -170,7 +151,7 @@ const BrokerIntegrationContent = () => {
         return;
       }
 
-      if (!selectedApiPortfolio) {
+      if (!selectedPortfolio) {
         toast({
           title: "Portfolio Required",
           description: "Please select a portfolio to connect your API to",
@@ -183,12 +164,12 @@ const BrokerIntegrationContent = () => {
       console.log('Testing Binance connection...');
       console.log('API Key configured:', !!apiKey);
       console.log('Secret Key configured:', !!secretKey);
-      console.log('Selected portfolio:', selectedApiPortfolio);
+      console.log('Selected portfolio:', selectedPortfolio);
       
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Store the portfolio connection
-      localStorage.setItem('binance_portfolio_id', selectedApiPortfolio);
+      localStorage.setItem('binance_portfolio_id', selectedPortfolio);
       
       setBinanceTestResult('success');
       toast({
@@ -255,8 +236,8 @@ const BrokerIntegrationContent = () => {
         </TabsList>
 
         <TabsContent value="sync" className="space-y-6">
-          {selectedApiPortfolio ? (
-            <SyncManager portfolioId={selectedApiPortfolio} />
+          {selectedPortfolio ? (
+            <SyncManager portfolioId={selectedPortfolio} />
           ) : (
             <Alert>
               <AlertCircle className="h-4 w-4" />
@@ -330,16 +311,16 @@ const BrokerIntegrationContent = () => {
                 </p>
                 <PortfolioSelector
                   portfolios={portfolios}
-                  value={selectedApiPortfolio}
-                  onValueChange={handleApiPortfolioChange}
+                  value={selectedPortfolio}
+                  onValueChange={setSelectedPortfolio}
                   label="Portfolio for API Connections"
                   placeholder="Select a portfolio for API connections"
                 />
-                {selectedApiPortfolio && (
+                {selectedPortfolio && (
                   <Alert>
                     <CheckCircle className="h-4 w-4" />
                     <AlertDescription>
-                      Selected portfolio: <strong>{portfolios.find(p => p.id === selectedApiPortfolio)?.name}</strong>
+                      Selected portfolio: <strong>{portfolios.find(p => p.id === selectedPortfolio)?.name}</strong>
                       <br />
                       All API data will be synced to this portfolio and stored in the database for offline access.
                     </AlertDescription>
@@ -497,8 +478,8 @@ const BrokerIntegrationContent = () => {
                     <CardContent>
                       <PortfolioSelector
                         portfolios={portfolios}
-                        value={selectedApiPortfolio}
-                        onValueChange={handleApiPortfolioChange}
+                        value={selectedPortfolio}
+                        onValueChange={setSelectedPortfolio}
                         label="Test Portfolio"
                         placeholder="Select a portfolio to test API connection"
                       />
@@ -517,7 +498,7 @@ const BrokerIntegrationContent = () => {
                       </div>
                       <Button 
                         onClick={testBinanceConnection}
-                        disabled={isTestingBinance || !selectedApiPortfolio}
+                        disabled={isTestingBinance || !selectedPortfolio}
                         variant="outline"
                       >
                         {isTestingBinance ? (
