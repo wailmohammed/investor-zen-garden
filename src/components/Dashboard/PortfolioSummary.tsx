@@ -92,26 +92,33 @@ const PortfolioSummary = () => {
               const realData = data.data;
               console.log('Real Trading212 data received:', realData);
               
-              // Extract and validate the data - DON'T default to zero for valid API responses
-              const totalValue = realData.totalValue || 0;
-              const todayChange = realData.todayChange || 0;
-              const todayPercentage = realData.todayPercentage || 0;
-              const totalReturn = realData.totalReturn || 0;
-              const totalReturnPercentage = realData.totalReturnPercentage || 0;
-              const netDeposits = realData.netDeposits || realData.cashBalance || 0;
-              const holdingsCount = realData.holdingsCount || 0;
-
-              // Calculate proper portfolio value from positions if totalValue is 0 but we have positions
-              let calculatedTotalValue = totalValue;
+              // Calculate proper values from positions if main values are missing
+              let calculatedTotalValue = realData.totalValue || 0;
+              let calculatedCashBalance = realData.cashBalance || 0;
+              
+              // If totalValue is 0 but we have positions, calculate from positions
               if (calculatedTotalValue === 0 && realData.positions && realData.positions.length > 0) {
                 calculatedTotalValue = realData.positions.reduce((sum: number, pos: any) => 
-                  sum + (pos.marketValue || 0), 0
-                ) + (realData.cashBalance || 0);
+                  sum + (pos.marketValue || (pos.quantity * pos.currentPrice) || 0), 0
+                );
               }
+              
+              // Add cash balance to total value
+              const finalTotalValue = calculatedTotalValue + calculatedCashBalance;
+              
+              // Extract the actual values - don't default important metrics to zero
+              const todayChange = realData.todayChange || 0;
+              const totalReturn = realData.totalReturn || 0;
+              const netDeposits = realData.netDeposits || calculatedCashBalance || 0;
+              const holdingsCount = realData.holdingsCount || (realData.positions ? realData.positions.length : 0);
+              
+              // Calculate percentages properly
+              const todayPercentage = finalTotalValue > 0 ? (todayChange / (finalTotalValue - todayChange)) * 100 : 0;
+              const totalReturnPercentage = netDeposits > 0 ? (totalReturn / netDeposits) * 100 : 0;
 
-              // Display the actual data without forcing zeros
+              // Display the actual data
               setPortfolioData({
-                totalValue: formatCurrency(calculatedTotalValue),
+                totalValue: formatCurrency(finalTotalValue),
                 todayChange: formatChangeWithSign(todayChange),
                 todayPercentage: formatPercentage(todayPercentage),
                 totalReturn: formatChangeWithSign(totalReturn),
@@ -121,15 +128,21 @@ const PortfolioSummary = () => {
               });
               setHasRealData(true);
               
-              // Cache the data
-              localStorage.setItem('trading212_data', JSON.stringify(realData));
+              // Cache the processed data
+              const processedData = {
+                ...realData,
+                totalValue: finalTotalValue,
+                todayPercentage: todayPercentage,
+                totalReturnPercentage: totalReturnPercentage
+              };
+              localStorage.setItem('trading212_data', JSON.stringify(processedData));
               
               toast({
                 title: "Trading212 Data Loaded",
                 description: `Portfolio updated with ${holdingsCount} positions from Trading212`,
                 variant: "default",
               });
-            } else if (data?.error === 'RATE_LIMITED') {
+            } else if (data?.error === 'RATE_LIMITED' || data?.error?.includes('RATE_LIMITED')) {
               console.warn('Trading212 API rate limited, trying cached data');
               setDataSource('Trading212 API (Rate Limited)');
               
@@ -145,16 +158,9 @@ const PortfolioSummary = () => {
                   const totalReturnPercentage = cachedRealData.totalReturnPercentage || 0;
                   const netDeposits = cachedRealData.netDeposits || cachedRealData.cashBalance || 0;
                   const holdingsCount = cachedRealData.holdingsCount || 0;
-
-                  let calculatedTotalValue = totalValue;
-                  if (calculatedTotalValue === 0 && cachedRealData.positions && cachedRealData.positions.length > 0) {
-                    calculatedTotalValue = cachedRealData.positions.reduce((sum: number, pos: any) => 
-                      sum + (pos.marketValue || 0), 0
-                    ) + (cachedRealData.cashBalance || 0);
-                  }
                   
                   setPortfolioData({
-                    totalValue: formatCurrency(calculatedTotalValue),
+                    totalValue: formatCurrency(totalValue),
                     todayChange: formatChangeWithSign(todayChange),
                     todayPercentage: formatPercentage(todayPercentage),
                     totalReturn: formatChangeWithSign(totalReturn),
@@ -184,23 +190,75 @@ const PortfolioSummary = () => {
             console.error('Trading212 API fetch error:', fetchError);
             setDataSource('Trading212 API (Error)');
             
-            // Show zero values for API errors to maintain consistency
-            setPortfolioData({
-              totalValue: "$0.00",
-              todayChange: "$0.00",
-              todayPercentage: "0%",
-              totalReturn: "$0.00",
-              totalReturnPercentage: "0%",
-              holdingsCount: 0,
-              netDeposits: "$0.00"
-            });
-            setHasRealData(false);
-            
-            toast({
-              title: "Trading212 Connection Failed",
-              description: "Unable to fetch data from Trading212. Please check your API configuration in the Data Integration page.",
-              variant: "destructive",
-            });
+            // Try cached data as fallback
+            const cachedData = localStorage.getItem('trading212_data');
+            if (cachedData) {
+              try {
+                const cachedRealData = JSON.parse(cachedData);
+                const totalValue = cachedRealData.totalValue || 0;
+                const todayChange = cachedRealData.todayChange || 0;
+                const todayPercentage = cachedRealData.todayPercentage || 0;
+                const totalReturn = cachedRealData.totalReturn || 0;
+                const totalReturnPercentage = cachedRealData.totalReturnPercentage || 0;
+                const netDeposits = cachedRealData.netDeposits || cachedRealData.cashBalance || 0;
+                const holdingsCount = cachedRealData.holdingsCount || 0;
+                
+                setPortfolioData({
+                  totalValue: formatCurrency(totalValue),
+                  todayChange: formatChangeWithSign(todayChange),
+                  todayPercentage: formatPercentage(todayPercentage),
+                  totalReturn: formatChangeWithSign(totalReturn),
+                  totalReturnPercentage: formatPercentage(totalReturnPercentage),
+                  holdingsCount: holdingsCount,
+                  netDeposits: formatCurrency(netDeposits)
+                });
+                setHasRealData(true);
+                setDataSource('Trading212 API (Cached)');
+                
+                toast({
+                  title: "Using Cached Data",
+                  description: "Unable to fetch fresh data. Showing cached portfolio data.",
+                  variant: "default",
+                });
+              } catch (parseError) {
+                console.error('Error parsing cached data:', parseError);
+                // Show zero values for API errors to maintain consistency
+                setPortfolioData({
+                  totalValue: "$0.00",
+                  todayChange: "$0.00",
+                  todayPercentage: "0%",
+                  totalReturn: "$0.00",
+                  totalReturnPercentage: "0%",
+                  holdingsCount: 0,
+                  netDeposits: "$0.00"
+                });
+                setHasRealData(false);
+                
+                toast({
+                  title: "Trading212 Connection Failed",
+                  description: "Unable to fetch data from Trading212. Please check your API configuration in the Data Integration page.",
+                  variant: "destructive",
+                });
+              }
+            } else {
+              // Show zero values for API errors to maintain consistency
+              setPortfolioData({
+                totalValue: "$0.00",
+                todayChange: "$0.00",
+                todayPercentage: "0%",
+                totalReturn: "$0.00",
+                totalReturnPercentage: "0%",
+                holdingsCount: 0,
+                netDeposits: "$0.00"
+              });
+              setHasRealData(false);
+              
+              toast({
+                title: "Trading212 Connection Failed",
+                description: "Unable to fetch data from Trading212. Please check your API configuration in the Data Integration page.",
+                variant: "destructive",
+              });
+            }
           }
         } else if (selectedPortfolio === binancePortfolioId) {
           console.log('Fetching real Binance portfolio data');
