@@ -7,10 +7,10 @@ import { usePortfolio } from "@/contexts/PortfolioContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import StatCard from "../StatCard";
-import { Shield, Calendar, TrendingUp, Percent, RefreshCw } from "lucide-react";
+import { Shield, Calendar, TrendingUp, Percent, RefreshCw, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { calculateDividendIncome, getSupportedDividendStocks } from "@/services/dividendCalculator";
+import { calculateDividendIncome, getSupportedDividendStocks, getActualDividendPayingStocks } from "@/services/dividendCalculator";
 
 interface DividendData {
   symbol: string;
@@ -25,6 +25,7 @@ interface DividendData {
   exDate: string;
   paymentDate: string;
   currentValue: number;
+  hasDiv: boolean;
 }
 
 const DividendTracking = () => {
@@ -34,7 +35,7 @@ const DividendTracking = () => {
   const [portfolioMetrics, setPortfolioMetrics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState('upcoming');
+  const [activeTab, setActiveTab] = useState('holdings');
 
   const fetchDividendData = async (forceRefresh = false) => {
     if (!user || !selectedPortfolio) {
@@ -49,7 +50,7 @@ const DividendTracking = () => {
       const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
       
       if (selectedPortfolio === trading212PortfolioId) {
-        console.log('Fetching Trading212 data and calculating dividends from shares owned');
+        console.log('Fetching Trading212 dividend-paying stock data');
         
         // Fetch Trading212 positions
         const { data, error } = await supabase.functions.invoke('trading212-sync', {
@@ -66,9 +67,16 @@ const DividendTracking = () => {
         if (data?.success && data.data?.positions) {
           const positions = data.data.positions;
           console.log('Trading212 positions found:', positions.length);
+          console.log('Sample positions:', positions.slice(0, 3));
           
-          // Calculate dividends using share quantities and free dividend data
+          // Calculate dividends using actual share quantities and comprehensive dividend data
           const dividendResults = calculateDividendIncome(positions);
+          
+          console.log('Dividend calculation completed:', {
+            totalAnnual: dividendResults.totalAnnualIncome,
+            stocksWithDividends: dividendResults.dividendPayingStocks.length,
+            portfolioYield: dividendResults.portfolioYield
+          });
           
           setDividendData(dividendResults.dividendPayingStocks);
           setPortfolioMetrics({
@@ -77,13 +85,9 @@ const DividendTracking = () => {
             monthlyAverage: dividendResults.totalAnnualIncome / 12,
             portfolioYield: dividendResults.portfolioYield,
             dividendPayingStocks: dividendResults.dividendPayingStocks.length,
-            supportedStocks: getSupportedDividendStocks().length
-          });
-
-          console.log('Dividend data calculated:', {
-            totalStocks: dividendResults.dividendPayingStocks.length,
-            totalAnnual: dividendResults.totalAnnualIncome,
-            portfolioYield: dividendResults.portfolioYield
+            totalStocksAnalyzed: positions.length,
+            supportedStocks: getSupportedDividendStocks().length,
+            actualDividendStocks: getActualDividendPayingStocks().length
           });
         } else {
           console.log('No Trading212 position data available');
@@ -91,7 +95,7 @@ const DividendTracking = () => {
           setPortfolioMetrics(null);
         }
       } else {
-        // For other portfolios, use mock data
+        // For other portfolios, show appropriate message
         setDividendData([]);
         setPortfolioMetrics(null);
       }
@@ -133,7 +137,7 @@ const DividendTracking = () => {
         </CardHeader>
         <CardContent>
           <div className="flex justify-center items-center h-48">
-            <p>Calculating dividend income from your holdings...</p>
+            <p>Analyzing your dividend-paying stock holdings...</p>
           </div>
         </CardContent>
       </Card>
@@ -183,7 +187,7 @@ const DividendTracking = () => {
     <Card className="h-full">
       <CardHeader className="pb-2">
         <div className="flex justify-between items-center">
-          <CardTitle>Dividend Tracking</CardTitle>
+          <CardTitle>Dividend Income Tracker</CardTitle>
           <Button 
             variant="outline" 
             size="sm"
@@ -196,8 +200,8 @@ const DividendTracking = () => {
         </div>
         {portfolioMetrics && (
           <p className="text-sm text-muted-foreground">
-            Calculated from {portfolioMetrics.dividendPayingStocks} dividend-paying stocks 
-            • {portfolioMetrics.supportedStocks} stocks supported
+            Found {portfolioMetrics.dividendPayingStocks} dividend-paying stocks from {portfolioMetrics.totalStocksAnalyzed} holdings
+            • {portfolioMetrics.actualDividendStocks} supported dividend stocks
           </p>
         )}
       </CardHeader>
@@ -213,6 +217,7 @@ const DividendTracking = () => {
                   percentage: "+7.2%",
                   isPositive: true
                 }}
+                icon={<DollarSign className="h-4 w-4" />}
               />
               <StatCard 
                 label="Monthly Average" 
@@ -222,15 +227,17 @@ const DividendTracking = () => {
                   percentage: "+7.2%",
                   isPositive: true
                 }}
+                icon={<Calendar className="h-4 w-4" />}
               />
               <StatCard 
                 label="Dividend Stocks" 
                 value={`${portfolioMetrics.dividendPayingStocks}`} 
                 change={{
-                  value: "0",
-                  percentage: "0",
+                  value: "Active",
+                  percentage: "Active",
                   isPositive: true
                 }}
+                icon={<Shield className="h-4 w-4" />}
               />
               <StatCard 
                 label="Portfolio Yield" 
@@ -240,6 +247,7 @@ const DividendTracking = () => {
                   percentage: "+0.3%",
                   isPositive: true
                 }}
+                icon={<Percent className="h-4 w-4" />}
               />
             </div>
 
@@ -249,21 +257,22 @@ const DividendTracking = () => {
               className="space-y-4"
             >
               <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="upcoming">Holdings</TabsTrigger>
-                <TabsTrigger value="monthly">Projections</TabsTrigger>
-                <TabsTrigger value="safety">Analysis</TabsTrigger>
+                <TabsTrigger value="holdings">Dividend Holdings</TabsTrigger>
+                <TabsTrigger value="projections">Monthly Projections</TabsTrigger>
+                <TabsTrigger value="analysis">Portfolio Analysis</TabsTrigger>
               </TabsList>
               
-              <TabsContent value="upcoming" className="space-y-4">
+              <TabsContent value="holdings" className="space-y-4">
                 <div className="rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Stock</TableHead>
+                        <TableHead>Company</TableHead>
                         <TableHead>Shares</TableHead>
-                        <TableHead>Annual Dividend</TableHead>
-                        <TableHead>Total Annual Income</TableHead>
+                        <TableHead>Dividend/Share</TableHead>
+                        <TableHead>Annual Income</TableHead>
                         <TableHead>Yield</TableHead>
+                        <TableHead>Frequency</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -273,12 +282,13 @@ const DividendTracking = () => {
                             <div className="font-medium">{dividend.symbol}</div>
                             <div className="text-xs text-muted-foreground">{dividend.company}</div>
                           </TableCell>
-                          <TableCell>{dividend.shares.toFixed(4)}</TableCell>
+                          <TableCell>{dividend.shares.toFixed(6)}</TableCell>
                           <TableCell>${dividend.annualDividend.toFixed(2)}</TableCell>
-                          <TableCell className="font-medium">
+                          <TableCell className="font-medium text-green-600">
                             ${dividend.totalAnnualIncome.toFixed(2)}
                           </TableCell>
                           <TableCell>{dividend.yield.toFixed(2)}%</TableCell>
+                          <TableCell className="capitalize">{dividend.frequency}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -286,7 +296,7 @@ const DividendTracking = () => {
                 </div>
               </TabsContent>
               
-              <TabsContent value="monthly" className="space-y-4">
+              <TabsContent value="projections" className="space-y-4">
                 <ResponsiveContainer width="100%" height={250}>
                   <BarChart data={monthlyData}>
                     <CartesianGrid strokeDasharray="3 3" />
@@ -301,7 +311,7 @@ const DividendTracking = () => {
                 </div>
               </TabsContent>
               
-              <TabsContent value="safety" className="space-y-4">
+              <TabsContent value="analysis" className="space-y-4">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
                     <Shield className="h-8 w-8 mb-2 text-finance-blue" />
@@ -310,7 +320,7 @@ const DividendTracking = () => {
                   </div>
                   <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
                     <Calendar className="h-8 w-8 mb-2 text-finance-blue" />
-                    <div className="text-xs uppercase text-muted-foreground">Dividend Stocks</div>
+                    <div className="text-xs uppercase text-muted-foreground">Div. Stocks</div>
                     <div className="text-2xl font-bold mt-1">{portfolioMetrics.dividendPayingStocks}</div>
                   </div>
                   <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
@@ -325,7 +335,9 @@ const DividendTracking = () => {
                   </div>
                 </div>
                 <div className="text-sm text-center text-muted-foreground mt-4">
-                  Dividend calculations based on current share holdings and free dividend data sources.
+                  Dividend calculations based on actual share holdings from Trading212 and comprehensive dividend database.
+                  <br />
+                  Analyzing {portfolioMetrics.totalStocksAnalyzed} total positions with {portfolioMetrics.actualDividendStocks} known dividend-paying stocks.
                 </div>
               </TabsContent>
             </Tabs>
@@ -333,13 +345,18 @@ const DividendTracking = () => {
         ) : (
           <div className="flex flex-col items-center justify-center h-48 text-center">
             <p className="text-muted-foreground mb-2">
-              No dividend-paying stocks found in your portfolio
+              {portfolioMetrics ? 
+                'No dividend-paying stocks found in your current holdings' : 
+                'Unable to load dividend data'
+              }
             </p>
-            <p className="text-sm text-muted-foreground mb-4">
-              Your holdings may be CFDs or stocks not in our dividend database
-            </p>
-            <div className="text-xs text-muted-foreground">
-              Supported dividend stocks: {getSupportedDividendStocks().join(', ')}
+            {portfolioMetrics && (
+              <p className="text-sm text-muted-foreground mb-4">
+                Analyzed {portfolioMetrics.totalStocksAnalyzed} holdings, but none match our dividend database of {portfolioMetrics.actualDividendStocks} dividend-paying stocks
+              </p>
+            )}
+            <div className="text-xs text-muted-foreground max-w-lg">
+              Supported dividend stocks include: AAPL, MSFT, JNJ, PG, KO, PEP, WMT, MCD, VZ, T, XOM, CVX, and many more major dividend payers
             </div>
           </div>
         )}
