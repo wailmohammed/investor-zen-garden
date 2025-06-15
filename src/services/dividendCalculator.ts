@@ -1,10 +1,4 @@
 
-// Re-export everything from the refactored dividend modules
-export { calculateDividendIncome, addDividendData, getSupportedDividendStocks, getActualDividendPayingStocks } from './dividend/dividendData';
-export { cleanSymbol, findDividendSymbol } from './dividend/symbolMatcher';
-export { getCompanyName } from './dividend/companyNames';
-export { getNextExDate, getNextPaymentDate } from './dividend/dateUtils';
-
 // Main calculator function
 import { DIVIDEND_DATABASE, DividendInfo } from './dividend/dividendData';
 import { findDividendSymbol } from './dividend/symbolMatcher';
