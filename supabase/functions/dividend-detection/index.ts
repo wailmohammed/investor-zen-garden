@@ -11,9 +11,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Dividend detection service
-const detectDividendsForPortfolio = async (portfolioId: string, userId: string) => {
-  console.log(`Starting dividend detection for portfolio: ${portfolioId}`);
+// Enhanced dividend detection with auto-save capability
+const detectDividendsForPortfolio = async (portfolioId: string, userId: string, autoSave = false) => {
+  console.log(`Starting dividend detection for portfolio: ${portfolioId}, autoSave: ${autoSave}`);
   
   try {
     // Get portfolio positions
@@ -48,39 +48,46 @@ const detectDividendsForPortfolio = async (portfolioId: string, userId: string) 
     
     console.log(`Analysis complete: ${analysis.dividendPayers.length} dividend stocks found`);
 
-    // Store detected dividends in database
-    for (const dividendStock of analysis.dividendPayers) {
-      const position = positions.find(p => p.symbol.toUpperCase().includes(dividendStock.symbol));
-      const estimatedAnnualIncome = position ? 
-        (dividendStock.dividendInfo.annual * position.quantity) : 0;
+    // Auto-save or manual save detected dividends
+    if ((autoSave || analysis.dividendPayers.length > 0) && analysis.dividendPayers.length > 0) {
+      console.log(`${autoSave ? 'Auto-saving' : 'Saving'} ${analysis.dividendPayers.length} dividend stocks to database`);
+      
+      for (const dividendStock of analysis.dividendPayers) {
+        const position = positions.find(p => p.symbol.toUpperCase().includes(dividendStock.symbol));
+        const estimatedAnnualIncome = position ? 
+          (dividendStock.dividendInfo.annual * position.quantity) : 0;
 
-      await supabase
-        .from('detected_dividends')
-        .upsert({
-          user_id: userId,
-          portfolio_id: portfolioId,
-          symbol: dividendStock.symbol,
-          company_name: dividendStock.symbol, // Could be enhanced with actual company names
-          annual_dividend: dividendStock.dividendInfo.annual,
-          dividend_yield: dividendStock.dividendInfo.yield,
-          frequency: dividendStock.dividendInfo.frequency,
-          ex_dividend_date: dividendStock.dividendInfo.nextExDate || null,
-          payment_date: dividendStock.dividendInfo.paymentDate || null,
-          shares_owned: position?.quantity || null,
-          estimated_annual_income: estimatedAnnualIncome,
-          detection_source: dividendStock.apiSource || 'database',
-          detected_at: new Date().toISOString(),
-          is_active: true
-        }, {
-          onConflict: 'user_id,portfolio_id,symbol'
-        });
+        await supabase
+          .from('detected_dividends')
+          .upsert({
+            user_id: userId,
+            portfolio_id: portfolioId,
+            symbol: dividendStock.symbol,
+            company_name: dividendStock.symbol,
+            annual_dividend: dividendStock.dividendInfo.annual,
+            dividend_yield: dividendStock.dividendInfo.yield,
+            frequency: dividendStock.dividendInfo.frequency,
+            ex_dividend_date: dividendStock.dividendInfo.nextExDate || null,
+            payment_date: dividendStock.dividendInfo.paymentDate || null,
+            shares_owned: position?.quantity || null,
+            estimated_annual_income: estimatedAnnualIncome,
+            detection_source: dividendStock.apiSource || 'database',
+            detected_at: new Date().toISOString(),
+            is_active: true
+          }, {
+            onConflict: 'user_id,portfolio_id,symbol'
+          });
+      }
+      
+      console.log(`${autoSave ? 'Auto-saved' : 'Saved'} ${analysis.dividendPayers.length} dividend records to database`);
     }
 
     return {
       success: true,
       stocksAnalyzed: analysis.analysisStats.totalAnalyzed,
       dividendStocksFound: analysis.dividendPayers.length,
-      analysisStats: analysis.analysisStats
+      analysisStats: analysis.analysisStats,
+      autoSaved: autoSave && analysis.dividendPayers.length > 0
     };
 
   } catch (error) {
@@ -133,7 +140,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { portfolioId, userId, runAll, saveData, dividendData } = await req.json();
+    const { portfolioId, userId, runAll, saveData, dividendData, autoSave } = await req.json();
 
     if (saveData && dividendData) {
       // Save dividend data directly
@@ -191,8 +198,8 @@ Deno.serve(async (req) => {
       });
 
     } else if (portfolioId && userId) {
-      // Run detection for specific portfolio
-      const result = await detectDividendsForPortfolio(portfolioId, userId);
+      // Run detection for specific portfolio with optional auto-save
+      const result = await detectDividendsForPortfolio(portfolioId, userId, autoSave);
       
       return new Response(JSON.stringify(result), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }

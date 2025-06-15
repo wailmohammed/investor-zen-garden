@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -7,12 +6,14 @@ import { usePortfolio } from "@/contexts/PortfolioContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import StatCard from "../StatCard";
-import { Shield, Calendar, TrendingUp, Percent, RefreshCw, DollarSign, Database, AlertTriangle, Save } from "lucide-react";
+import { Shield, Calendar, TrendingUp, Percent, RefreshCw, DollarSign, Database, AlertTriangle, Save, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { calculateDividendIncome } from "@/services/dividendCalculator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 interface DividendData {
   symbol: string;
@@ -42,9 +43,58 @@ const DividendTracking = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [autoSaving, setAutoSaving] = useState(false);
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
   const [activeTab, setActiveTab] = useState('holdings');
   const [processingStatus, setProcessingStatus] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+
+  // Auto-save detected dividends when data changes
+  useEffect(() => {
+    if (autoSaveEnabled && dividendData.length > 0 && portfolioMetrics && !saving && !autoSaving) {
+      autoSaveDetectedDividends();
+    }
+  }, [dividendData, portfolioMetrics, autoSaveEnabled]);
+
+  const autoSaveDetectedDividends = async () => {
+    if (!user || !selectedPortfolio || !dividendData.length) return;
+
+    setAutoSaving(true);
+    try {
+      console.log('Auto-saving detected dividends to database...');
+      
+      const { data, error } = await supabase.functions.invoke('dividend-detection', {
+        body: {
+          portfolioId: selectedPortfolio,
+          userId: user.id,
+          saveData: true,
+          dividendData: dividendData
+        }
+      });
+
+      if (error) {
+        console.error('Error auto-saving dividend data:', error);
+        return;
+      }
+
+      if (data?.success) {
+        console.log('Auto-saved dividend data successfully:', data);
+        setLastSyncTime(new Date().toLocaleString());
+        
+        // Show subtle notification for auto-save
+        toast({
+          title: "Data Auto-Saved",
+          description: `${dividendData.length} dividend stocks automatically saved`,
+          variant: "default",
+        });
+      }
+    } catch (error: any) {
+      console.error('Error auto-saving dividend data:', error);
+    } finally {
+      setAutoSaving(false);
+    }
+  };
 
   const saveDetectedDividends = async () => {
     if (!user || !selectedPortfolio || !dividendData.length) {
@@ -58,9 +108,8 @@ const DividendTracking = () => {
 
     setSaving(true);
     try {
-      console.log('Saving detected dividends to database...');
+      console.log('Manually saving detected dividends to database...');
       
-      // Call the dividend detection edge function to save data
       const { data, error } = await supabase.functions.invoke('dividend-detection', {
         body: {
           portfolioId: selectedPortfolio,
@@ -76,9 +125,10 @@ const DividendTracking = () => {
       }
 
       if (data?.success) {
+        setLastSyncTime(new Date().toLocaleString());
         toast({
           title: "Data Saved Successfully",
-          description: `Saved ${dividendData.length} dividend stocks to database`,
+          description: `Manually saved ${dividendData.length} dividend stocks to database`,
           variant: "default",
         });
         console.log('Dividend data saved successfully:', data);
@@ -271,8 +321,15 @@ const DividendTracking = () => {
     }
   };
 
-  const handleManualRefresh = () => {
-    fetchDividendData(true);
+  const handleManualRefresh = async () => {
+    await fetchDividendData(true);
+    
+    // Auto-save after manual refresh if enabled
+    if (autoSaveEnabled && dividendData.length > 0) {
+      setTimeout(() => {
+        autoSaveDetectedDividends();
+      }, 1000);
+    }
   };
 
   const triggerAutoSync = async () => {
@@ -282,11 +339,15 @@ const DividendTracking = () => {
       setRefreshing(true);
       toast({
         title: "Triggering Auto Sync",
-        description: "Starting automated dividend detection...",
+        description: "Starting automated dividend detection and save...",
       });
 
-      const { data, error } = await supabase.functions.invoke('run-scheduled-task', {
-        body: { taskName: 'dividend-detection' }
+      const { data, error } = await supabase.functions.invoke('dividend-detection', {
+        body: { 
+          portfolioId: selectedPortfolio,
+          userId: user.id,
+          autoSave: true // Enable auto-save in the sync process
+        }
       });
 
       if (error) {
@@ -294,15 +355,16 @@ const DividendTracking = () => {
       }
 
       if (data?.success) {
+        setLastSyncTime(new Date().toLocaleString());
         toast({
-          title: "Auto Sync Triggered",
-          description: "Dividend detection job has been started",
+          title: "Auto Sync Complete",
+          description: `Found and saved ${data.dividendStocksFound || 0} dividend stocks`,
           variant: "default",
         });
         
-        // Refresh data after a delay
+        // Refresh data after auto sync
         setTimeout(() => {
-          fetchDividendData(true);
+          fetchDividendData(false);
         }, 2000);
       } else {
         throw new Error(data?.error || 'Failed to trigger auto sync');
@@ -343,13 +405,13 @@ const DividendTracking = () => {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>🚀 Enhanced Dividend Tracker with Comprehensive API Detection</CardTitle>
+          <CardTitle>🚀 Enhanced Dividend Tracker with Auto-Save</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col justify-center items-center h-48 space-y-2">
             <RefreshCw className="h-8 w-8 animate-spin text-blue-500" />
             <p>{processingStatus}</p>
-            <p className="text-sm text-muted-foreground">Using Yahoo Finance, Alpha Vantage, FMP & Polygon APIs...</p>
+            <p className="text-sm text-muted-foreground">Using comprehensive API detection with auto-save...</p>
           </div>
         </CardContent>
       </Card>
@@ -399,35 +461,49 @@ const DividendTracking = () => {
     <Card className="h-full">
       <CardHeader className="pb-2">
         <div className="flex justify-between items-center">
-          <CardTitle>🌟 Enhanced Dividend Tracker with Comprehensive API Detection</CardTitle>
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={saveDetectedDividends}
-              disabled={saving || !dividendData.length}
-            >
-              <Save className={`h-4 w-4 mr-2 ${saving ? 'animate-spin' : ''}`} />
-              {saving ? 'Saving...' : 'Save Data'}
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={handleManualRefresh}
-              disabled={refreshing}
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-              {refreshing ? 'Refreshing...' : 'Refresh'}
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={triggerAutoSync}
-              disabled={refreshing}
-            >
-              <Database className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-              Auto Sync
-            </Button>
+          <CardTitle>🌟 Enhanced Dividend Tracker with Auto-Save</CardTitle>
+          <div className="flex items-center gap-4">
+            {/* Auto-Save Toggle */}
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="auto-save"
+                checked={autoSaveEnabled}
+                onCheckedChange={setAutoSaveEnabled}
+              />
+              <Label htmlFor="auto-save" className="text-sm">
+                Auto-Save
+              </Label>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={saveDetectedDividends}
+                disabled={saving || autoSaving || !dividendData.length}
+              >
+                <Save className={`h-4 w-4 mr-2 ${(saving || autoSaving) ? 'animate-spin' : ''}`} />
+                {saving ? 'Saving...' : autoSaving ? 'Auto-Saving...' : 'Save Data'}
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleManualRefresh}
+                disabled={refreshing || autoSaving}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+                {refreshing ? 'Refreshing...' : 'Manual Sync'}
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={triggerAutoSync}
+                disabled={refreshing || autoSaving}
+              >
+                <Database className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+                Auto Sync & Save
+              </Button>
+            </div>
           </div>
         </div>
         {portfolioMetrics && (
@@ -436,11 +512,19 @@ const DividendTracking = () => {
               Enhanced Detection: {portfolioMetrics.dividendPayingStocks} dividend payers from {portfolioMetrics.totalStocksAnalyzed} holdings
               • Database: {portfolioMetrics.databaseSize} stocks • API Calls: {portfolioMetrics.apiCallsMade} • Cache Hits: {portfolioMetrics.databaseHits}
             </p>
+            {lastSyncTime && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                Last synced: {lastSyncTime}
+                {autoSaveEnabled && <span className="text-green-600">(Auto-save ON)</span>}
+              </p>
+            )}
             {portfolioMetrics.newStocksAdded > 0 && (
               <Alert className="mt-2">
                 <Database className="h-4 w-4" />
                 <AlertDescription>
-                  🎉 Discovered {portfolioMetrics.newStocksAdded} new dividend payers using comprehensive API detection from Yahoo Finance, Alpha Vantage, FMP & Polygon
+                  🎉 Discovered {portfolioMetrics.newStocksAdded} new dividend payers using comprehensive API detection
+                  {autoSaveEnabled && " - Auto-saved to database"}
                 </AlertDescription>
               </Alert>
             )}
@@ -458,7 +542,7 @@ const DividendTracking = () => {
                   onClick={handleManualRefresh}
                   disabled={refreshing}
                 >
-                  Try Again
+                  Manual Sync
                 </Button>
                 <Button 
                   variant="outline" 
@@ -466,7 +550,7 @@ const DividendTracking = () => {
                   onClick={triggerAutoSync}
                   disabled={refreshing}
                 >
-                  Auto Sync
+                  Auto Sync & Save
                 </Button>
               </div>
             </AlertDescription>
@@ -474,6 +558,16 @@ const DividendTracking = () => {
         )}
       </CardHeader>
       <CardContent>
+        {/* Status indicators */}
+        {(autoSaving || saving) && (
+          <Alert className="mb-4">
+            <Save className="h-4 w-4 animate-spin" />
+            <AlertDescription>
+              {autoSaving ? 'Auto-saving dividend data to database...' : 'Manually saving dividend data...'}
+            </AlertDescription>
+          </Alert>
+        )}
+
         {portfolioMetrics && dividendData.length > 0 ? (
           <>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
@@ -648,7 +742,7 @@ const DividendTracking = () => {
                 disabled={refreshing}
               >
                 <Database className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                Auto Sync
+                Auto Sync & Save
               </Button>
             </div>
           </div>
