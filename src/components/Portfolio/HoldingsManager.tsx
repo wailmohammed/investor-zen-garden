@@ -241,6 +241,17 @@ const HoldingsManager = () => {
     });
   };
 
+  const startEditing = (holding: Holding) => {
+    setEditingHolding(holding.id);
+    setEditValues({
+      symbol: holding.symbol,
+      company_name: holding.company_name || '',
+      shares: holding.shares,
+      average_cost: holding.average_cost,
+      current_price: holding.current_price || holding.average_cost,
+    });
+  };
+
   const handleUpdateHolding = (holdingId: string) => {
     if (!editValues.symbol || editValues.shares <= 0 || editValues.average_cost <= 0) {
       toast({
