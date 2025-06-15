@@ -11,6 +11,16 @@ import { DollarSign, Database, RefreshCw, Clock, Shield } from "lucide-react";
 const DividendStatusIndicator = () => {
   const { user } = useAuth();
   const { selectedPortfolio } = usePortfolio();
+  
+  // Add error boundary protection
+  let dividendData;
+  try {
+    dividendData = useDividendData();
+  } catch (error) {
+    console.log('DividendDataProvider not available:', error);
+    return null; // Don't render if context is not available
+  }
+
   const {
     dividends,
     loading,
@@ -23,7 +33,7 @@ const DividendStatusIndicator = () => {
     forceSyncData,
     toggleAutoSync,
     getDividendSummary
-  } = useDividendData();
+  } = dividendData;
 
   if (!user || !selectedPortfolio || dividends.length === 0) {
     return null;

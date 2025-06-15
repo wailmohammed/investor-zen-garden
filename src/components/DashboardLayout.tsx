@@ -1,3 +1,4 @@
+
 import {
   LayoutDashboard,
   Settings,
@@ -27,6 +28,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
 import DividendStatusIndicator from "@/components/Global/DividendStatusIndicator";
+
+interface DashboardLayoutProps {
+  children: React.ReactNode;
+}
 
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const { user, signOut, isAdmin } = useAuth();
@@ -245,7 +250,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           </button>
           <span className="font-semibold">{user?.email}</span>
         </header>
-        <main className="container mx-auto px-4 py-6">
+        <main className="container mx-auto px-4 py-6 lg:ml-64">
           {/* Global Dividend Status - shows on all pages */}
           <DividendStatusIndicator />
           

@@ -10,9 +10,9 @@ import AIChat from "@/components/AIChat";
 import DividendTracking from "@/components/Dashboard/DividendTracking";
 import DataSourceIndicator from "@/components/Dashboard/DataSourceIndicator";
 import { useAuth } from "@/contexts/AuthContext";
-import { PortfolioProvider, usePortfolio } from "@/contexts/PortfolioContext";
+import { usePortfolio } from "@/contexts/PortfolioContext";
 
-const DashboardContent = () => {
+const Dashboard = () => {
   const { user } = useAuth();
   const { selectedPortfolio, portfolios } = usePortfolio();
 
@@ -84,14 +84,6 @@ const DashboardContent = () => {
         </div>
       </div>
     </DashboardLayout>
-  );
-};
-
-const Dashboard = () => {
-  return (
-    <PortfolioProvider>
-      <DashboardContent />
-    </PortfolioProvider>
   );
 };
 
