@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -27,7 +26,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Edit2, Trash2, Save, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, X, AlertCircle, Briefcase } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface Holding {
   id: string;
@@ -74,6 +74,9 @@ const HoldingsManager = () => {
       setSelectedPortfolioForAdd(selectedPortfolio);
     }
   }, [isAddDialogOpen, selectedPortfolio, selectedPortfolioForAdd]);
+
+  // Check if user has any portfolios
+  const hasPortfolios = portfolios && portfolios.length > 0;
 
   // Fetch holdings for selected portfolio
   const { data: holdings = [], isLoading, refetch } = useQuery({
@@ -281,13 +284,45 @@ const HoldingsManager = () => {
     return `${percentage >= 0 ? '+' : ''}${percentage.toFixed(2)}%`;
   };
 
+  // Show message if no portfolios exist
+  if (!hasPortfolios) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <Alert>
+            <Briefcase className="h-4 w-4" />
+            <AlertDescription>
+              <div className="space-y-2">
+                <p className="font-medium">No Portfolios Found</p>
+                <p>You need to create a portfolio first before you can add holdings manually, via API, or CSV import.</p>
+                <p className="text-sm text-muted-foreground">
+                  Go to the "Portfolios" tab to create your first portfolio.
+                </p>
+              </div>
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Show message if portfolios exist but none selected
   if (!selectedPortfolio) {
     return (
       <Card>
         <CardContent className="p-6">
-          <p className="text-center text-muted-foreground">
-            Please select a portfolio to manage holdings.
-          </p>
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              <div className="space-y-2">
+                <p className="font-medium">Select a Portfolio</p>
+                <p>Please select a portfolio to manage holdings.</p>
+                <p className="text-sm text-muted-foreground">
+                  You can select a portfolio from the dropdown in the portfolio section.
+                </p>
+              </div>
+            </AlertDescription>
+          </Alert>
         </CardContent>
       </Card>
     );
