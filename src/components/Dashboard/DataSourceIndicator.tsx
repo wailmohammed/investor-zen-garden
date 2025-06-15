@@ -5,7 +5,7 @@ import { usePortfolio } from "@/contexts/PortfolioContext";
 
 interface DataSourceIndicatorProps {
   isConnected: boolean;
-  dataSource: 'Trading212' | 'CSV' | 'Mock' | 'CoinGecko';
+  dataSource: 'Trading212' | 'CSV' | 'Mock' | 'CoinGecko' | 'Binance';
   lastUpdated?: string;
   recordCount?: number;
 }
@@ -25,7 +25,7 @@ const DataSourceIndicator = ({ isConnected, dataSource, lastUpdated, recordCount
 
   const getStatusColor = () => {
     if (isTrading212Connected) return 'bg-green-500';
-    if (isBinanceConnected) return 'bg-yellow-500';
+    if (isBinanceConnected) return 'bg-orange-500';
     if (portfolioType === 'crypto') return 'bg-green-500';
     if (dataSource === 'CSV') return 'bg-blue-500';
     return 'bg-gray-500';
@@ -33,7 +33,7 @@ const DataSourceIndicator = ({ isConnected, dataSource, lastUpdated, recordCount
 
   const getStatusText = () => {
     if (isTrading212Connected) return 'Live Data';
-    if (isBinanceConnected) return 'Binance Data';
+    if (isBinanceConnected) return 'Live Binance Data';
     if (portfolioType === 'crypto') return 'Live Crypto Data';
     if (dataSource === 'CSV') return 'CSV Data';
     return 'Demo Data';
@@ -41,7 +41,7 @@ const DataSourceIndicator = ({ isConnected, dataSource, lastUpdated, recordCount
 
   const getDataSourceText = () => {
     if (isTrading212Connected) return 'Trading212';
-    if (isBinanceConnected) return 'Binance';
+    if (isBinanceConnected) return 'Binance API';
     if (portfolioType === 'crypto') return 'CoinGecko API';
     return dataSource;
   };

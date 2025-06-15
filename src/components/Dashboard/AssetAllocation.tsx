@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
@@ -39,12 +40,30 @@ const AssetAllocation = () => {
         // Trading212 allocation - keep existing logic
         setAllocationData([]);
       } else if (selectedPortfolio === binancePortfolioId) {
-        // Binance crypto allocation
-        setAllocationData([
-          { name: 'Bitcoin', value: 45, amount: '$29,000' },
-          { name: 'Ethereum', value: 30, amount: '$15,000' },
-          { name: 'Cardano', value: 25, amount: '$5,000' }
-        ]);
+        // Fetch real Binance allocation
+        try {
+          setIsLoading(true);
+          const { data, error } = await supabase.functions.invoke('binance-api', {
+            body: { portfolioId: selectedPortfolio }
+          });
+
+          if (error) throw error;
+
+          if (data?.success && data.data?.holdings) {
+            const totalValue = data.data.totalValue;
+            const formattedAllocation = data.data.holdings.slice(0, 10).map((holding: any) => ({
+              name: holding.name || holding.symbol,
+              value: Number(((holding.value / totalValue) * 100).toFixed(1)),
+              amount: `$${holding.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            }));
+            setAllocationData(formattedAllocation);
+          }
+        } catch (error) {
+          console.error('Error fetching Binance allocation:', error);
+          setAllocationData([]);
+        } finally {
+          setIsLoading(false);
+        }
       } else if (portfolioType === 'crypto') {
         // Fetch real crypto allocation from API
         try {

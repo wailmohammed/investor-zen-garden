@@ -1,3 +1,4 @@
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ExternalLink } from "lucide-react";
@@ -28,12 +29,33 @@ const TopHoldings = () => {
         // Trading212 holdings - keep existing logic
         setHoldings([]);
       } else if (selectedPortfolio === binancePortfolioId) {
-        // Binance crypto holdings
-        setHoldings([
-          { symbol: 'BTC', name: 'Bitcoin', value: '$29,000.00', allocation: '45%', change: '+2.5%' },
-          { symbol: 'ETH', name: 'Ethereum', value: '$15,000.00', allocation: '30%', change: '+1.8%' },
-          { symbol: 'ADA', name: 'Cardano', value: '$5,000.00', allocation: '25%', change: '+3.2%' }
-        ]);
+        // Fetch real Binance holdings
+        try {
+          setIsLoading(true);
+          const { data, error } = await supabase.functions.invoke('binance-api', {
+            body: { portfolioId: selectedPortfolio }
+          });
+
+          if (error) throw error;
+
+          if (data?.success && data.data?.holdings) {
+            const formattedHoldings = data.data.holdings.slice(0, 10).map((holding: any) => ({
+              symbol: holding.symbol,
+              name: holding.name,
+              value: `$${holding.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              allocation: `${((holding.value / data.data.totalValue) * 100).toFixed(1)}%`,
+              change: `${holding.changePercent24h >= 0 ? '+' : ''}${holding.changePercent24h.toFixed(2)}%`,
+              amount: holding.amount,
+              price: `$${holding.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}`
+            }));
+            setHoldings(formattedHoldings);
+          }
+        } catch (error) {
+          console.error('Error fetching Binance holdings:', error);
+          setHoldings([]);
+        } finally {
+          setIsLoading(false);
+        }
       } else if (portfolioType === 'crypto') {
         // Fetch real crypto holdings from API
         try {
@@ -139,7 +161,7 @@ const TopHoldings = () => {
                 <div className="flex-1">
                   <div className="font-medium">{holding.symbol}</div>
                   <div className="text-sm text-muted-foreground">{holding.name}</div>
-                  {portfolioType === 'crypto' && holding.amount && (
+                  {(portfolioType === 'crypto' || selectedPortfolio === localStorage.getItem('binance_portfolio_id')) && holding.amount && (
                     <div className="text-xs text-muted-foreground">
                       {holding.amount} @ {holding.price}
                     </div>

@@ -28,11 +28,11 @@ const DashboardContent = () => {
   const isTrading212Connected = selectedPortfolio === trading212PortfolioId;
   const isBinanceConnected = selectedPortfolio === binancePortfolioId;
   
-  let dataSource: 'Trading212' | 'CSV' | 'Mock' | 'CoinGecko' = 'Mock';
+  let dataSource: 'Trading212' | 'CSV' | 'Mock' | 'CoinGecko' | 'Binance' = 'Mock';
   if (isTrading212Connected) {
     dataSource = 'Trading212';
   } else if (isBinanceConnected) {
-    dataSource = 'Mock'; // Binance shows as Mock for now
+    dataSource = 'Binance';
   } else if (portfolioType === 'crypto') {
     dataSource = 'CoinGecko';
   }

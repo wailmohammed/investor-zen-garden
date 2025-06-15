@@ -83,12 +83,38 @@ const BrokerIntegrationContent = () => {
         });
 
         console.log('Trading212 connected successfully with real data:', data.data);
-      } else {
-        toast({
-          title: "Coming Soon",
-          description: `${brokerName} integration is coming soon.`,
-          variant: "destructive",
+      } else if (brokerName === 'Binance') {
+        console.log(`Syncing Binance data to portfolio: ${selectedPortfolio}`);
+        
+        const { data, error } = await supabase.functions.invoke('binance-api', {
+          body: { portfolioId: selectedPortfolio }
         });
+
+        if (error) {
+          console.error('Binance connection error:', error);
+          throw new Error(`Failed to connect to Binance: ${error.message}`);
+        }
+
+        if (!data?.success) {
+          console.error('Binance API error:', data?.error, data?.message);
+          throw new Error(data?.message || 'Failed to connect to Binance API. Please check your API credentials.');
+        }
+
+        // Store the successful connection with portfolio association
+        localStorage.setItem('binance_portfolio_id', selectedPortfolio);
+        localStorage.setItem('binance_connected', 'true');
+        localStorage.setItem('binance_data', JSON.stringify(data.data));
+
+        setConnectedBrokers(prev => ({ ...prev, [brokerName]: true }));
+
+        const selectedPortfolioName = portfolios.find(p => p.id === selectedPortfolio)?.name || 'Unknown';
+
+        toast({
+          title: "Success!",
+          description: `Binance connected successfully to "${selectedPortfolioName}". Found ${data.data.holdingsCount} holdings with total value of $${data.data.totalValue.toLocaleString()}.`,
+        });
+
+        console.log('Binance connected successfully with real data:', data.data);
       }
     } catch (error: any) {
       console.error(`Error connecting ${brokerName}:`, error);
@@ -146,12 +172,34 @@ const BrokerIntegrationContent = () => {
 
         console.log('Trading212 data refreshed successfully:', data.data);
         window.location.reload();
-      } else {
-        toast({
-          title: "Coming Soon",
-          description: `${brokerName} refresh is coming soon.`,
-          variant: "destructive",
+      } else if (brokerName === 'Binance') {
+        console.log('Refreshing Binance data...');
+        
+        localStorage.removeItem('binance_data');
+        
+        const { data, error } = await supabase.functions.invoke('binance-api', {
+          body: { portfolioId: selectedPortfolio }
         });
+
+        if (error) {
+          console.error('Binance refresh error:', error);
+          throw new Error(`Failed to refresh Binance data: ${error.message}`);
+        }
+
+        if (!data?.success) {
+          console.error('Binance API error:', data?.error, data?.message);
+          throw new Error(data?.message || 'Failed to refresh Binance data. Please check your API credentials.');
+        }
+
+        localStorage.setItem('binance_data', JSON.stringify(data.data));
+
+        toast({
+          title: "Data Refreshed!",
+          description: `Binance data updated successfully. Found ${data.data.holdingsCount} holdings with total value of $${data.data.totalValue.toLocaleString()}.`,
+        });
+
+        console.log('Binance data refreshed successfully:', data.data);
+        window.location.reload();
       }
     } catch (error: any) {
       console.error(`Error refreshing ${brokerName}:`, error);

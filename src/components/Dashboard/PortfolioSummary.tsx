@@ -141,18 +141,56 @@ const PortfolioSummary = () => {
             });
           }
         } else if (selectedPortfolio === binancePortfolioId) {
-          console.log('Loading Binance crypto portfolio data');
-          setPortfolioData({
-            totalValue: "$29,000.00",
-            todayChange: "+$1,250.00",
-            todayPercentage: "+4.50%",
-            totalReturn: "+$8,500.00",
-            totalReturnPercentage: "+41.46%",
-            holdingsCount: 3,
-            netDeposits: "$20,500.00"
+          console.log('Fetching real Binance portfolio data');
+          
+          // Call the Binance API function to get real data
+          const { data, error } = await supabase.functions.invoke('binance-api', {
+            body: { portfolioId: selectedPortfolio }
           });
+
+          if (error) {
+            console.error('Error fetching Binance data:', error);
+            toast({
+              title: "Binance API Error",
+              description: "Failed to fetch Binance data. Please check your API credentials.",
+              variant: "destructive",
+            });
+            throw error;
+          }
+
+          if (data?.success) {
+            // Use real Binance data from API
+            const realData = data.data;
+            setPortfolioData({
+              totalValue: `$${realData.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              todayChange: `${realData.todayChange >= 0 ? '+' : ''}$${Math.abs(realData.todayChange).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              todayPercentage: `${realData.todayPercentage >= 0 ? '+' : ''}${realData.todayPercentage.toFixed(2)}%`,
+              totalReturn: `${realData.totalReturn >= 0 ? '+' : ''}$${Math.abs(realData.totalReturn).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              totalReturnPercentage: `${realData.totalReturnPercentage >= 0 ? '+' : ''}${realData.totalReturnPercentage.toFixed(2)}%`,
+              holdingsCount: realData.holdingsCount,
+              netDeposits: `$${realData.netDeposits.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            });
+            
+            // Cache the data
+            localStorage.setItem('binance_data', JSON.stringify(realData));
+            console.log('Real Binance data loaded successfully:', realData);
+            
+            toast({
+              title: "Live Binance Data",
+              description: "Portfolio updated with real-time data from your Binance account",
+              variant: "default",
+            });
+          } else {
+            console.error('Binance API returned error:', data?.error);
+            toast({
+              title: "Binance API Error",
+              description: data?.error || 'Failed to fetch Binance data',
+              variant: "destructive",
+            });
+            throw new Error(data?.error || 'Failed to fetch Binance data');
+          }
         } else if (portfolioType === 'crypto') {
-          console.log('Fetching real crypto portfolio data');
+          console.log('Fetching crypto portfolio data from CoinGecko');
           
           // Call the crypto API function to get real data
           const { data, error } = await supabase.functions.invoke('crypto-api', {
@@ -326,7 +364,7 @@ const PortfolioSummary = () => {
                 <p className="text-xs text-blue-600">✓ Connected to Trading212 (Real Data)</p>
               )}
               {selectedPortfolio === localStorage.getItem('binance_portfolio_id') && (
-                <p className="text-xs text-yellow-600">✓ Connected to Binance</p>
+                <p className="text-xs text-orange-600">✓ Connected to Binance (Real Data)</p>
               )}
               {portfolioType === 'crypto' && selectedPortfolio !== localStorage.getItem('binance_portfolio_id') && (
                 <p className="text-xs text-green-600">✓ Live Data from CoinGecko API</p>
