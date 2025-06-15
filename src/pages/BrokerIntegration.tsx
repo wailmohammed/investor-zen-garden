@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CheckCircle, XCircle, Loader2, AlertCircle, Key, Shield, Zap, Database, Portfolio, TrendingUp, DollarSign } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, AlertCircle, Key, Shield, Zap, Database, Briefcase, TrendingUp, DollarSign } from "lucide-react";
 import { BrokerCard } from "@/components/BrokerCard";
 import ApiKeyManager from "@/components/ApiKeyManager";
 import PortfolioManager from "@/components/Portfolio/PortfolioManager";
@@ -185,7 +184,7 @@ const BrokerIntegration = () => {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Portfolio className="h-5 w-5" />
+                    <Briefcase className="h-5 w-5" />
                     Data Import & CSV Upload
                   </CardTitle>
                 </CardHeader>
