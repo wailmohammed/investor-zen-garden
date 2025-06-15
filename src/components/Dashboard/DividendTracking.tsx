@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -28,6 +29,7 @@ interface DividendData {
   currentValue: number;
   hasDiv: boolean;
   isNewlyAdded?: boolean;
+  apiSource?: string;
 }
 
 const DividendTracking = () => {
