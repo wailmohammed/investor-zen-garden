@@ -7,8 +7,9 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { DividendDataProvider } from "@/contexts/DividendDataContext";
 import Dashboard from "@/pages/Dashboard";
 import BrokerIntegration from "@/pages/BrokerIntegration";
-import Portfolios from "@/pages/Portfolios";
-import Auth from "@/pages/Auth";
+import Portfolio from "@/pages/Portfolio";
+import Login from "@/pages/Login";
+import Signup from "@/pages/Signup";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 const queryClient = new QueryClient();
@@ -22,7 +23,8 @@ function App() {
             <Router>
               <div className="min-h-screen bg-gray-50">
                 <Routes>
-                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/signup" element={<Signup />} />
                   <Route path="/" element={
                     <ProtectedRoute>
                       <Dashboard />
@@ -40,7 +42,7 @@ function App() {
                   } />
                   <Route path="/portfolios" element={
                     <ProtectedRoute>
-                      <Portfolios />
+                      <Portfolio />
                     </ProtectedRoute>
                   } />
                   <Route path="*" element={<Navigate to="/" replace />} />
