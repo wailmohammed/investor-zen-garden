@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { calculateDividendIncome } from "@/services/dividendCalculator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useToast } from "@/hooks/use-toast";
 
 interface DividendData {
   symbol: string;
@@ -35,12 +36,14 @@ interface DividendData {
 const DividendTracking = () => {
   const { user } = useAuth();
   const { selectedPortfolio } = usePortfolio();
+  const { toast } = useToast();
   const [dividendData, setDividendData] = useState<DividendData[]>([]);
   const [portfolioMetrics, setPortfolioMetrics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('holdings');
   const [processingStatus, setProcessingStatus] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
 
   const fetchDividendData = async (forceRefresh = false) => {
     if (!user || !selectedPortfolio) {
@@ -49,7 +52,14 @@ const DividendTracking = () => {
     }
 
     setLoading(true);
-    if (forceRefresh) setRefreshing(true);
+    setError(null);
+    if (forceRefresh) {
+      setRefreshing(true);
+      toast({
+        title: "Refreshing Data",
+        description: "Analyzing portfolio for dividend stocks...",
+      });
+    }
     setProcessingStatus('Initializing comprehensive dividend analysis...');
 
     try {
@@ -60,17 +70,46 @@ const DividendTracking = () => {
         
         setProcessingStatus('Connecting to Trading212 and preparing API services...');
         
-        // Fetch Trading212 positions
-        const { data, error } = await supabase.functions.invoke('trading212-sync', {
-          body: { portfolioId: selectedPortfolio }
+        // Fetch Trading212 positions with better error handling
+        const { data, error: functionError } = await supabase.functions.invoke('trading212-sync', {
+          body: { portfolioId: selectedPortfolio, forceRefresh }
         });
 
-        if (error) {
-          console.error('Error fetching Trading212 data:', error);
-          setDividendData([]);
-          setPortfolioMetrics(null);
-          setProcessingStatus('Error fetching data');
-          return;
+        if (functionError) {
+          console.error('Error calling trading212-sync:', functionError);
+          throw new Error(functionError.message || 'Failed to fetch Trading212 data');
+        }
+
+        if (data?.error) {
+          console.error('Trading212 sync error:', data.error);
+          if (data.error.includes('RATE_LIMITED')) {
+            setError('Trading212 API rate limit reached. Please try again in a few minutes.');
+            toast({
+              title: "Rate Limited",
+              description: "Trading212 API rate limit reached. Using cached data if available.",
+              variant: "destructive",
+            });
+            // Try to use cached data or show empty state with proper message
+            setDividendData([]);
+            setPortfolioMetrics({
+              annualIncome: 0,
+              quarterlyIncome: 0,
+              monthlyAverage: 0,
+              portfolioYield: 0,
+              dividendPayingStocks: 0,
+              totalStocksAnalyzed: 0,
+              databaseSize: 0,
+              newStocksAdded: 0,
+              coveragePercentage: 0,
+              processingErrors: 1,
+              apiCallsMade: 0,
+              databaseHits: 0
+            });
+            setProcessingStatus('Rate limited - using cached data');
+            return;
+          } else {
+            throw new Error(data.error);
+          }
         }
 
         if (data?.success && data.data?.positions) {
@@ -109,27 +148,47 @@ const DividendTracking = () => {
           });
           
           setProcessingStatus('Enhanced analysis complete with comprehensive API detection');
+          
+          if (forceRefresh) {
+            toast({
+              title: "Refresh Complete",
+              description: `Found ${dividendResults.dividendPayingStocks.length} dividend stocks from ${positions.length} holdings`,
+            });
+          }
         } else {
           console.log('No Trading212 position data available');
           setDividendData([]);
           setPortfolioMetrics(null);
-          setProcessingStatus('No data available');
+          setProcessingStatus('No Trading212 data available');
+          setError('No portfolio data found. Please ensure your Trading212 portfolio is properly connected.');
         }
       } else {
         // For other portfolios, show appropriate message
         setDividendData([]);
         setPortfolioMetrics(null);
-        setProcessingStatus('Portfolio not supported');
+        setProcessingStatus('Portfolio not supported for dividend tracking');
+        setError('This portfolio type does not support dividend tracking. Please select a Trading212 portfolio.');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error in enhanced dividend calculation:", error);
+      setError(error.message || 'Failed to analyze portfolio for dividends');
       setDividendData([]);
       setPortfolioMetrics(null);
       setProcessingStatus('Error during enhanced analysis');
+      
+      toast({
+        title: "Analysis Failed",
+        description: error.message || 'Failed to analyze portfolio for dividends',
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
+  };
+
+  const handleManualRefresh = () => {
+    fetchDividendData(true);
   };
 
   useEffect(() => {
@@ -156,7 +215,7 @@ const DividendTracking = () => {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>🚀 Enhanced Dividend Tracking with Free APIs</CardTitle>
+          <CardTitle>🚀 Enhanced Dividend Tracker with Comprehensive API Detection</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col justify-center items-center h-48 space-y-2">
@@ -173,7 +232,7 @@ const DividendTracking = () => {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Enhanced Dividend Tracking</CardTitle>
+          <CardTitle>Enhanced Dividend Tracker</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex justify-center items-center h-48">
@@ -192,7 +251,7 @@ const DividendTracking = () => {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Enhanced Dividend Tracking</CardTitle>
+          <CardTitle>Enhanced Dividend Tracker</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col items-center justify-center h-48 text-center">
@@ -216,11 +275,11 @@ const DividendTracking = () => {
           <Button 
             variant="outline" 
             size="sm"
-            onClick={() => fetchDividendData(true)}
+            onClick={handleManualRefresh}
             disabled={refreshing}
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-            Refresh
+            {refreshing ? 'Refreshing...' : 'Refresh'}
           </Button>
         </div>
         {portfolioMetrics && (
@@ -238,6 +297,23 @@ const DividendTracking = () => {
               </Alert>
             )}
           </>
+        )}
+        {error && (
+          <Alert variant="destructive" className="mt-2">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              {error}
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="ml-2"
+                onClick={handleManualRefresh}
+                disabled={refreshing}
+              >
+                Try Again
+              </Button>
+            </AlertDescription>
+          </Alert>
         )}
       </CardHeader>
       <CardContent>
@@ -390,7 +466,7 @@ const DividendTracking = () => {
           <div className="flex flex-col items-center justify-center h-48 text-center">
             <AlertTriangle className="h-12 w-12 text-yellow-500 mb-4" />
             <p className="text-muted-foreground mb-2">
-              {portfolioMetrics ? 
+              {error ? error : portfolioMetrics ? 
                 'No dividend-paying stocks found in your current holdings' : 
                 'Unable to load enhanced dividend data'
               }
@@ -400,6 +476,15 @@ const DividendTracking = () => {
                 Analyzed {portfolioMetrics.totalStocksAnalyzed} holdings with enhanced database of {portfolioMetrics.databaseSize} stocks
               </p>
             )}
+            <Button 
+              variant="outline" 
+              onClick={handleManualRefresh}
+              disabled={refreshing}
+              className="mt-2"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+              {refreshing ? 'Refreshing...' : 'Try Again'}
+            </Button>
           </div>
         )}
       </CardContent>
