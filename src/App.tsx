@@ -12,6 +12,7 @@ import Dividends from './pages/Dividends';
 import { PortfolioProvider } from './contexts/PortfolioContext';
 import { DividendDataProvider } from "@/contexts/DividendDataContext";
 import DividendStats from './pages/DividendStats';
+import Index from './pages/Index';
 
 // Create QueryClient instance
 const queryClient = new QueryClient();
@@ -26,7 +27,7 @@ function App() {
             <PortfolioProvider>
               <DividendDataProvider>
                 <Routes>
-                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/" element={<Index />} />
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/portfolio" element={<Portfolio />} />
                   <Route path="/settings" element={<Settings />} />
