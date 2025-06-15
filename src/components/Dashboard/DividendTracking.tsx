@@ -21,6 +21,7 @@ interface DividendData {
   totalAnnualIncome: number;
   totalQuarterlyIncome: number;
   yield: number;
+  frequency: 'quarterly' | 'annual' | 'monthly' | 'semi-annual';
   nextPayment: number;
   exDate: string;
   paymentDate: string;
