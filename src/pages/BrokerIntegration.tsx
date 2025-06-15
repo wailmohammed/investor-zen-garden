@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +14,7 @@ import ApiKeyManager from "@/components/ApiKeyManager";
 import PortfolioManager from "@/components/Portfolio/PortfolioManager";
 import WatchlistManager from "@/components/Portfolio/WatchlistManager";
 import DividendManager from "@/components/Portfolio/DividendManager";
+import HoldingsManager from "@/components/Portfolio/HoldingsManager";
 import Trading212CsvUpload from "@/components/Trading212CsvUpload";
 import { CSVUpload } from "@/components/ui/csv-upload";
 import { toast } from "@/hooks/use-toast";
@@ -94,9 +96,10 @@ const BrokerIntegration = () => {
           </div>
 
           <Tabs defaultValue="brokers" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-6">
+            <TabsList className="grid w-full grid-cols-7">
               <TabsTrigger value="brokers">🏢 Brokers</TabsTrigger>
               <TabsTrigger value="portfolios">📊 Portfolios</TabsTrigger>
+              <TabsTrigger value="holdings">💼 Holdings</TabsTrigger>
               <TabsTrigger value="dividends">💰 Dividends</TabsTrigger>
               <TabsTrigger value="watchlists">👁️ Watchlists</TabsTrigger>
               <TabsTrigger value="api-config">🔑 API Keys</TabsTrigger>
@@ -216,6 +219,10 @@ const BrokerIntegration = () => {
 
             <TabsContent value="portfolios">
               <PortfolioManager csvData={csvData} />
+            </TabsContent>
+
+            <TabsContent value="holdings">
+              <HoldingsManager />
             </TabsContent>
 
             <TabsContent value="dividends">
