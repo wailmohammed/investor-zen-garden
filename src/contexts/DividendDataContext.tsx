@@ -319,9 +319,6 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }, 30000); // Check every 30 seconds
 
       return () => clearInterval(changeCheckInterval);
-    } else {
-      // If no user or no portfolio, ensure we are not in a loading state.
-      setState(prev => ({ ...prev, loading: false, dividends: [] }));
     }
   }, [user?.id, selectedPortfolio]);
 
