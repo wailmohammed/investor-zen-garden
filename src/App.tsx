@@ -1,44 +1,57 @@
 
-import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { ThemeProvider } from "@/contexts/ThemeContext"
-import Dashboard from './pages/Dashboard';
-import Portfolio from './pages/Portfolio';
-import Settings from './pages/Settings';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Toaster } from "@/components/ui/toaster"
-import { AuthProvider } from './contexts/AuthContext';
-import Dividends from './pages/Dividends';
-import { PortfolioProvider } from './contexts/PortfolioContext';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from "@/components/ui/toaster";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { DividendDataProvider } from "@/contexts/DividendDataContext";
-import DividendStats from './pages/DividendStats';
+import Dashboard from "@/pages/Dashboard";
+import BrokerIntegration from "@/pages/BrokerIntegration";
+import Portfolios from "@/pages/Portfolios";
+import Auth from "@/pages/Auth";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
-// Create QueryClient instance
 const queryClient = new QueryClient();
 
 function App() {
   return (
-    <BrowserRouter>
-      <ThemeProvider>
-        <QueryClientProvider client={queryClient}>
-          <Toaster />
-          <AuthProvider>
-            <PortfolioProvider>
-              <DividendDataProvider>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <AuthProvider>
+          <DividendDataProvider>
+            <Router>
+              <div className="min-h-screen bg-gray-50">
                 <Routes>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/portfolio" element={<Portfolio />} />
-                  <Route path="/settings" element={<Settings />} />
-                  <Route path="/dividends" element={<Dividends />} />
-                  <Route path="/dividend-stats" element={<DividendStats />} />
+                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/" element={
+                    <ProtectedRoute>
+                      <Dashboard />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/dashboard" element={
+                    <ProtectedRoute>
+                      <Dashboard />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/brokers" element={
+                    <ProtectedRoute>
+                      <BrokerIntegration />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/portfolios" element={
+                    <ProtectedRoute>
+                      <Portfolios />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
-              </DividendDataProvider>
-            </PortfolioProvider>
-          </AuthProvider>
-        </QueryClientProvider>
-      </ThemeProvider>
-    </BrowserRouter>
+              </div>
+              <Toaster />
+            </Router>
+          </DividendDataProvider>
+        </AuthProvider>
+      </TooltipProvider>
+    </QueryClientProvider>
   );
 }
 
