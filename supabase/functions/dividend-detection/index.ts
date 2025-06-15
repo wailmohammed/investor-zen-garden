@@ -11,21 +11,43 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Enhanced dividend detection with auto-save capability
-const detectDividendsForPortfolio = async (portfolioId: string, userId: string, autoSave = false) => {
-  console.log(`Starting dividend detection for portfolio: ${portfolioId}, autoSave: ${autoSave}`);
+// Enhanced dividend detection with portfolio data integration
+const detectDividendsForPortfolio = async (portfolioId: string, userId: string, autoSave = false, usePortfolioData = false) => {
+  console.log(`Starting dividend detection for portfolio: ${portfolioId}, autoSave: ${autoSave}, usePortfolioData: ${usePortfolioData}`);
   
   try {
-    // Get portfolio positions
-    const { data: positions, error: positionsError } = await supabase
-      .from('portfolio_positions')
-      .select('*')
-      .eq('portfolio_id', portfolioId)
-      .eq('user_id', userId);
+    let positions;
 
-    if (positionsError) {
-      console.error('Error fetching positions:', positionsError);
-      return { success: false, error: positionsError.message };
+    if (usePortfolioData) {
+      // Use saved portfolio positions instead of API calls
+      console.log('Using saved portfolio data for dividend detection');
+      const { data: savedPositions, error: positionsError } = await supabase
+        .from('portfolio_positions')
+        .select('*')
+        .eq('portfolio_id', portfolioId)
+        .eq('user_id', userId);
+
+      if (positionsError) {
+        console.error('Error fetching saved positions:', positionsError);
+        return { success: false, error: positionsError.message };
+      }
+
+      positions = savedPositions || [];
+      console.log(`Found ${positions.length} saved positions for analysis`);
+    } else {
+      // Original logic: get positions from API or database
+      const { data: apiPositions, error: positionsError } = await supabase
+        .from('portfolio_positions')
+        .select('*')
+        .eq('portfolio_id', portfolioId)
+        .eq('user_id', userId);
+
+      if (positionsError) {
+        console.error('Error fetching positions:', positionsError);
+        return { success: false, error: positionsError.message };
+      }
+
+      positions = apiPositions || [];
     }
 
     if (!positions || positions.length === 0) {
@@ -33,7 +55,7 @@ const detectDividendsForPortfolio = async (portfolioId: string, userId: string, 
       return { success: true, stocksAnalyzed: 0, dividendStocksFound: 0 };
     }
 
-    console.log(`Found ${positions.length} positions to analyze`);
+    console.log(`Analyzing ${positions.length} positions for dividends`);
 
     // Convert positions to holdings format for analysis
     const holdings = positions.map(pos => ({
@@ -48,15 +70,16 @@ const detectDividendsForPortfolio = async (portfolioId: string, userId: string, 
     
     console.log(`Analysis complete: ${analysis.dividendPayers.length} dividend stocks found`);
 
-    // Auto-save or manual save detected dividends
-    if ((autoSave || analysis.dividendPayers.length > 0) && analysis.dividendPayers.length > 0) {
-      console.log(`${autoSave ? 'Auto-saving' : 'Saving'} ${analysis.dividendPayers.length} dividend stocks to database`);
+    // Auto-save detected dividends and update existing records
+    if (analysis.dividendPayers.length > 0) {
+      console.log(`Saving/updating ${analysis.dividendPayers.length} dividend stocks to database`);
       
       for (const dividendStock of analysis.dividendPayers) {
         const position = positions.find(p => p.symbol.toUpperCase().includes(dividendStock.symbol));
         const estimatedAnnualIncome = position ? 
           (dividendStock.dividendInfo.annual * position.quantity) : 0;
 
+        // Upsert with updated data including current shares
         await supabase
           .from('detected_dividends')
           .upsert({
@@ -71,7 +94,7 @@ const detectDividendsForPortfolio = async (portfolioId: string, userId: string, 
             payment_date: dividendStock.dividendInfo.paymentDate || null,
             shares_owned: position?.quantity || null,
             estimated_annual_income: estimatedAnnualIncome,
-            detection_source: dividendStock.apiSource || 'database',
+            detection_source: usePortfolioData ? 'portfolio_data' : (dividendStock.apiSource || 'database'),
             detected_at: new Date().toISOString(),
             is_active: true
           }, {
@@ -79,7 +102,20 @@ const detectDividendsForPortfolio = async (portfolioId: string, userId: string, 
           });
       }
       
-      console.log(`${autoSave ? 'Auto-saved' : 'Saved'} ${analysis.dividendPayers.length} dividend records to database`);
+      console.log(`Saved/updated ${analysis.dividendPayers.length} dividend records to database`);
+    }
+
+    // Clean up inactive dividend stocks (positions no longer held)
+    const currentSymbols = positions.map(p => p.symbol.replace(/_US_EQ$|_EQ$|\.L$|\.TO$/, '').toUpperCase());
+    if (currentSymbols.length > 0) {
+      await supabase
+        .from('detected_dividends')
+        .update({ is_active: false })
+        .eq('user_id', userId)
+        .eq('portfolio_id', portfolioId)
+        .not('symbol', 'in', `(${currentSymbols.join(',')})`);
+      
+      console.log('Updated inactive dividend stocks');
     }
 
     return {
@@ -87,7 +123,7 @@ const detectDividendsForPortfolio = async (portfolioId: string, userId: string, 
       stocksAnalyzed: analysis.analysisStats.totalAnalyzed,
       dividendStocksFound: analysis.dividendPayers.length,
       analysisStats: analysis.analysisStats,
-      autoSaved: autoSave && analysis.dividendPayers.length > 0
+      dataSource: usePortfolioData ? 'saved_portfolio' : 'api_detection'
     };
 
   } catch (error) {
@@ -140,7 +176,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { portfolioId, userId, runAll, saveData, dividendData, autoSave } = await req.json();
+    const { portfolioId, userId, runAll, saveData, dividendData, autoSave, usePortfolioData } = await req.json();
 
     if (saveData && dividendData) {
       // Save dividend data directly
@@ -167,7 +203,7 @@ Deno.serve(async (req) => {
       const results = [];
       
       for (const job of jobs || []) {
-        const result = await detectDividendsForPortfolio(job.portfolio_id, job.user_id);
+        const result = await detectDividendsForPortfolio(job.portfolio_id, job.user_id, true, true);
         
         // Update job status
         await supabase
@@ -198,8 +234,8 @@ Deno.serve(async (req) => {
       });
 
     } else if (portfolioId && userId) {
-      // Run detection for specific portfolio with optional auto-save
-      const result = await detectDividendsForPortfolio(portfolioId, userId, autoSave);
+      // Run detection for specific portfolio with optional settings
+      const result = await detectDividendsForPortfolio(portfolioId, userId, autoSave, usePortfolioData);
       
       return new Response(JSON.stringify(result), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -225,3 +261,41 @@ Deno.serve(async (req) => {
     });
   }
 });
+
+// Save dividend data directly
+const saveDividendData = async (userId: string, portfolioId: string, dividendData: any[]) => {
+  console.log(`Saving ${dividendData.length} dividend records for portfolio: ${portfolioId}`);
+  
+  try {
+    for (const dividend of dividendData) {
+      await supabase
+        .from('detected_dividends')
+        .upsert({
+          user_id: userId,
+          portfolio_id: portfolioId,
+          symbol: dividend.symbol,
+          company_name: dividend.company || dividend.symbol,
+          annual_dividend: dividend.annualDividend,
+          dividend_yield: dividend.yield,
+          frequency: dividend.frequency || 'quarterly',
+          ex_dividend_date: dividend.exDate || null,
+          payment_date: dividend.paymentDate || null,
+          shares_owned: dividend.shares || null,
+          estimated_annual_income: dividend.totalAnnualIncome,
+          detection_source: dividend.apiSource || 'manual',
+          detected_at: new Date().toISOString(),
+          is_active: true
+        }, {
+          onConflict: 'user_id,portfolio_id,symbol'
+        });
+    }
+
+    return {
+      success: true,
+      savedCount: dividendData.length
+    };
+  } catch (error) {
+    console.error('Error saving dividend data:', error);
+    return { success: false, error: error.message };
+  }
+};

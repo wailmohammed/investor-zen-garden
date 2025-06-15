@@ -8,7 +8,7 @@ import { usePortfolio } from "@/contexts/PortfolioContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import StatCard from "../StatCard";
-import { Shield, Calendar, TrendingUp, Percent, RefreshCw, DollarSign, Database, AlertTriangle } from "lucide-react";
+import { Shield, Calendar, TrendingUp, Percent, RefreshCw, DollarSign, Database, AlertTriangle, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
@@ -29,7 +29,6 @@ const DividendTracking = () => {
   } = useDividendData();
 
   const [activeTab, setActiveTab] = useState('holdings');
-  const isAdmin = user?.email?.includes('admin');
 
   const { totalAnnualIncome, totalStocks, averageYield } = getDividendSummary();
 
@@ -58,8 +57,8 @@ const DividendTracking = () => {
         <CardContent>
           <div className="flex flex-col justify-center items-center h-48 space-y-2">
             <RefreshCw className="h-8 w-8 animate-spin text-blue-500" />
-            <p>Loading dividend data...</p>
-            <p className="text-sm text-muted-foreground">Automatic detection with smart API limits...</p>
+            <p>Auto-detecting dividends from portfolio data...</p>
+            <p className="text-sm text-muted-foreground">Using saved portfolio positions</p>
           </div>
         </CardContent>
       </Card>
@@ -99,17 +98,23 @@ const DividendTracking = () => {
           </div>
         </div>
 
-        <p className="text-sm text-muted-foreground">
-          Auto-managed data: {totalStocks} dividend stocks • API Limit: {apiCallsToday}/{maxApiCallsPerDay} calls today
-          {lastSync && ` • Last sync: ${new Date(lastSync).toLocaleString()}`}
-        </p>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <CheckCircle className="h-4 w-4 text-green-500" />
+          <span>Auto-managed from portfolio data • {totalStocks} dividend stocks detected</span>
+          {lastSync && (
+            <>
+              <span>•</span>
+              <span>Last sync: {new Date(lastSync).toLocaleString()}</span>
+            </>
+          )}
+        </div>
 
         {/* API Limit Warning */}
         {!canMakeApiCall && (
           <Alert className="mt-2">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              Daily API limit reached ({apiCallsToday}/{maxApiCallsPerDay}). Showing saved data. Limit resets at midnight.
+              Daily API limit reached ({apiCallsToday}/{maxApiCallsPerDay}). Using saved portfolio data. Limit resets at midnight.
             </AlertDescription>
           </Alert>
         )}
@@ -123,8 +128,8 @@ const DividendTracking = () => {
                 label="Annual Income" 
                 value={`$${totalAnnualIncome.toFixed(2)}`} 
                 change={{
-                  value: "+7.2%",
-                  percentage: "+7.2%",
+                  value: "Auto-calculated",
+                  percentage: "From portfolio",
                   isPositive: true
                 }}
                 icon={<DollarSign className="h-4 w-4" />}
@@ -133,8 +138,8 @@ const DividendTracking = () => {
                 label="Monthly Average" 
                 value={`$${(totalAnnualIncome / 12).toFixed(2)}`} 
                 change={{
-                  value: "+7.2%",
-                  percentage: "+7.2%",
+                  value: "Auto-updated",
+                  percentage: "Live data",
                   isPositive: true
                 }}
                 icon={<Calendar className="h-4 w-4" />}
@@ -143,8 +148,8 @@ const DividendTracking = () => {
                 label="Dividend Stocks" 
                 value={`${totalStocks}`} 
                 change={{
-                  value: "Auto-saved",
-                  percentage: "Database",
+                  value: "From portfolio",
+                  percentage: "Auto-detected",
                   isPositive: true
                 }}
                 icon={<Shield className="h-4 w-4" />}
@@ -153,8 +158,8 @@ const DividendTracking = () => {
                 label="Average Yield" 
                 value={`${averageYield.toFixed(2)}%`} 
                 change={{
-                  value: "+0.3%",
-                  percentage: "+0.3%",
+                  value: "Portfolio avg",
+                  percentage: "Real-time",
                   isPositive: true
                 }}
                 icon={<Percent className="h-4 w-4" />}
@@ -169,7 +174,7 @@ const DividendTracking = () => {
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="holdings">Holdings</TabsTrigger>
                 <TabsTrigger value="projections">Monthly Projections</TabsTrigger>
-                <TabsTrigger value="analysis">API Status</TabsTrigger>
+                <TabsTrigger value="system">System Status</TabsTrigger>
               </TabsList>
               
               <TabsContent value="holdings" className="space-y-4">
@@ -199,8 +204,8 @@ const DividendTracking = () => {
                           </TableCell>
                           <TableCell>{dividend.dividend_yield.toFixed(2)}%</TableCell>
                           <TableCell>
-                            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                              {dividend.detection_source}
+                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                              {dividend.detection_source === 'portfolio_data' ? 'Portfolio' : dividend.detection_source}
                             </span>
                           </TableCell>
                         </TableRow>
@@ -221,37 +226,37 @@ const DividendTracking = () => {
                   </BarChart>
                 </ResponsiveContainer>
                 <div className="text-center text-sm text-muted-foreground">
-                  Projected annual dividend income: ${totalAnnualIncome.toFixed(2)} from auto-managed data
+                  Projected annual dividend income: ${totalAnnualIncome.toFixed(2)} from portfolio-synced data
                 </div>
               </TabsContent>
               
-              <TabsContent value="analysis" className="space-y-4">
+              <TabsContent value="system" className="space-y-4">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
-                    <Database className="h-8 w-8 mb-2 text-finance-blue" />
-                    <div className="text-xs uppercase text-muted-foreground">API Calls Today</div>
-                    <div className="text-2xl font-bold mt-1">{apiCallsToday}/{maxApiCallsPerDay}</div>
+                    <Database className="h-8 w-8 mb-2 text-blue-600" />
+                    <div className="text-xs uppercase text-muted-foreground">Data Source</div>
+                    <div className="text-lg font-bold mt-1">Portfolio</div>
                   </div>
                   <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
-                    <TrendingUp className="h-8 w-8 mb-2 text-finance-blue" />
-                    <div className="text-xs uppercase text-muted-foreground">Auto-Saved Stocks</div>
-                    <div className="text-2xl font-bold mt-1">{totalStocks}</div>
-                  </div>
-                  <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
-                    <Shield className="h-8 w-8 mb-2 text-finance-blue" />
+                    <CheckCircle className="h-8 w-8 mb-2 text-green-600" />
                     <div className="text-xs uppercase text-muted-foreground">Auto-Detection</div>
-                    <div className="text-2xl font-bold mt-1">ON</div>
+                    <div className="text-lg font-bold mt-1">Active</div>
                   </div>
                   <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
-                    <Percent className="h-8 w-8 mb-2 text-finance-blue" />
-                    <div className="text-xs uppercase text-muted-foreground">Avg Yield</div>
-                    <div className="text-2xl font-bold mt-1">{averageYield.toFixed(1)}%</div>
+                    <TrendingUp className="h-8 w-8 mb-2 text-purple-600" />
+                    <div className="text-xs uppercase text-muted-foreground">Change Tracking</div>
+                    <div className="text-lg font-bold mt-1">ON</div>
+                  </div>
+                  <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
+                    <RefreshCw className="h-8 w-8 mb-2 text-orange-600" />
+                    <div className="text-xs uppercase text-muted-foreground">API Calls Left</div>
+                    <div className="text-lg font-bold mt-1">{maxApiCallsPerDay - apiCallsToday}</div>
                   </div>
                 </div>
                 <div className="text-sm text-center text-muted-foreground mt-4">
-                  🌟 Smart API management with automatic detection. Data is auto-saved and persisted across sessions.
+                  🌟 Automatically detects dividends from your connected portfolio data.
                   <br />
-                  Use Manual Sync to update your dividend data when needed.
+                  Changes are tracked and updated automatically. Use Manual Sync for fresh API data when needed.
                 </div>
               </TabsContent>
             </Tabs>
@@ -260,10 +265,10 @@ const DividendTracking = () => {
           <div className="flex flex-col items-center justify-center h-48 text-center">
             <Database className="h-12 w-12 text-blue-500 mb-4" />
             <p className="text-muted-foreground mb-2">
-              No dividend data found
+              Auto-detecting dividends from portfolio...
             </p>
             <p className="text-sm text-muted-foreground mb-4">
-              Click "Manual Sync" to detect and auto-save dividend data from your portfolio
+              This uses your saved portfolio data. Click "Manual Sync" for fresh API detection.
             </p>
             <Button 
               onClick={refreshDividendData}
