@@ -48,15 +48,15 @@ const DividendTracking = () => {
 
     setLoading(true);
     if (forceRefresh) setRefreshing(true);
-    setProcessingStatus('Fetching portfolio data...');
+    setProcessingStatus('Initializing comprehensive dividend analysis...');
 
     try {
       const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
       
       if (selectedPortfolio === trading212PortfolioId) {
-        console.log('Fetching Trading212 data with enhanced dividend analysis');
+        console.log('Starting ENHANCED Trading212 dividend analysis with multiple free APIs');
         
-        setProcessingStatus('Connecting to Trading212...');
+        setProcessingStatus('Connecting to Trading212 and preparing API services...');
         
         // Fetch Trading212 positions
         const { data, error } = await supabase.functions.invoke('trading212-sync', {
@@ -75,16 +75,18 @@ const DividendTracking = () => {
           const positions = data.data.positions;
           console.log('Trading212 positions found:', positions.length);
           
-          setProcessingStatus('Analyzing dividend data for all holdings...');
+          setProcessingStatus(`Analyzing ${positions.length} holdings with comprehensive API detection (Yahoo Finance, Alpha Vantage, FMP, Polygon)...`);
           
-          // Use enhanced dividend calculator with dynamic data fetching
+          // Use ENHANCED dividend calculator with comprehensive API detection
           const dividendResults = await calculateDividendIncome(positions);
           
-          console.log('Enhanced dividend calculation completed:', {
+          console.log('🎉 ENHANCED dividend calculation completed:', {
             totalAnnual: dividendResults.totalAnnualIncome,
             stocksWithDividends: dividendResults.dividendPayingStocks.length,
             portfolioYield: dividendResults.portfolioYield,
-            newStocksAdded: dividendResults.stats.newStocksAdded,
+            newlyDetected: dividendResults.stats.newStocksAdded,
+            apiCallsMade: dividendResults.stats.apiCallsMade,
+            databaseHits: dividendResults.stats.databaseHits,
             databaseSize: dividendResults.stats.databaseSize
           });
           
@@ -99,10 +101,12 @@ const DividendTracking = () => {
             databaseSize: dividendResults.stats.databaseSize,
             newStocksAdded: dividendResults.stats.newStocksAdded,
             coveragePercentage: dividendResults.stats.coveragePercentage,
-            processingErrors: dividendResults.stats.processingErrors
+            processingErrors: dividendResults.stats.processingErrors,
+            apiCallsMade: dividendResults.stats.apiCallsMade,
+            databaseHits: dividendResults.stats.databaseHits
           });
           
-          setProcessingStatus('Analysis complete');
+          setProcessingStatus('Enhanced analysis complete with comprehensive API detection');
         } else {
           console.log('No Trading212 position data available');
           setDividendData([]);
@@ -116,10 +120,10 @@ const DividendTracking = () => {
         setProcessingStatus('Portfolio not supported');
       }
     } catch (error) {
-      console.error("Error calculating dividend data:", error);
+      console.error("Error in enhanced dividend calculation:", error);
       setDividendData([]);
       setPortfolioMetrics(null);
-      setProcessingStatus('Error during analysis');
+      setProcessingStatus('Error during enhanced analysis');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -150,13 +154,13 @@ const DividendTracking = () => {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Enhanced Dividend Tracking</CardTitle>
+          <CardTitle>🚀 Enhanced Dividend Tracking with Free APIs</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col justify-center items-center h-48 space-y-2">
             <RefreshCw className="h-8 w-8 animate-spin text-blue-500" />
             <p>{processingStatus}</p>
-            <p className="text-sm text-muted-foreground">Analyzing all holdings and expanding dividend database...</p>
+            <p className="text-sm text-muted-foreground">Using Yahoo Finance, Alpha Vantage, FMP & Polygon APIs...</p>
           </div>
         </CardContent>
       </Card>
@@ -206,7 +210,7 @@ const DividendTracking = () => {
     <Card className="h-full">
       <CardHeader className="pb-2">
         <div className="flex justify-between items-center">
-          <CardTitle>Enhanced Dividend Income Tracker</CardTitle>
+          <CardTitle>🌟 Enhanced Dividend Tracker with Comprehensive API Detection</CardTitle>
           <Button 
             variant="outline" 
             size="sm"
@@ -220,14 +224,14 @@ const DividendTracking = () => {
         {portfolioMetrics && (
           <>
             <p className="text-sm text-muted-foreground">
-              Found {portfolioMetrics.dividendPayingStocks} dividend-paying stocks from {portfolioMetrics.totalStocksAnalyzed} holdings
-              • Database: {portfolioMetrics.databaseSize} stocks • Coverage: {portfolioMetrics.coveragePercentage.toFixed(1)}%
+              Enhanced Detection: {portfolioMetrics.dividendPayingStocks} dividend payers from {portfolioMetrics.totalStocksAnalyzed} holdings
+              • Database: {portfolioMetrics.databaseSize} stocks • API Calls: {portfolioMetrics.apiCallsMade} • Cache Hits: {portfolioMetrics.databaseHits}
             </p>
             {portfolioMetrics.newStocksAdded > 0 && (
               <Alert className="mt-2">
                 <Database className="h-4 w-4" />
                 <AlertDescription>
-                  Added {portfolioMetrics.newStocksAdded} new stocks to dividend database from your holdings
+                  🎉 Discovered {portfolioMetrics.newStocksAdded} new dividend payers using comprehensive API detection from Yahoo Finance, Alpha Vantage, FMP & Polygon
                 </AlertDescription>
               </Alert>
             )}
@@ -286,9 +290,9 @@ const DividendTracking = () => {
               className="space-y-4"
             >
               <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="holdings">Dividend Holdings</TabsTrigger>
+                <TabsTrigger value="holdings">Enhanced Holdings</TabsTrigger>
                 <TabsTrigger value="projections">Monthly Projections</TabsTrigger>
-                <TabsTrigger value="analysis">Enhanced Analysis</TabsTrigger>
+                <TabsTrigger value="analysis">API Analysis</TabsTrigger>
               </TabsList>
               
               <TabsContent value="holdings" className="space-y-4">
@@ -301,7 +305,7 @@ const DividendTracking = () => {
                         <TableHead>Dividend/Share</TableHead>
                         <TableHead>Annual Income</TableHead>
                         <TableHead>Yield</TableHead>
-                        <TableHead>Status</TableHead>
+                        <TableHead>Detection</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -319,9 +323,12 @@ const DividendTracking = () => {
                           <TableCell>{dividend.yield.toFixed(2)}%</TableCell>
                           <TableCell>
                             {dividend.isNewlyAdded ? (
-                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">New</span>
+                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded flex items-center gap-1">
+                                🆕 API
+                                {dividend.apiSource && <span className="text-xs">({dividend.apiSource})</span>}
+                              </span>
                             ) : (
-                              <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Known</span>
+                              <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">💾 Known</span>
                             )}
                           </TableCell>
                         </TableRow>
@@ -355,24 +362,24 @@ const DividendTracking = () => {
                   </div>
                   <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
                     <TrendingUp className="h-8 w-8 mb-2 text-finance-blue" />
-                    <div className="text-xs uppercase text-muted-foreground">Coverage</div>
-                    <div className="text-2xl font-bold mt-1">{portfolioMetrics.coveragePercentage.toFixed(1)}%</div>
+                    <div className="text-xs uppercase text-muted-foreground">API Calls</div>
+                    <div className="text-2xl font-bold mt-1">{portfolioMetrics.apiCallsMade}</div>
                   </div>
                   <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
                     <Shield className="h-8 w-8 mb-2 text-finance-blue" />
-                    <div className="text-xs uppercase text-muted-foreground">New Stocks</div>
-                    <div className="text-2xl font-bold mt-1">{portfolioMetrics.newStocksAdded}</div>
+                    <div className="text-xs uppercase text-muted-foreground">Cache Hits</div>
+                    <div className="text-2xl font-bold mt-1">{portfolioMetrics.databaseHits}</div>
                   </div>
                   <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
                     <Percent className="h-8 w-8 mb-2 text-finance-blue" />
-                    <div className="text-xs uppercase text-muted-foreground">Errors</div>
-                    <div className="text-2xl font-bold mt-1">{portfolioMetrics.processingErrors}</div>
+                    <div className="text-xs uppercase text-muted-foreground">New Detected</div>
+                    <div className="text-2xl font-bold mt-1">{portfolioMetrics.newStocksAdded}</div>
                   </div>
                 </div>
                 <div className="text-sm text-center text-muted-foreground mt-4">
-                  Enhanced dividend calculations with dynamic database expansion.
+                  🌟 Enhanced dividend detection using Yahoo Finance, Alpha Vantage, Financial Modeling Prep & Polygon APIs.
                   <br />
-                  Automatically added missing stocks from your {portfolioMetrics.totalStocksAnalyzed} holdings to ensure complete coverage.
+                  Comprehensive analysis of {portfolioMetrics.totalStocksAnalyzed} holdings with real-time API detection for maximum accuracy.
                 </div>
               </TabsContent>
             </Tabs>

@@ -1,10 +1,9 @@
-
-// Main calculator function with dynamic dividend data fetching
+// Main calculator function with enhanced comprehensive dividend data fetching
 import { DIVIDEND_DATABASE, DividendInfo } from './dividend/dividendData';
 import { findDividendSymbol } from './dividend/symbolMatcher';
 import { getCompanyName } from './dividend/companyNames';
 import { getNextExDate, getNextPaymentDate } from './dividend/dateUtils';
-import { ensureDividendDataForHoldings, addStockToDividendDatabase, getDatabaseStats } from './dividend/dynamicDividendManager';
+import { analyzePortfolioForDividends, getComprehensiveStats } from './dividend/enhancedDividendManager';
 
 interface Position {
   symbol: string;
@@ -26,12 +25,14 @@ export const calculateDividendIncome = async (positions: Position[]): Promise<{
     coveragePercentage: number;
     newStocksAdded: number;
     processingErrors: number;
+    apiCallsMade: number;
+    databaseHits: number;
   };
 }> => {
-  console.log('Starting enhanced dividend calculation for positions:', positions.length);
+  console.log('🚀 Starting ENHANCED dividend calculation with comprehensive API detection...');
   
-  // First, ensure all holdings have dividend data
-  const holdingsProcessing = await ensureDividendDataForHoldings(
+  // Use the enhanced portfolio analysis
+  const analysisResults = await analyzePortfolioForDividends(
     positions.map(p => ({
       symbol: p.symbol,
       quantity: p.quantity,
@@ -41,62 +42,35 @@ export const calculateDividendIncome = async (positions: Position[]): Promise<{
   );
   
   const dividendPayingStocks = [];
-  const allStocksWithData = [];
   let totalAnnualIncome = 0;
   let totalQuarterlyIncome = 0;
   let totalPortfolioValue = 0;
-  let dividendPayingStocksCount = 0;
-  let symbolsProcessed = 0;
-  let symbolsMatched = 0;
-  let zeroPayerCount = 0;
+  let processingErrors = 0;
 
+  // Process each position with the enhanced dividend data
   for (const position of positions) {
-    symbolsProcessed++;
-    
     try {
-      // Enhanced symbol matching with dynamic data
-      let matchedSymbol = findDividendSymbol(position.symbol, DIVIDEND_DATABASE);
-      let dividendInfo = matchedSymbol ? DIVIDEND_DATABASE[matchedSymbol] : null;
-      
-      // If not found, try to add it dynamically
-      if (!dividendInfo) {
-        const cleanSymbol = position.symbol.replace(/_US_EQ$|_EQ$|\.L$|\.TO$/, '').toUpperCase();
-        try {
-          dividendInfo = await addStockToDividendDatabase(cleanSymbol);
-          matchedSymbol = cleanSymbol;
-        } catch (error) {
-          console.error(`Failed to add ${cleanSymbol} to database:`, error);
-        }
-      }
-      
-      // Calculate portfolio value for all positions
+      const cleanSymbol = position.symbol.replace(/_US_EQ$|_EQ$|\.L$|\.TO$/, '').toUpperCase();
       const positionValue = position.marketValue || (position.quantity * position.currentPrice);
       totalPortfolioValue += positionValue;
       
-      if (dividendInfo && position.quantity > 0) {
-        symbolsMatched++;
+      // Find dividend info from enhanced analysis
+      const dividendPayer = analysisResults.dividendPayers.find(dp => dp.symbol === cleanSymbol);
+      
+      if (dividendPayer && dividendPayer.dividendInfo.annual > 0 && position.quantity > 0) {
+        const dividendInfo = dividendPayer.dividendInfo;
         const annualDividendForPosition = dividendInfo.annual * position.quantity;
         const quarterlyDividendForPosition = dividendInfo.quarterly * position.quantity;
         
-        // Check if this stock actually pays dividends
-        const actuallyPaysDividends = dividendInfo.annual > 0;
+        totalAnnualIncome += annualDividendForPosition;
+        totalQuarterlyIncome += quarterlyDividendForPosition;
         
-        if (actuallyPaysDividends) {
-          totalAnnualIncome += annualDividendForPosition;
-          totalQuarterlyIncome += quarterlyDividendForPosition;
-          dividendPayingStocksCount++;
-          
-          console.log(`✓ DIVIDEND PAYER: ${matchedSymbol}: ${position.quantity} shares × $${dividendInfo.annual} = $${annualDividendForPosition.toFixed(2)} annual`);
-        } else {
-          zeroPayerCount++;
-          console.log(`✗ NON-DIVIDEND: ${matchedSymbol}: $${dividendInfo.annual} annual dividend`);
-        }
+        console.log(`✅ ENHANCED DIVIDEND PAYER: ${cleanSymbol}: ${position.quantity} shares × $${dividendInfo.annual} = $${annualDividendForPosition.toFixed(2)} annual ${dividendPayer.isNewlyDetected ? '(NEW!)' : '(KNOWN)'}`);
         
-        // Add all stocks with data to the comprehensive list
-        allStocksWithData.push({
-          symbol: matchedSymbol || position.symbol,
+        dividendPayingStocks.push({
+          symbol: cleanSymbol,
           originalSymbol: position.symbol,
-          company: getCompanyName(matchedSymbol || position.symbol),
+          company: getCompanyName(cleanSymbol),
           shares: position.quantity,
           annualDividend: dividendInfo.annual,
           quarterlyDividend: dividendInfo.quarterly,
@@ -108,45 +82,45 @@ export const calculateDividendIncome = async (positions: Position[]): Promise<{
           exDate: getNextExDate(),
           paymentDate: getNextPaymentDate(),
           currentValue: positionValue,
-          hasDiv: actuallyPaysDividends,
-          isNewlyAdded: !findDividendSymbol(position.symbol, DIVIDEND_DATABASE)
+          hasDiv: true,
+          isNewlyAdded: dividendPayer.isNewlyDetected,
+          apiSource: dividendPayer.apiSource
         });
-        
-        // Only add to dividend paying stocks if it actually pays dividends
-        if (actuallyPaysDividends) {
-          dividendPayingStocks.push(allStocksWithData[allStocksWithData.length - 1]);
-        }
-      } else {
-        console.log(`⚠️ NO DATA: ${position.symbol} - could not find or fetch dividend data`);
+      } else if (analysisResults.nonDividendStocks.includes(cleanSymbol)) {
+        console.log(`❌ CONFIRMED NON-DIVIDEND: ${cleanSymbol}`);
       }
     } catch (error) {
-      console.error(`Error processing position ${position.symbol}:`, error);
+      console.error(`❌ Error processing position ${position.symbol}:`, error);
+      processingErrors++;
     }
   }
 
   const portfolioYield = totalPortfolioValue > 0 ? (totalAnnualIncome / totalPortfolioValue) * 100 : 0;
-  const coveragePercentage = symbolsProcessed > 0 ? (symbolsMatched / symbolsProcessed) * 100 : 0;
-  const dbStats = getDatabaseStats();
+  const coveragePercentage = positions.length > 0 ? (analysisResults.analysisStats.totalAnalyzed / positions.length) * 100 : 0;
+  const comprehensiveStats = getComprehensiveStats();
 
   const stats = {
-    totalPositions: symbolsProcessed,
-    symbolsMatched: symbolsMatched,
-    dividendPayingStocks: dividendPayingStocksCount,
-    databaseSize: dbStats.totalStocks,
+    totalPositions: positions.length,
+    symbolsMatched: analysisResults.analysisStats.totalAnalyzed,
+    dividendPayingStocks: analysisResults.analysisStats.dividendPayersFound,
+    databaseSize: comprehensiveStats.totalStocks,
     coveragePercentage: Math.round(coveragePercentage * 100) / 100,
-    newStocksAdded: holdingsProcessing.newStocksAdded,
-    processingErrors: holdingsProcessing.errors
+    newStocksAdded: analysisResults.analysisStats.newlyDetected,
+    processingErrors: processingErrors,
+    apiCallsMade: analysisResults.analysisStats.apiCallsMade,
+    databaseHits: analysisResults.analysisStats.databaseHits
   };
 
   console.log('📊 ENHANCED DIVIDEND ANALYSIS RESULTS:');
-  console.log(`   Total positions: ${symbolsProcessed}`);
-  console.log(`   Symbols matched: ${symbolsMatched}`);
-  console.log(`   Dividend payers: ${dividendPayingStocksCount}`);
-  console.log(`   Zero dividend stocks: ${zeroPayerCount}`);
-  console.log(`   No data found: ${symbolsProcessed - symbolsMatched}`);
-  console.log(`   Total annual income: $${totalAnnualIncome.toFixed(2)}`);
-  console.log(`   Portfolio yield: ${portfolioYield.toFixed(2)}%`);
-  console.log(`   Database size: ${dbStats.totalStocks} stocks`);
+  console.log(`   📈 Total positions: ${stats.totalPositions}`);
+  console.log(`   🎯 Symbols analyzed: ${stats.symbolsMatched}`);
+  console.log(`   💰 Dividend payers: ${stats.dividendPayingStocks}`);
+  console.log(`   🆕 Newly detected: ${stats.newStocksAdded}`);
+  console.log(`   🌐 API calls made: ${stats.apiCallsMade}`);
+  console.log(`   💾 Database hits: ${stats.databaseHits}`);
+  console.log(`   💵 Total annual income: $${totalAnnualIncome.toFixed(2)}`);
+  console.log(`   📊 Portfolio yield: ${portfolioYield.toFixed(2)}%`);
+  console.log(`   🗄️ Database size: ${stats.databaseSize} stocks`);
 
   return {
     totalAnnualIncome,
