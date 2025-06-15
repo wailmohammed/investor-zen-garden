@@ -53,15 +53,15 @@ const DividendReport = () => {
 
         if (data?.success && data.data?.positions) {
           const positions = data.data.positions;
-          const dividendResults = calculateDividendIncome(positions);
+          const dividendResults = await calculateDividendIncome(positions);
           
           const report: ReportData = {
             totalAnnualIncome: dividendResults.totalAnnualIncome,
             portfolioYield: dividendResults.portfolioYield,
             dividendStocks: dividendResults.dividendPayingStocks.length,
             totalStocks: positions.length,
-            avgSafetyScore: 88, // Mock average safety score
-            projectedGrowth: 9.2, // Mock projected growth
+            avgSafetyScore: 88,
+            projectedGrowth: 9.2,
             recommendations: generateRecommendations(dividendResults),
             strengths: generateStrengths(dividendResults),
             risks: generateRisks(dividendResults)

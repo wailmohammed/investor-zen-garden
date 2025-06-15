@@ -49,7 +49,7 @@ const DividendOverviewEnhanced = () => {
 
         if (data?.success && data.data?.positions) {
           const positions = data.data.positions;
-          const dividendResults = calculateDividendIncome(positions);
+          const dividendResults = await calculateDividendIncome(positions);
           
           setStats({
             totalAnnualIncome: dividendResults.totalAnnualIncome,

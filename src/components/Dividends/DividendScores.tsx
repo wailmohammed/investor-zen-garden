@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -54,7 +53,7 @@ const DividendScores = () => {
 
         if (data?.success && data.data?.positions) {
           const positions = data.data.positions;
-          const dividendResults = calculateDividendIncome(positions);
+          const dividendResults = await calculateDividendIncome(positions);
           
           const safetyResults = dividendResults.dividendPayingStocks.map((stock: any) => {
             const safetyScore = getSafetyScore(stock.symbol);
@@ -176,7 +175,6 @@ const DividendScores = () => {
     );
   }
 
-  // Calculate portfolio safety metrics
   const avgSafetyScore = safetyData.reduce((sum, stock) => sum + stock.safetyScore, 0) / safetyData.length;
   const safeStocks = safetyData.filter(stock => stock.isSafe).length;
   const totalAnnualIncome = safetyData.reduce((sum, stock) => sum + stock.totalAnnualIncome, 0);

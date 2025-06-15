@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
@@ -52,7 +51,7 @@ const DividendOverview = () => {
 
         if (data?.success && data.data?.positions) {
           const positions = data.data.positions;
-          const dividendResults = calculateDividendIncome(positions);
+          const dividendResults = await calculateDividendIncome(positions);
           
           setOverviewData({
             annualIncome: dividendResults.totalAnnualIncome,
@@ -114,7 +113,6 @@ const DividendOverview = () => {
     );
   }
 
-  // Prepare data for charts
   const sectorData = overviewData.dividendHoldings.reduce((acc: any, holding: any) => {
     const sector = getSectorForSymbol(holding.symbol);
     const existing = acc.find((item: any) => item.name === sector);
@@ -128,7 +126,7 @@ const DividendOverview = () => {
 
   const monthlyProjection = Array.from({ length: 12 }, (_, i) => ({
     month: new Date(0, i).toLocaleString('default', { month: 'short' }),
-    income: overviewData.monthlyAverage * (0.8 + Math.random() * 0.4) // Add some variation
+    income: overviewData.monthlyAverage * (0.8 + Math.random() * 0.4)
   }));
 
   const COLORS = ['#4f46e5', '#7c3aed', '#ec4899', '#f59e0b', '#10b981', '#3b82f6'];
@@ -264,7 +262,6 @@ const DividendOverview = () => {
   );
 };
 
-// Helper function to determine sector from symbol
 const getSectorForSymbol = (symbol: string): string => {
   const sectorMap: Record<string, string> = {
     'AAPL': 'Technology',

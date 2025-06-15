@@ -74,7 +74,6 @@ const DividendPerformanceTable = () => {
             setError(`Trading212 API rate limit reached. ${data.message}`);
             if (data.retryAfter) {
               setRateLimitRetry(data.retryAfter);
-              // Set up countdown timer
               const interval = setInterval(() => {
                 setRateLimitRetry(prev => {
                   if (prev && prev > 1) {
@@ -105,15 +104,14 @@ const DividendPerformanceTable = () => {
 
         if (data?.success && data.data?.positions) {
           const positions = data.data.positions;
-          const dividendResults = calculateDividendIncome(positions);
+          const dividendResults = await calculateDividendIncome(positions);
           
-          // Set statistics
           setStats(dividendResults.stats);
           
           const performanceResults = dividendResults.dividendPayingStocks.map((stock: any) => ({
             ...stock,
-            performance: Math.random() * 20 - 10, // Mock performance data
-            safetyScore: Math.floor(Math.random() * 20) + 80 // Mock safety score 80-100
+            performance: Math.random() * 20 - 10,
+            safetyScore: Math.floor(Math.random() * 20) + 80
           }));
           
           setPerformanceData(performanceResults);
