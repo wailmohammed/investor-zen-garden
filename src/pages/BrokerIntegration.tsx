@@ -50,6 +50,14 @@ const BrokerIntegrationContent = () => {
     }
   };
 
+  const handleCSVUpload = (data: any[]) => {
+    setCsvData(data);
+    toast({
+      title: "CSV Data Loaded",
+      description: `${data.length} items ready to import`,
+    });
+  };
+
   // Trading212 connection handlers
   const handleTrading212Connect = () => {
     if (!selectedApiPortfolio) {
