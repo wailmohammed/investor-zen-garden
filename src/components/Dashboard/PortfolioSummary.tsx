@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import StatCard from "../StatCard";
 import { PortfolioSelector } from "@/components/ui/portfolio-selector";
@@ -20,6 +19,7 @@ const PortfolioSummary = () => {
     netDeposits: "$0.00"
   });
   const [isLoadingData, setIsLoadingData] = useState(false);
+  const [hasRealData, setHasRealData] = useState(false);
 
   // Get current portfolio type
   const currentPortfolio = portfolios.find(p => p.id === selectedPortfolio);
@@ -29,21 +29,23 @@ const PortfolioSummary = () => {
   useEffect(() => {
     const fetchPortfolioData = async () => {
       if (!selectedPortfolio) {
-        console.log('No portfolio selected, using default data');
+        console.log('No portfolio selected, showing empty state');
         setPortfolioData({
-          totalValue: "$254,872.65",
-          todayChange: "+$1,243.32",
-          todayPercentage: "+0.49%",
-          totalReturn: "+$45,631.28",
-          totalReturnPercentage: "+21.8%",
-          holdingsCount: 15,
-          netDeposits: "$209,241.37"
+          totalValue: "$0.00",
+          todayChange: "$0.00",
+          todayPercentage: "0%",
+          totalReturn: "$0.00",
+          totalReturnPercentage: "0%",
+          holdingsCount: 0,
+          netDeposits: "$0.00"
         });
+        setHasRealData(false);
         return;
       }
 
       try {
         setIsLoadingData(true);
+        setHasRealData(false);
         console.log('Fetching data for portfolio:', selectedPortfolio, 'Type:', portfolioType);
         
         // Check if this is a Trading212 or Binance connected portfolio
@@ -78,6 +80,7 @@ const PortfolioSummary = () => {
                 holdingsCount: realData.holdingsCount,
                 netDeposits: `$${realData.netDeposits.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
               });
+              setHasRealData(true);
               
               // Update cached data
               localStorage.setItem('trading212_data', JSON.stringify(realData));
@@ -104,6 +107,7 @@ const PortfolioSummary = () => {
                 holdingsCount: cachedRealData.holdingsCount,
                 netDeposits: `$${cachedRealData.netDeposits.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
               });
+              setHasRealData(true);
               console.log('Using cached Trading212 data');
               
               toast({
@@ -113,31 +117,15 @@ const PortfolioSummary = () => {
               });
             } catch (parseError) {
               console.error('Error parsing cached data:', parseError);
-              // Fall back to sample data
-              setPortfolioData({
-                totalValue: "$2,631.96",
-                todayChange: "-$32.15",
-                todayPercentage: "-1.21%",
-                totalReturn: "-$95.13",
-                totalReturnPercentage: "-11.0%",
-                holdingsCount: 3,
-                netDeposits: "$2,727.09"
-              });
+              // Keep zero values if no valid data
+              setHasRealData(false);
             }
           } else if (shouldUseCached) {
-            // No cached data available, use sample data
-            setPortfolioData({
-              totalValue: "$2,631.96",
-              todayChange: "-$32.15",
-              todayPercentage: "-1.21%",
-              totalReturn: "-$95.13",
-              totalReturnPercentage: "-11.0%",
-              holdingsCount: 3,
-              netDeposits: "$2,727.09"
-            });
+            // No cached data available, keep zero values
+            setHasRealData(false);
             toast({
-              title: "Sample Data",
-              description: "Trading212 API is unavailable. Showing sample portfolio data.",
+              title: "No Data Available",
+              description: "Trading212 API is unavailable and no cached data found. Please try refreshing or check your connection.",
               variant: "default",
             });
           }
@@ -249,48 +237,29 @@ const PortfolioSummary = () => {
             });
           }
         } else {
-          console.log('Loading default stock portfolio data');
-          // Default stock portfolio data
+          console.log('Loading sample stock portfolio data for user portfolio');
+          // Sample data for user-created portfolios
           setPortfolioData({
-            totalValue: "$254,872.65",
-            todayChange: "+$1,243.32",
-            todayPercentage: "+0.49%",
-            totalReturn: "+$45,631.28",
-            totalReturnPercentage: "+21.8%",
-            holdingsCount: 15,
-            netDeposits: "$209,241.37"
+            totalValue: "$12,543.87",
+            todayChange: "+$156.42",
+            todayPercentage: "+1.27%",
+            totalReturn: "+$2,543.87",
+            totalReturnPercentage: "+25.4%",
+            holdingsCount: 8,
+            netDeposits: "$10,000.00"
           });
+          setHasRealData(true);
         }
       } catch (error) {
         console.error('Error fetching portfolio data:', error);
         
-        // Use fallback data based on portfolio type
-        if (portfolioType === 'crypto') {
-          setPortfolioData({
-            totalValue: "$15,432.18",
-            todayChange: "+$542.33",
-            todayPercentage: "+3.64%",
-            totalReturn: "+$3,432.18",
-            totalReturnPercentage: "+28.6%",
-            holdingsCount: 8,
-            netDeposits: "$12,000.00"
-          });
-        } else {
-          setPortfolioData({
-            totalValue: "$254,872.65",
-            todayChange: "+$1,243.32",
-            todayPercentage: "+0.49%",
-            totalReturn: "+$45,631.28",
-            totalReturnPercentage: "+21.8%",
-            holdingsCount: 15,
-            netDeposits: "$209,241.37"
-          });
-        }
+        // Keep zero values on error
+        setHasRealData(false);
         
         toast({
-          title: "Using Sample Data",
-          description: "Unable to load real portfolio data. Showing sample data.",
-          variant: "default",
+          title: "Error Loading Data",
+          description: "Unable to load portfolio data. Please try again later.",
+          variant: "destructive",
         });
       } finally {
         setIsLoadingData(false);
@@ -340,6 +309,19 @@ const PortfolioSummary = () => {
               <div className="text-sm text-blue-600">🔄 Fetching real-time data...</div>
             )}
             
+            {!hasRealData && !isLoadingData && portfolioData.totalValue === "$0.00" && (
+              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                <p className="text-sm text-yellow-800">
+                  📊 This portfolio appears to be empty or data is unavailable.
+                </p>
+                <p className="text-xs text-yellow-600 mt-1">
+                  {selectedPortfolio === localStorage.getItem('trading212_portfolio_id') 
+                    ? "Check your Trading212 connection or try refreshing the data."
+                    : "Add some holdings to this portfolio or connect it to a broker."}
+                </p>
+              </div>
+            )}
+            
             <StatCard 
               label="Total Value" 
               value={portfolioData.totalValue}
@@ -386,13 +368,18 @@ const PortfolioSummary = () => {
                 </span>
               </p>
               {selectedPortfolio === localStorage.getItem('trading212_portfolio_id') && (
-                <p className="text-xs text-blue-600">✓ Connected to Trading212 (Real Data)</p>
+                <p className="text-xs text-blue-600">
+                  {hasRealData ? '✓ Connected to Trading212 (Real Data)' : '⚠️ Trading212 Connected (No Data)'}
+                </p>
               )}
               {selectedPortfolio === localStorage.getItem('binance_portfolio_id') && (
                 <p className="text-xs text-orange-600">✓ Connected to Binance (Real Data)</p>
               )}
               {portfolioType === 'crypto' && selectedPortfolio !== localStorage.getItem('binance_portfolio_id') && (
                 <p className="text-xs text-green-600">✓ Live Data from CoinGecko API</p>
+              )}
+              {!hasRealData && selectedPortfolio !== localStorage.getItem('trading212_portfolio_id') && selectedPortfolio !== localStorage.getItem('binance_portfolio_id') && (
+                <p className="text-xs text-gray-600">📝 Manual Portfolio (Add holdings to see data)</p>
               )}
             </div>
           </div>
