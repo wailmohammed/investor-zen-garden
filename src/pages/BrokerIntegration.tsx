@@ -129,45 +129,39 @@ const BrokerIntegration = () => {
               <BrokerCard
                 name="Trading212"
                 logo="/trading212-logo.svg"
-                description="Connect your Trading212 account to automatically sync your portfolio and dividend data."
-                isConnected={!!localStorage.getItem('trading212_portfolio_id')}
-                features={["Real-time portfolio sync", "Dividend tracking", "Performance analytics"]}
+                description="Connect your Trading212 account to automatically sync your portfolio and dividend data with real-time portfolio sync, dividend tracking, and performance analytics."
+                status={!!localStorage.getItem('trading212_portfolio_id') ? 'connected' : 'not_connected'}
                 onConnect={() => console.log('Trading212 connection')}
               />
 
               <BrokerCard
                 name="Binance"
                 logo="/binance-logo.svg"
-                description="Connect your Binance account to track your cryptocurrency portfolio."
-                isConnected={!!localStorage.getItem('binance_api_key')}
-                features={["Crypto portfolio tracking", "Real-time prices", "Transaction history"]}
+                description="Connect your Binance account to track your cryptocurrency portfolio with crypto portfolio tracking, real-time prices, and transaction history."
+                status={!!localStorage.getItem('binance_api_key') ? 'connected' : 'not_connected'}
                 onConnect={() => console.log('Binance connection')}
               />
 
               <BrokerCard
                 name="Interactive Brokers"
                 logo="/interactive-brokers-logo.svg"
-                description="Professional trading platform integration for comprehensive portfolio management."
-                isConnected={false}
-                features={["Global markets access", "Advanced analytics", "Options tracking"]}
+                description="Professional trading platform integration for comprehensive portfolio management with global markets access, advanced analytics, and options tracking."
+                status="not_connected"
                 onConnect={() => toast({
                   title: "Coming Soon",
                   description: "Interactive Brokers integration is in development.",
                 })}
-                isPremium={true}
               />
 
               <BrokerCard
                 name="eToro"
                 logo="/etoro-logo.svg"
-                description="Social trading platform with copy trading and portfolio insights."
-                isConnected={false}
-                features={["Social trading", "Copy portfolios", "Multi-asset tracking"]}
+                description="Social trading platform with copy trading and portfolio insights including social trading, copy portfolios, and multi-asset tracking."
+                status="not_connected"
                 onConnect={() => toast({
                   title: "Coming Soon",
                   description: "eToro integration is planned for future release.",
                 })}
-                isPremium={true}
               />
             </div>
           </TabsContent>
