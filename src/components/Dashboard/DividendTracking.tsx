@@ -1,407 +1,60 @@
+
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useDividendData } from "@/contexts/DividendDataContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePortfolio } from "@/contexts/PortfolioContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import StatCard from "../StatCard";
-import { Shield, Calendar, TrendingUp, Percent, RefreshCw, DollarSign, Database, AlertTriangle, Save, Clock } from "lucide-react";
+import { Shield, Calendar, TrendingUp, Percent, RefreshCw, DollarSign, Database, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
-import { calculateDividendIncome } from "@/services/dividendCalculator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
-interface DividendData {
-  symbol: string;
-  company: string;
-  shares: number;
-  annualDividend: number;
-  quarterlyDividend: number;
-  totalAnnualIncome: number;
-  totalQuarterlyIncome: number;
-  yield: number;
-  frequency: 'quarterly' | 'annual' | 'monthly' | 'semi-annual';
-  nextPayment: number;
-  exDate: string;
-  paymentDate: string;
-  currentValue: number;
-  hasDiv: boolean;
-  isNewlyAdded?: boolean;
-  apiSource?: string;
-}
-
 const DividendTracking = () => {
   const { user } = useAuth();
   const { selectedPortfolio } = usePortfolio();
   const { toast } = useToast();
-  const [dividendData, setDividendData] = useState<DividendData[]>([]);
-  const [portfolioMetrics, setPortfolioMetrics] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [autoSaving, setAutoSaving] = useState(false);
-  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
+  const {
+    dividends,
+    loading,
+    lastSync,
+    apiCallsToday,
+    maxApiCallsPerDay,
+    canMakeApiCall,
+    autoSyncEnabled,
+    refreshDividendData,
+    forceSyncData,
+    toggleAutoSync,
+    getDividendSummary
+  } = useDividendData();
+
   const [activeTab, setActiveTab] = useState('holdings');
-  const [processingStatus, setProcessingStatus] = useState<string>('');
-  const [error, setError] = useState<string | null>(null);
-  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const isAdmin = user?.email?.includes('admin');
 
-  // Auto-save detected dividends when data changes
-  useEffect(() => {
-    if (autoSaveEnabled && dividendData.length > 0 && portfolioMetrics && !saving && !autoSaving) {
-      autoSaveDetectedDividends();
-    }
-  }, [dividendData, portfolioMetrics, autoSaveEnabled]);
-
-  const autoSaveDetectedDividends = async () => {
-    if (!user || !selectedPortfolio || !dividendData.length) return;
-
-    setAutoSaving(true);
-    try {
-      console.log('Auto-saving detected dividends to database...');
-      
-      const { data, error } = await supabase.functions.invoke('dividend-detection', {
-        body: {
-          portfolioId: selectedPortfolio,
-          userId: user.id,
-          saveData: true,
-          dividendData: dividendData
-        }
-      });
-
-      if (error) {
-        console.error('Error auto-saving dividend data:', error);
-        return;
-      }
-
-      if (data?.success) {
-        console.log('Auto-saved dividend data successfully:', data);
-        setLastSyncTime(new Date().toLocaleString());
-        
-        // Show subtle notification for auto-save
-        toast({
-          title: "Data Auto-Saved",
-          description: `${dividendData.length} dividend stocks automatically saved`,
-          variant: "default",
-        });
-      }
-    } catch (error: any) {
-      console.error('Error auto-saving dividend data:', error);
-    } finally {
-      setAutoSaving(false);
-    }
-  };
-
-  const saveDetectedDividends = async () => {
-    if (!user || !selectedPortfolio || !dividendData.length) {
-      toast({
-        title: "No Data to Save",
-        description: "No dividend data available to save",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setSaving(true);
-    try {
-      console.log('Manually saving detected dividends to database...');
-      
-      const { data, error } = await supabase.functions.invoke('dividend-detection', {
-        body: {
-          portfolioId: selectedPortfolio,
-          userId: user.id,
-          saveData: true,
-          dividendData: dividendData
-        }
-      });
-
-      if (error) {
-        console.error('Error saving dividend data:', error);
-        throw new Error(error.message || 'Failed to save dividend data');
-      }
-
-      if (data?.success) {
-        setLastSyncTime(new Date().toLocaleString());
-        toast({
-          title: "Data Saved Successfully",
-          description: `Manually saved ${dividendData.length} dividend stocks to database`,
-          variant: "default",
-        });
-        console.log('Dividend data saved successfully:', data);
-      } else {
-        throw new Error(data?.error || 'Failed to save dividend data');
-      }
-    } catch (error: any) {
-      console.error('Error saving dividend data:', error);
-      toast({
-        title: "Save Failed",
-        description: error.message || 'Failed to save dividend data',
-        variant: "destructive",
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const fetchDividendData = async (forceRefresh = false) => {
-    if (!user || !selectedPortfolio) {
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    if (forceRefresh) {
-      setRefreshing(true);
-      toast({
-        title: "Refreshing Data",
-        description: "Analyzing portfolio for dividend stocks...",
-      });
-    }
-    setProcessingStatus('Initializing comprehensive dividend analysis...');
-
-    try {
-      const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
-      
-      if (selectedPortfolio === trading212PortfolioId) {
-        console.log('Starting ENHANCED Trading212 dividend analysis with multiple free APIs');
-        
-        setProcessingStatus('Connecting to Trading212 and preparing API services...');
-        
-        // Fetch Trading212 positions with better error handling
-        const { data, error: functionError } = await supabase.functions.invoke('trading212-sync', {
-          body: { portfolioId: selectedPortfolio, forceRefresh }
-        });
-
-        if (functionError) {
-          console.error('Error calling trading212-sync:', functionError);
-          throw new Error(functionError.message || 'Failed to fetch Trading212 data');
-        }
-
-        if (data?.error) {
-          console.error('Trading212 sync error:', data.error);
-          if (data.error.includes('RATE_LIMITED')) {
-            setError('Trading212 API rate limit reached. Please try again in a few minutes.');
-            toast({
-              title: "Rate Limited",
-              description: "Trading212 API rate limit reached. Using cached data if available.",
-              variant: "destructive",
-            });
-            // Try to use cached data
-            const cachedData = localStorage.getItem('trading212_data');
-            if (cachedData) {
-              try {
-                const parsedData = JSON.parse(cachedData);
-                if (parsedData.positions) {
-                  setProcessingStatus('Using cached Trading212 data for dividend analysis...');
-                  const dividendResults = await calculateDividendIncome(parsedData.positions);
-                  
-                  setDividendData(dividendResults.dividendPayingStocks);
-                  setPortfolioMetrics({
-                    annualIncome: dividendResults.totalAnnualIncome,
-                    quarterlyIncome: dividendResults.totalQuarterlyIncome,
-                    monthlyAverage: dividendResults.totalAnnualIncome / 12,
-                    portfolioYield: dividendResults.portfolioYield,
-                    dividendPayingStocks: dividendResults.dividendPayingStocks.length,
-                    totalStocksAnalyzed: parsedData.positions.length,
-                    databaseSize: dividendResults.stats.databaseSize,
-                    newStocksAdded: dividendResults.stats.newStocksAdded,
-                    coveragePercentage: dividendResults.stats.coveragePercentage,
-                    processingErrors: dividendResults.stats.processingErrors,
-                    apiCallsMade: dividendResults.stats.apiCallsMade,
-                    databaseHits: dividendResults.stats.databaseHits
-                  });
-                  setProcessingStatus('Using cached data - analysis complete');
-                  return;
-                }
-              } catch (parseError) {
-                console.error('Error parsing cached data:', parseError);
-              }
-            }
-            
-            // No cached data available
-            setDividendData([]);
-            setPortfolioMetrics({
-              annualIncome: 0,
-              quarterlyIncome: 0,
-              monthlyAverage: 0,
-              portfolioYield: 0,
-              dividendPayingStocks: 0,
-              totalStocksAnalyzed: 0,
-              databaseSize: 0,
-              newStocksAdded: 0,
-              coveragePercentage: 0,
-              processingErrors: 1,
-              apiCallsMade: 0,
-              databaseHits: 0
-            });
-            setProcessingStatus('Rate limited - no cached data available');
-            return;
-          } else {
-            throw new Error(data.error);
-          }
-        }
-
-        if (data?.success && data.data?.positions) {
-          const positions = data.data.positions;
-          console.log('Trading212 positions found:', positions.length);
-          
-          setProcessingStatus(`Analyzing ${positions.length} holdings with comprehensive API detection...`);
-          
-          // Use ENHANCED dividend calculator with comprehensive API detection
-          const dividendResults = await calculateDividendIncome(positions);
-          
-          console.log('🎉 ENHANCED dividend calculation completed:', {
-            totalAnnual: dividendResults.totalAnnualIncome,
-            stocksWithDividends: dividendResults.dividendPayingStocks.length,
-            portfolioYield: dividendResults.portfolioYield,
-            newlyDetected: dividendResults.stats.newStocksAdded,
-            apiCallsMade: dividendResults.stats.apiCallsMade,
-            databaseHits: dividendResults.stats.databaseHits,
-            databaseSize: dividendResults.stats.databaseSize
-          });
-          
-          setDividendData(dividendResults.dividendPayingStocks);
-          setPortfolioMetrics({
-            annualIncome: dividendResults.totalAnnualIncome,
-            quarterlyIncome: dividendResults.totalQuarterlyIncome,
-            monthlyAverage: dividendResults.totalAnnualIncome / 12,
-            portfolioYield: dividendResults.portfolioYield,
-            dividendPayingStocks: dividendResults.dividendPayingStocks.length,
-            totalStocksAnalyzed: positions.length,
-            databaseSize: dividendResults.stats.databaseSize,
-            newStocksAdded: dividendResults.stats.newStocksAdded,
-            coveragePercentage: dividendResults.stats.coveragePercentage,
-            processingErrors: dividendResults.stats.processingErrors,
-            apiCallsMade: dividendResults.stats.apiCallsMade,
-            databaseHits: dividendResults.stats.databaseHits
-          });
-          
-          setProcessingStatus('Enhanced analysis complete with comprehensive API detection');
-          
-          if (forceRefresh) {
-            toast({
-              title: "Refresh Complete",
-              description: `Found ${dividendResults.dividendPayingStocks.length} dividend stocks from ${positions.length} holdings`,
-            });
-          }
-        } else {
-          console.log('No Trading212 position data available');
-          setDividendData([]);
-          setPortfolioMetrics(null);
-          setProcessingStatus('No Trading212 data available');
-          setError('No portfolio data found. Please ensure your Trading212 portfolio is properly connected.');
-        }
-      } else {
-        // For other portfolios, show appropriate message
-        setDividendData([]);
-        setPortfolioMetrics(null);
-        setProcessingStatus('Portfolio not supported for dividend tracking');
-        setError('This portfolio type does not support dividend tracking. Please select a Trading212 portfolio.');
-      }
-    } catch (error: any) {
-      console.error("Error in enhanced dividend calculation:", error);
-      setError(error.message || 'Failed to analyze portfolio for dividends');
-      setDividendData([]);
-      setPortfolioMetrics(null);
-      setProcessingStatus('Error during enhanced analysis');
-      
-      toast({
-        title: "Analysis Failed",
-        description: error.message || 'Failed to analyze portfolio for dividends',
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  const handleManualRefresh = async () => {
-    await fetchDividendData(true);
-    
-    // Auto-save after manual refresh if enabled
-    if (autoSaveEnabled && dividendData.length > 0) {
-      setTimeout(() => {
-        autoSaveDetectedDividends();
-      }, 1000);
-    }
-  };
-
-  const triggerAutoSync = async () => {
-    if (!user || !selectedPortfolio) return;
-
-    try {
-      setRefreshing(true);
-      toast({
-        title: "Triggering Auto Sync",
-        description: "Starting automated dividend detection and save...",
-      });
-
-      const { data, error } = await supabase.functions.invoke('dividend-detection', {
-        body: { 
-          portfolioId: selectedPortfolio,
-          userId: user.id,
-          autoSave: true // Enable auto-save in the sync process
-        }
-      });
-
-      if (error) {
-        throw new Error(error.message || 'Failed to trigger auto sync');
-      }
-
-      if (data?.success) {
-        setLastSyncTime(new Date().toLocaleString());
-        toast({
-          title: "Auto Sync Complete",
-          description: `Found and saved ${data.dividendStocksFound || 0} dividend stocks`,
-          variant: "default",
-        });
-        
-        // Refresh data after auto sync
-        setTimeout(() => {
-          fetchDividendData(false);
-        }, 2000);
-      } else {
-        throw new Error(data?.error || 'Failed to trigger auto sync');
-      }
-    } catch (error: any) {
-      console.error('Error triggering auto sync:', error);
-      toast({
-        title: "Auto Sync Failed",
-        description: error.message || 'Failed to trigger auto sync',
-        variant: "destructive",
-      });
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDividendData();
-  }, [user, selectedPortfolio]);
+  const { totalAnnualIncome, totalStocks, averageYield } = getDividendSummary();
 
   // Prepare monthly income projection data for the chart
-  const monthlyData = portfolioMetrics ? [
-    { month: "Jan", income: portfolioMetrics.monthlyAverage * 0.95 },
-    { month: "Feb", income: portfolioMetrics.monthlyAverage * 0.88 },
-    { month: "Mar", income: portfolioMetrics.monthlyAverage * 1.15 },
-    { month: "Apr", income: portfolioMetrics.monthlyAverage * 0.92 },
-    { month: "May", income: portfolioMetrics.monthlyAverage * 1.08 },
-    { month: "Jun", income: portfolioMetrics.monthlyAverage * 1.22 },
-    { month: "Jul", income: portfolioMetrics.monthlyAverage * 1.05 },
-    { month: "Aug", income: portfolioMetrics.monthlyAverage * 0.85 },
-    { month: "Sep", income: portfolioMetrics.monthlyAverage * 1.12 },
-    { month: "Oct", income: portfolioMetrics.monthlyAverage * 0.98 },
-    { month: "Nov", income: portfolioMetrics.monthlyAverage * 1.03 },
-    { month: "Dec", income: portfolioMetrics.monthlyAverage * 1.07 }
+  const monthlyData = totalAnnualIncome > 0 ? [
+    { month: "Jan", income: (totalAnnualIncome / 12) * 0.95 },
+    { month: "Feb", income: (totalAnnualIncome / 12) * 0.88 },
+    { month: "Mar", income: (totalAnnualIncome / 12) * 1.15 },
+    { month: "Apr", income: (totalAnnualIncome / 12) * 0.92 },
+    { month: "May", income: (totalAnnualIncome / 12) * 1.08 },
+    { month: "Jun", income: (totalAnnualIncome / 12) * 1.22 },
+    { month: "Jul", income: (totalAnnualIncome / 12) * 1.05 },
+    { month: "Aug", income: (totalAnnualIncome / 12) * 0.85 },
+    { month: "Sep", income: (totalAnnualIncome / 12) * 1.12 },
+    { month: "Oct", income: (totalAnnualIncome / 12) * 0.98 },
+    { month: "Nov", income: (totalAnnualIncome / 12) * 1.03 },
+    { month: "Dec", income: (totalAnnualIncome / 12) * 1.07 }
   ] : [];
 
-  if (loading) {
+  if (loading && dividends.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -410,8 +63,8 @@ const DividendTracking = () => {
         <CardContent>
           <div className="flex flex-col justify-center items-center h-48 space-y-2">
             <RefreshCw className="h-8 w-8 animate-spin text-blue-500" />
-            <p>{processingStatus}</p>
-            <p className="text-sm text-muted-foreground">Using comprehensive API detection with auto-save...</p>
+            <p>Loading saved dividend data...</p>
+            <p className="text-sm text-muted-foreground">Using comprehensive API detection with smart limits...</p>
           </div>
         </CardContent>
       </Card>
@@ -433,45 +86,21 @@ const DividendTracking = () => {
     );
   }
 
-  // Check if this is a portfolio without dividends
-  const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
-  const binancePortfolioId = localStorage.getItem('binance_portfolio_id');
-  
-  if (selectedPortfolio === binancePortfolioId) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Enhanced Dividend Tracker</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col items-center justify-center h-48 text-center">
-            <p className="text-muted-foreground mb-2">
-              Crypto portfolios don't include dividend-paying assets
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Switch to a stock portfolio to view dividend data
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <Card className="h-full">
       <CardHeader className="pb-2">
         <div className="flex justify-between items-center">
-          <CardTitle>🌟 Enhanced Dividend Tracker with Auto-Save</CardTitle>
+          <CardTitle>🌟 Enhanced Dividend Tracker with Smart API Limits</CardTitle>
           <div className="flex items-center gap-4">
             {/* Auto-Save Toggle */}
             <div className="flex items-center space-x-2">
               <Switch
                 id="auto-save"
-                checked={autoSaveEnabled}
-                onCheckedChange={setAutoSaveEnabled}
+                checked={autoSyncEnabled}
+                onCheckedChange={toggleAutoSync}
               />
               <Label htmlFor="auto-save" className="text-sm">
-                Auto-Save
+                Auto-Sync
               </Label>
             </div>
             
@@ -479,101 +108,52 @@ const DividendTracking = () => {
               <Button 
                 variant="outline" 
                 size="sm"
-                onClick={saveDetectedDividends}
-                disabled={saving || autoSaving || !dividendData.length}
+                onClick={refreshDividendData}
+                disabled={loading || !canMakeApiCall}
               >
-                <Save className={`h-4 w-4 mr-2 ${(saving || autoSaving) ? 'animate-spin' : ''}`} />
-                {saving ? 'Saving...' : autoSaving ? 'Auto-Saving...' : 'Save Data'}
+                <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                {loading ? 'Syncing...' : `Sync (${maxApiCallsPerDay - apiCallsToday} left)`}
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={handleManualRefresh}
-                disabled={refreshing || autoSaving}
-              >
-                <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                {refreshing ? 'Refreshing...' : 'Manual Sync'}
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={triggerAutoSync}
-                disabled={refreshing || autoSaving}
-              >
-                <Database className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                Auto Sync & Save
-              </Button>
+
+              {isAdmin && (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={forceSyncData}
+                  disabled={loading}
+                  className="border-orange-300 text-orange-600 hover:bg-orange-50"
+                >
+                  <Database className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                  Admin Force Sync
+                </Button>
+              )}
             </div>
           </div>
         </div>
-        {portfolioMetrics && (
-          <>
-            <p className="text-sm text-muted-foreground">
-              Enhanced Detection: {portfolioMetrics.dividendPayingStocks} dividend payers from {portfolioMetrics.totalStocksAnalyzed} holdings
-              • Database: {portfolioMetrics.databaseSize} stocks • API Calls: {portfolioMetrics.apiCallsMade} • Cache Hits: {portfolioMetrics.databaseHits}
-            </p>
-            {lastSyncTime && (
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                Last synced: {lastSyncTime}
-                {autoSaveEnabled && <span className="text-green-600">(Auto-save ON)</span>}
-              </p>
-            )}
-            {portfolioMetrics.newStocksAdded > 0 && (
-              <Alert className="mt-2">
-                <Database className="h-4 w-4" />
-                <AlertDescription>
-                  🎉 Discovered {portfolioMetrics.newStocksAdded} new dividend payers using comprehensive API detection
-                  {autoSaveEnabled && " - Auto-saved to database"}
-                </AlertDescription>
-              </Alert>
-            )}
-          </>
-        )}
-        {error && (
-          <Alert variant="destructive" className="mt-2">
+
+        <p className="text-sm text-muted-foreground">
+          Saved Data: {totalStocks} dividend stocks • API Limit: {apiCallsToday}/{maxApiCallsPerDay} calls today
+          {lastSync && ` • Last sync: ${new Date(lastSync).toLocaleString()}`}
+        </p>
+
+        {/* API Limit Warning */}
+        {!canMakeApiCall && (
+          <Alert className="mt-2">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              {error}
-              <div className="flex gap-2 mt-2">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={handleManualRefresh}
-                  disabled={refreshing}
-                >
-                  Manual Sync
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={triggerAutoSync}
-                  disabled={refreshing}
-                >
-                  Auto Sync & Save
-                </Button>
-              </div>
+              Daily API limit reached ({apiCallsToday}/{maxApiCallsPerDay}). Showing saved data. Limit resets at midnight.
             </AlertDescription>
           </Alert>
         )}
       </CardHeader>
-      <CardContent>
-        {/* Status indicators */}
-        {(autoSaving || saving) && (
-          <Alert className="mb-4">
-            <Save className="h-4 w-4 animate-spin" />
-            <AlertDescription>
-              {autoSaving ? 'Auto-saving dividend data to database...' : 'Manually saving dividend data...'}
-            </AlertDescription>
-          </Alert>
-        )}
 
-        {portfolioMetrics && dividendData.length > 0 ? (
+      <CardContent>
+        {totalStocks > 0 ? (
           <>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
               <StatCard 
                 label="Annual Income" 
-                value={`$${portfolioMetrics.annualIncome.toFixed(2)}`} 
+                value={`$${totalAnnualIncome.toFixed(2)}`} 
                 change={{
                   value: "+7.2%",
                   percentage: "+7.2%",
@@ -583,7 +163,7 @@ const DividendTracking = () => {
               />
               <StatCard 
                 label="Monthly Average" 
-                value={`$${portfolioMetrics.monthlyAverage.toFixed(2)}`} 
+                value={`$${(totalAnnualIncome / 12).toFixed(2)}`} 
                 change={{
                   value: "+7.2%",
                   percentage: "+7.2%",
@@ -593,17 +173,17 @@ const DividendTracking = () => {
               />
               <StatCard 
                 label="Dividend Stocks" 
-                value={`${portfolioMetrics.dividendPayingStocks}`} 
+                value={`${totalStocks}`} 
                 change={{
-                  value: `${portfolioMetrics.newStocksAdded} new`,
-                  percentage: `${portfolioMetrics.newStocksAdded} new`,
+                  value: "Saved",
+                  percentage: "Database",
                   isPositive: true
                 }}
                 icon={<Shield className="h-4 w-4" />}
               />
               <StatCard 
-                label="Portfolio Yield" 
-                value={`${portfolioMetrics.portfolioYield.toFixed(2)}%`} 
+                label="Average Yield" 
+                value={`${averageYield.toFixed(2)}%`} 
                 change={{
                   value: "+0.3%",
                   percentage: "+0.3%",
@@ -619,9 +199,9 @@ const DividendTracking = () => {
               className="space-y-4"
             >
               <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="holdings">Enhanced Holdings</TabsTrigger>
+                <TabsTrigger value="holdings">Saved Holdings</TabsTrigger>
                 <TabsTrigger value="projections">Monthly Projections</TabsTrigger>
-                <TabsTrigger value="analysis">API Analysis</TabsTrigger>
+                <TabsTrigger value="analysis">API Management</TabsTrigger>
               </TabsList>
               
               <TabsContent value="holdings" className="space-y-4">
@@ -634,31 +214,26 @@ const DividendTracking = () => {
                         <TableHead>Dividend/Share</TableHead>
                         <TableHead>Annual Income</TableHead>
                         <TableHead>Yield</TableHead>
-                        <TableHead>Detection</TableHead>
+                        <TableHead>Source</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {dividendData.map((dividend, index) => (
-                        <TableRow key={index}>
+                      {dividends.map((dividend) => (
+                        <TableRow key={dividend.id}>
                           <TableCell>
                             <div className="font-medium">{dividend.symbol}</div>
-                            <div className="text-xs text-muted-foreground">{dividend.company}</div>
+                            <div className="text-xs text-muted-foreground">{dividend.company_name}</div>
                           </TableCell>
-                          <TableCell>{dividend.shares.toFixed(6)}</TableCell>
-                          <TableCell>${dividend.annualDividend.toFixed(2)}</TableCell>
+                          <TableCell>{dividend.shares_owned?.toFixed(6) || 'N/A'}</TableCell>
+                          <TableCell>${dividend.annual_dividend.toFixed(2)}</TableCell>
                           <TableCell className="font-medium text-green-600">
-                            ${dividend.totalAnnualIncome.toFixed(2)}
+                            ${dividend.estimated_annual_income.toFixed(2)}
                           </TableCell>
-                          <TableCell>{dividend.yield.toFixed(2)}%</TableCell>
+                          <TableCell>{dividend.dividend_yield.toFixed(2)}%</TableCell>
                           <TableCell>
-                            {dividend.isNewlyAdded ? (
-                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded flex items-center gap-1">
-                                🆕 API
-                                {dividend.apiSource && <span className="text-xs">({dividend.apiSource})</span>}
-                              </span>
-                            ) : (
-                              <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">💾 Known</span>
-                            )}
+                            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                              {dividend.detection_source}
+                            </span>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -678,7 +253,7 @@ const DividendTracking = () => {
                   </BarChart>
                 </ResponsiveContainer>
                 <div className="text-center text-sm text-muted-foreground">
-                  Enhanced projected annual dividend income: ${portfolioMetrics.annualIncome.toFixed(2)}
+                  Projected annual dividend income: ${totalAnnualIncome.toFixed(2)} from saved data
                 </div>
               </TabsContent>
               
@@ -686,65 +261,49 @@ const DividendTracking = () => {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
                     <Database className="h-8 w-8 mb-2 text-finance-blue" />
-                    <div className="text-xs uppercase text-muted-foreground">Database Size</div>
-                    <div className="text-2xl font-bold mt-1">{portfolioMetrics.databaseSize}</div>
+                    <div className="text-xs uppercase text-muted-foreground">API Calls Today</div>
+                    <div className="text-2xl font-bold mt-1">{apiCallsToday}/{maxApiCallsPerDay}</div>
                   </div>
                   <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
                     <TrendingUp className="h-8 w-8 mb-2 text-finance-blue" />
-                    <div className="text-xs uppercase text-muted-foreground">API Calls</div>
-                    <div className="text-2xl font-bold mt-1">{portfolioMetrics.apiCallsMade}</div>
+                    <div className="text-xs uppercase text-muted-foreground">Saved Stocks</div>
+                    <div className="text-2xl font-bold mt-1">{totalStocks}</div>
                   </div>
                   <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
                     <Shield className="h-8 w-8 mb-2 text-finance-blue" />
-                    <div className="text-xs uppercase text-muted-foreground">Cache Hits</div>
-                    <div className="text-2xl font-bold mt-1">{portfolioMetrics.databaseHits}</div>
+                    <div className="text-xs uppercase text-muted-foreground">Auto-sync</div>
+                    <div className="text-2xl font-bold mt-1">{autoSyncEnabled ? 'ON' : 'OFF'}</div>
                   </div>
                   <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
                     <Percent className="h-8 w-8 mb-2 text-finance-blue" />
-                    <div className="text-xs uppercase text-muted-foreground">New Detected</div>
-                    <div className="text-2xl font-bold mt-1">{portfolioMetrics.newStocksAdded}</div>
+                    <div className="text-xs uppercase text-muted-foreground">Avg Yield</div>
+                    <div className="text-2xl font-bold mt-1">{averageYield.toFixed(1)}%</div>
                   </div>
                 </div>
                 <div className="text-sm text-center text-muted-foreground mt-4">
-                  🌟 Enhanced dividend detection using Yahoo Finance, Alpha Vantage, Financial Modeling Prep & Polygon APIs.
+                  🌟 Smart API management with 4 calls per day limit. Data is automatically saved and persisted across sessions.
                   <br />
-                  Comprehensive analysis of {portfolioMetrics.totalStocksAnalyzed} holdings with real-time API detection for maximum accuracy.
+                  {isAdmin && 'Admin users can force sync without limits using the Force Sync button.'}
                 </div>
               </TabsContent>
             </Tabs>
           </>
         ) : (
           <div className="flex flex-col items-center justify-center h-48 text-center">
-            <AlertTriangle className="h-12 w-12 text-yellow-500 mb-4" />
+            <Database className="h-12 w-12 text-blue-500 mb-4" />
             <p className="text-muted-foreground mb-2">
-              {error ? error : portfolioMetrics ? 
-                'No dividend-paying stocks found in your current holdings' : 
-                'Unable to load enhanced dividend data'
-              }
+              No saved dividend data found
             </p>
-            {portfolioMetrics && (
-              <p className="text-sm text-muted-foreground mb-4">
-                Analyzed {portfolioMetrics.totalStocksAnalyzed} holdings with enhanced database of {portfolioMetrics.databaseSize} stocks
-              </p>
-            )}
-            <div className="flex gap-2">
-              <Button 
-                variant="outline" 
-                onClick={handleManualRefresh}
-                disabled={refreshing}
-              >
-                <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                {refreshing ? 'Refreshing...' : 'Try Again'}
-              </Button>
-              <Button 
-                variant="outline" 
-                onClick={triggerAutoSync}
-                disabled={refreshing}
-              >
-                <Database className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                Auto Sync & Save
-              </Button>
-            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Click "Sync" to detect and save dividend data from your portfolio
+            </p>
+            <Button 
+              onClick={refreshDividendData}
+              disabled={loading || !canMakeApiCall}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              {loading ? 'Detecting...' : 'Detect & Save Dividends'}
+            </Button>
           </div>
         )}
       </CardContent>

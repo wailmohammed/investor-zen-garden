@@ -1,83 +1,26 @@
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useDividendData } from "@/contexts/DividendDataContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePortfolio } from "@/contexts/PortfolioContext";
-import { supabase } from "@/integrations/supabase/client";
-import { calculateDividendIncome, getDividendDatabaseStats } from "@/services/dividendCalculator";
 import { TrendingUp, DollarSign, PieChart, Database, Target, AlertCircle } from "lucide-react";
-
-interface DividendOverviewStats {
-  totalAnnualIncome: number;
-  totalQuarterlyIncome: number;
-  portfolioYield: number;
-  dividendPayingStocks: number;
-  totalPositions: number;
-  symbolsMatched: number;
-  coveragePercentage: number;
-  databaseSize: number;
-}
 
 const DividendOverviewEnhanced = () => {
   const { user } = useAuth();
   const { selectedPortfolio } = usePortfolio();
-  const [stats, setStats] = useState<DividendOverviewStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    dividends,
+    loading,
+    apiCallsToday,
+    maxApiCallsPerDay,
+    getDividendSummary
+  } = useDividendData();
 
-  const fetchDividendOverview = async () => {
-    if (!user || !selectedPortfolio) {
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
-      
-      if (selectedPortfolio === trading212PortfolioId) {
-        const { data, error: functionError } = await supabase.functions.invoke('trading212-sync', {
-          body: { portfolioId: selectedPortfolio }
-        });
-
-        if (functionError || data?.error) {
-          setError(data?.message || 'Failed to fetch data');
-          return;
-        }
-
-        if (data?.success && data.data?.positions) {
-          const positions = data.data.positions;
-          const dividendResults = await calculateDividendIncome(positions);
-          
-          setStats({
-            totalAnnualIncome: dividendResults.totalAnnualIncome,
-            totalQuarterlyIncome: dividendResults.totalQuarterlyIncome,
-            portfolioYield: dividendResults.portfolioYield,
-            dividendPayingStocks: dividendResults.dividendPayingStocks.length,
-            totalPositions: dividendResults.stats.totalPositions,
-            symbolsMatched: dividendResults.stats.symbolsMatched,
-            coveragePercentage: dividendResults.stats.coveragePercentage,
-            databaseSize: dividendResults.stats.databaseSize
-          });
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching dividend overview:", error);
-      setError('Failed to fetch dividend data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDividendOverview();
-  }, [user, selectedPortfolio]);
-
-  const databaseStats = getDividendDatabaseStats();
-
-  if (loading) {
+  if (loading && dividends.length === 0) {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {[...Array(4)].map((_, i) => (
@@ -95,27 +38,29 @@ const DividendOverviewEnhanced = () => {
     );
   }
 
-  if (error) {
+  if (!selectedPortfolio) {
     return (
-      <Alert variant="destructive">
+      <Alert>
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
-          {error}
+          Please select a portfolio to view dividend data.
         </AlertDescription>
       </Alert>
     );
   }
 
-  if (!stats) {
+  if (dividends.length === 0) {
     return (
       <Alert>
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
-          No dividend data available. Please select a Trading212 portfolio.
+          No saved dividend data found. Use the dividend tracker to detect and save your dividend stocks.
         </AlertDescription>
       </Alert>
     );
   }
+
+  const { totalAnnualIncome, totalStocks, averageYield } = getDividendSummary();
 
   return (
     <div className="space-y-6">
@@ -127,22 +72,22 @@ const DividendOverviewEnhanced = () => {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${stats.totalAnnualIncome.toFixed(2)}</div>
+            <div className="text-2xl font-bold">${totalAnnualIncome.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">
-              ${(stats.totalAnnualIncome / 12).toFixed(2)} per month
+              ${(totalAnnualIncome / 12).toFixed(2)} per month
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Portfolio Yield</CardTitle>
+            <CardTitle className="text-sm font-medium">Average Yield</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.portfolioYield.toFixed(2)}%</div>
+            <div className="text-2xl font-bold">{averageYield.toFixed(2)}%</div>
             <p className="text-xs text-muted-foreground">
-              Annual dividend yield
+              Portfolio average
             </p>
           </CardContent>
         </Card>
@@ -153,22 +98,22 @@ const DividendOverviewEnhanced = () => {
             <PieChart className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.dividendPayingStocks}</div>
+            <div className="text-2xl font-bold">{totalStocks}</div>
             <p className="text-xs text-muted-foreground">
-              of {stats.totalPositions} total positions
+              Saved in database
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Database Coverage</CardTitle>
+            <CardTitle className="text-sm font-medium">API Usage</CardTitle>
             <Database className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.coveragePercentage.toFixed(1)}%</div>
+            <div className="text-2xl font-bold">{apiCallsToday}/{maxApiCallsPerDay}</div>
             <p className="text-xs text-muted-foreground">
-              {stats.symbolsMatched} of {stats.totalPositions} matched
+              Calls used today
             </p>
           </CardContent>
         </Card>
@@ -180,45 +125,48 @@ const DividendOverviewEnhanced = () => {
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <Target className="h-5 w-5" />
-              Coverage Analysis
+              Portfolio Analysis
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
               <div className="flex justify-between text-sm mb-1">
-                <span>Symbol Recognition</span>
-                <span>{stats.symbolsMatched}/{stats.totalPositions}</span>
+                <span>High Yield Stocks (&gt;4%)</span>
+                <span>{dividends.filter(d => d.dividend_yield > 4).length}</span>
               </div>
-              <Progress value={stats.coveragePercentage} className="h-2" />
+              <Progress 
+                value={(dividends.filter(d => d.dividend_yield > 4).length / totalStocks) * 100} 
+                className="h-2" 
+              />
             </div>
             
             <div>
               <div className="flex justify-between text-sm mb-1">
-                <span>Dividend Paying Stocks</span>
-                <span>{stats.dividendPayingStocks}/{stats.symbolsMatched}</span>
+                <span>Medium Yield Stocks (2-4%)</span>
+                <span>{dividends.filter(d => d.dividend_yield >= 2 && d.dividend_yield <= 4).length}</span>
               </div>
               <Progress 
-                value={stats.symbolsMatched > 0 ? (stats.dividendPayingStocks / stats.symbolsMatched) * 100 : 0} 
+                value={(dividends.filter(d => d.dividend_yield >= 2 && d.dividend_yield <= 4).length / totalStocks) * 100} 
                 className="h-2" 
               />
             </div>
 
             <div className="pt-2 space-y-2">
               <div className="flex justify-between text-sm">
-                <span>Positions Analyzed:</span>
-                <Badge variant="outline">{stats.totalPositions}</Badge>
+                <span>Total Stocks:</span>
+                <Badge variant="outline">{totalStocks}</Badge>
               </div>
               <div className="flex justify-between text-sm">
-                <span>Symbols Matched:</span>
-                <Badge variant="outline">{stats.symbolsMatched}</Badge>
+                <span>High Yield (&gt;4%):</span>
+                <Badge variant="outline">{dividends.filter(d => d.dividend_yield > 4).length}</Badge>
               </div>
               <div className="flex justify-between text-sm">
-                <span>Dividend Stocks:</span>
-                <Badge variant="outline">{stats.dividendPayingStocks}</Badge>
+                <span>Medium Yield (2-4%):</span>
+                <Badge variant="outline">{dividends.filter(d => d.dividend_yield >= 2 && d.dividend_yield <= 4).length}</Badge>
               </div>
               <div className="flex justify-between text-sm">
-                <span>Non-Dividend:</span>
-                <Badge variant="outline">{stats.symbolsMatched - stats.dividendPayingStocks}</Badge>
+                <span>Low Yield (&lt;2%):</span>
+                <Badge variant="outline">{dividends.filter(d => d.dividend_yield < 2).length}</Badge>
               </div>
             </div>
           </CardContent>
@@ -228,41 +176,41 @@ const DividendOverviewEnhanced = () => {
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <Database className="h-5 w-5" />
-              Database Statistics
+              Data Management
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">{databaseStats.totalStocks}</div>
-                <p className="text-xs text-muted-foreground">Total Stocks</p>
+                <div className="text-2xl font-bold text-blue-600">{totalStocks}</div>
+                <p className="text-xs text-muted-foreground">Saved Stocks</p>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">{databaseStats.dividendPayingStocks}</div>
-                <p className="text-xs text-muted-foreground">Dividend Paying</p>
+                <div className="text-2xl font-bold text-green-600">{maxApiCallsPerDay - apiCallsToday}</div>
+                <p className="text-xs text-muted-foreground">API Calls Left</p>
               </div>
             </div>
 
             <div>
               <div className="flex justify-between text-sm mb-1">
-                <span>Dividend Coverage</span>
-                <span>{databaseStats.coverageRate}%</span>
+                <span>Daily API Usage</span>
+                <span>{apiCallsToday}/{maxApiCallsPerDay}</span>
               </div>
-              <Progress value={databaseStats.coverageRate} className="h-2" />
+              <Progress value={(apiCallsToday / maxApiCallsPerDay) * 100} className="h-2" />
             </div>
 
             <div className="pt-2 space-y-2">
               <div className="flex justify-between text-sm">
-                <span>Dividend Stocks:</span>
-                <Badge className="bg-green-100 text-green-800">{databaseStats.dividendPayingStocks}</Badge>
+                <span>Data Source:</span>
+                <Badge className="bg-green-100 text-green-800">Saved Database</Badge>
               </div>
               <div className="flex justify-between text-sm">
-                <span>Non-Dividend:</span>
-                <Badge className="bg-gray-100 text-gray-800">{databaseStats.nonDividendStocks}</Badge>
+                <span>Auto-Sync:</span>
+                <Badge variant="outline">Smart Limits</Badge>
               </div>
               <div className="flex justify-between text-sm">
-                <span>Database Version:</span>
-                <Badge variant="outline">Enhanced 500+</Badge>
+                <span>Storage:</span>
+                <Badge variant="outline">Persistent</Badge>
               </div>
             </div>
           </CardContent>
@@ -277,19 +225,19 @@ const DividendOverviewEnhanced = () => {
         <CardContent>
           <div className="grid gap-4 md:grid-cols-4">
             <div className="text-center">
-              <div className="text-xl font-bold text-green-600">${stats.totalAnnualIncome.toFixed(2)}</div>
+              <div className="text-xl font-bold text-green-600">${totalAnnualIncome.toFixed(2)}</div>
               <p className="text-sm text-muted-foreground">Annual Total</p>
             </div>
             <div className="text-center">
-              <div className="text-xl font-bold text-blue-600">${stats.totalQuarterlyIncome.toFixed(2)}</div>
+              <div className="text-xl font-bold text-blue-600">${(totalAnnualIncome / 4).toFixed(2)}</div>
               <p className="text-sm text-muted-foreground">Quarterly</p>
             </div>
             <div className="text-center">
-              <div className="text-xl font-bold text-purple-600">${(stats.totalAnnualIncome / 12).toFixed(2)}</div>
+              <div className="text-xl font-bold text-purple-600">${(totalAnnualIncome / 12).toFixed(2)}</div>
               <p className="text-sm text-muted-foreground">Monthly Average</p>
             </div>
             <div className="text-center">
-              <div className="text-xl font-bold text-orange-600">${(stats.totalAnnualIncome / 52).toFixed(2)}</div>
+              <div className="text-xl font-bold text-orange-600">${(totalAnnualIncome / 52).toFixed(2)}</div>
               <p className="text-sm text-muted-foreground">Weekly Average</p>
             </div>
           </div>

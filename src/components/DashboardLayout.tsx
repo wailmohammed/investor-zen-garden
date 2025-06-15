@@ -1,4 +1,3 @@
-
 import {
   LayoutDashboard,
   Settings,
@@ -27,8 +26,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
+import DividendStatusIndicator from "@/components/Global/DividendStatusIndicator";
 
-const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
+const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const { user, signOut, isAdmin } = useAuth();
   const location = useLocation();
   const pathname = location.pathname;
@@ -44,7 +44,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50/50">
+    <div className="min-h-screen bg-background">
       <aside
         className={`${
           isOpen ? "translate-x-0" : "-translate-x-full"
@@ -245,7 +245,12 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
           </button>
           <span className="font-semibold">{user?.email}</span>
         </header>
-        <main className="flex-1 overflow-y-auto p-4">{children}</main>
+        <main className="container mx-auto px-4 py-6">
+          {/* Global Dividend Status - shows on all pages */}
+          <DividendStatusIndicator />
+          
+          {children}
+        </main>
       </div>
     </div>
   );
