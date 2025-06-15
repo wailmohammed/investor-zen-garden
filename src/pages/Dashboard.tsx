@@ -14,14 +14,28 @@ import { PortfolioProvider, usePortfolio } from "@/contexts/PortfolioContext";
 
 const DashboardContent = () => {
   const { user } = useAuth();
-  const { selectedPortfolio } = usePortfolio();
+  const { selectedPortfolio, portfolios } = usePortfolio();
 
   console.log("Dashboard - Rendering for user:", user?.email);
 
+  // Get current portfolio type
+  const currentPortfolio = portfolios.find(p => p.id === selectedPortfolio);
+  const portfolioType = currentPortfolio?.portfolio_type || 'stock';
+
   // Determine data source
   const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
+  const binancePortfolioId = localStorage.getItem('binance_portfolio_id');
   const isTrading212Connected = selectedPortfolio === trading212PortfolioId;
-  const dataSource = isTrading212Connected ? 'Trading212' : 'Mock';
+  const isBinanceConnected = selectedPortfolio === binancePortfolioId;
+  
+  let dataSource: 'Trading212' | 'CSV' | 'Mock' | 'CoinGecko' = 'Mock';
+  if (isTrading212Connected) {
+    dataSource = 'Trading212';
+  } else if (isBinanceConnected) {
+    dataSource = 'Mock'; // Binance shows as Mock for now
+  } else if (portfolioType === 'crypto') {
+    dataSource = 'CoinGecko';
+  }
 
   return (
     <DashboardLayout>
@@ -37,7 +51,7 @@ const DashboardContent = () => {
           </div>
           <div>
             <DataSourceIndicator 
-              isConnected={isTrading212Connected}
+              isConnected={isTrading212Connected || isBinanceConnected || portfolioType === 'crypto'}
               dataSource={dataSource}
               lastUpdated={new Date().toISOString()}
             />
@@ -56,13 +70,17 @@ const DashboardContent = () => {
             <PerformanceChart />
           </div>
           <div>
-            <DividendTracking />
+            {portfolioType === 'stock' ? (
+              <DividendTracking />
+            ) : (
+              <MarketOverview />
+            )}
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <AIChat />
-          <MarketOverview />
+          {portfolioType === 'stock' && <MarketOverview />}
         </div>
       </div>
     </DashboardLayout>
