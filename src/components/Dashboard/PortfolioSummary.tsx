@@ -26,6 +26,23 @@ const PortfolioSummary = () => {
   const currentPortfolio = portfolios.find(p => p.id === selectedPortfolio);
   const portfolioType = currentPortfolio?.portfolio_type || 'stock';
 
+  // Format currency helper
+  const formatCurrency = (amount: number) => {
+    return `$${Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  // Format percentage helper
+  const formatPercentage = (percentage: number) => {
+    const sign = percentage >= 0 ? '+' : '';
+    return `${sign}${percentage.toFixed(2)}%`;
+  };
+
+  // Format change with sign
+  const formatChangeWithSign = (amount: number) => {
+    const sign = amount >= 0 ? '+' : '-';
+    return `${sign}${formatCurrency(amount)}`;
+  };
+
   // Fetch portfolio-specific data
   useEffect(() => {
     const fetchPortfolioData = async () => {
@@ -72,18 +89,30 @@ const PortfolioSummary = () => {
             }
 
             if (data?.success && data.data) {
-              // Use real Trading212 data
+              // Use real Trading212 data with proper validation
               const realData = data.data;
               console.log('Real Trading212 data received:', realData);
               
+              // Validate and sanitize the data
+              const totalValue = realData.totalValue || 0;
+              const todayChange = realData.todayChange || 0;
+              const todayPercentage = realData.todayPercentage || 0;
+              const totalReturn = realData.totalReturn || 0;
+              const totalReturnPercentage = realData.totalReturnPercentage || 0;
+              const netDeposits = realData.netDeposits || 0;
+              const holdingsCount = realData.holdingsCount || 0;
+
+              // Ensure data consistency - if total value is 0, other values should be 0 too
+              const isEmptyPortfolio = totalValue === 0;
+              
               setPortfolioData({
-                totalValue: `$${realData.totalValue?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}`,
-                todayChange: `${realData.todayChange >= 0 ? '+' : ''}$${Math.abs(realData.todayChange || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                todayPercentage: `${realData.todayPercentage >= 0 ? '+' : ''}${(realData.todayPercentage || 0).toFixed(2)}%`,
-                totalReturn: `${realData.totalReturn >= 0 ? '+' : ''}$${Math.abs(realData.totalReturn || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                totalReturnPercentage: `${realData.totalReturnPercentage >= 0 ? '+' : ''}${(realData.totalReturnPercentage || 0).toFixed(2)}%`,
-                holdingsCount: realData.holdingsCount || 0,
-                netDeposits: `$${(realData.netDeposits || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                totalValue: formatCurrency(totalValue),
+                todayChange: isEmptyPortfolio ? "$0.00" : formatChangeWithSign(todayChange),
+                todayPercentage: isEmptyPortfolio ? "0%" : formatPercentage(todayPercentage),
+                totalReturn: isEmptyPortfolio ? "$0.00" : formatChangeWithSign(totalReturn),
+                totalReturnPercentage: isEmptyPortfolio ? "0%" : formatPercentage(totalReturnPercentage),
+                holdingsCount: holdingsCount,
+                netDeposits: formatCurrency(netDeposits)
               });
               setHasRealData(true);
               
@@ -92,60 +121,76 @@ const PortfolioSummary = () => {
               
               toast({
                 title: "Trading212 Data Loaded",
-                description: `Portfolio updated with ${realData.holdingsCount || 0} positions from Trading212`,
+                description: `Portfolio updated with ${holdingsCount} positions from Trading212`,
                 variant: "default",
               });
-            } else if (data?.error) {
-              console.error('Trading212 API returned error:', data.error);
-              throw new Error(data.error);
+            } else if (data?.error === 'RATE_LIMITED') {
+              console.warn('Trading212 API rate limited');
+              setDataSource('Trading212 API (Rate Limited)');
+              
+              // Try to use cached data
+              const cachedData = localStorage.getItem('trading212_data');
+              if (cachedData) {
+                try {
+                  const cachedRealData = JSON.parse(cachedData);
+                  const totalValue = cachedRealData.totalValue || 0;
+                  const todayChange = cachedRealData.todayChange || 0;
+                  const todayPercentage = cachedRealData.todayPercentage || 0;
+                  const totalReturn = cachedRealData.totalReturn || 0;
+                  const totalReturnPercentage = cachedRealData.totalReturnPercentage || 0;
+                  const netDeposits = cachedRealData.netDeposits || 0;
+                  const holdingsCount = cachedRealData.holdingsCount || 0;
+
+                  const isEmptyPortfolio = totalValue === 0;
+                  
+                  setPortfolioData({
+                    totalValue: formatCurrency(totalValue),
+                    todayChange: isEmptyPortfolio ? "$0.00" : formatChangeWithSign(todayChange),
+                    todayPercentage: isEmptyPortfolio ? "0%" : formatPercentage(todayPercentage),
+                    totalReturn: isEmptyPortfolio ? "$0.00" : formatChangeWithSign(totalReturn),
+                    totalReturnPercentage: isEmptyPortfolio ? "0%" : formatPercentage(totalReturnPercentage),
+                    holdingsCount: holdingsCount,
+                    netDeposits: formatCurrency(netDeposits)
+                  });
+                  setHasRealData(true);
+                  
+                  toast({
+                    title: "Using Cached Data",
+                    description: "Trading212 API is rate limited. Showing cached portfolio data.",
+                    variant: "default",
+                  });
+                } catch (parseError) {
+                  console.error('Error parsing cached data:', parseError);
+                  throw new Error('Invalid cached data');
+                }
+              } else {
+                throw new Error('No cached data available and API is rate limited');
+              }
             } else {
-              console.error('Trading212 API returned no data');
-              throw new Error('No data received from Trading212 API');
+              console.error('Trading212 API returned no valid data:', data);
+              throw new Error('No valid data received from Trading212 API');
             }
           } catch (fetchError) {
             console.error('Trading212 API fetch error:', fetchError);
+            setDataSource('Trading212 API (Error)');
             
-            // Try to use cached data
-            const cachedData = localStorage.getItem('trading212_data');
-            if (cachedData) {
-              try {
-                const cachedRealData = JSON.parse(cachedData);
-                setPortfolioData({
-                  totalValue: `$${cachedRealData.totalValue?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}`,
-                  todayChange: `${cachedRealData.todayChange >= 0 ? '+' : ''}$${Math.abs(cachedRealData.todayChange || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                  todayPercentage: `${cachedRealData.todayPercentage >= 0 ? '+' : ''}${(cachedRealData.todayPercentage || 0).toFixed(2)}%`,
-                  totalReturn: `${cachedRealData.totalReturn >= 0 ? '+' : ''}$${Math.abs(cachedRealData.totalReturn || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                  totalReturnPercentage: `${cachedRealData.totalReturnPercentage >= 0 ? '+' : ''}${(cachedRealData.totalReturnPercentage || 0).toFixed(2)}%`,
-                  holdingsCount: cachedRealData.holdingsCount || 0,
-                  netDeposits: `$${(cachedRealData.netDeposits || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                });
-                setHasRealData(true);
-                setDataSource('Trading212 API (Cached)');
-                
-                toast({
-                  title: "Using Cached Data",
-                  description: "Trading212 API is temporarily unavailable. Showing cached portfolio data.",
-                  variant: "default",
-                });
-              } catch (parseError) {
-                console.error('Error parsing cached data:', parseError);
-                // Show API connection error
-                setDataSource('Trading212 API (Error)');
-                toast({
-                  title: "Trading212 Connection Issue",
-                  description: "Unable to connect to Trading212 API. Please check your API key configuration.",
-                  variant: "destructive",
-                });
-              }
-            } else {
-              // No cached data, show error state
-              setDataSource('Trading212 API (Error)');
-              toast({
-                title: "Trading212 Connection Failed",
-                description: "Unable to fetch data from Trading212. Please check your API configuration in the Data Integration page.",
-                variant: "destructive",
-              });
-            }
+            // Show zero values for API errors to maintain consistency
+            setPortfolioData({
+              totalValue: "$0.00",
+              todayChange: "$0.00",
+              todayPercentage: "0%",
+              totalReturn: "$0.00",
+              totalReturnPercentage: "0%",
+              holdingsCount: 0,
+              netDeposits: "$0.00"
+            });
+            setHasRealData(false);
+            
+            toast({
+              title: "Trading212 Connection Failed",
+              description: "Unable to fetch data from Trading212. Please check your API configuration in the Data Integration page.",
+              variant: "destructive",
+            });
           }
         } else if (selectedPortfolio === binancePortfolioId) {
           console.log('Fetching real Binance portfolio data');
@@ -159,6 +204,17 @@ const PortfolioSummary = () => {
           if (error) {
             console.error('Error fetching Binance data:', error);
             setDataSource('Binance API (Error)');
+            setPortfolioData({
+              totalValue: "$0.00",
+              todayChange: "$0.00",
+              todayPercentage: "0%",
+              totalReturn: "$0.00",
+              totalReturnPercentage: "0%",
+              holdingsCount: 0,
+              netDeposits: "$0.00"
+            });
+            setHasRealData(false);
+            
             toast({
               title: "Binance API Error",
               description: "Failed to fetch Binance data. Please check your API credentials.",
@@ -168,16 +224,26 @@ const PortfolioSummary = () => {
           }
 
           if (data?.success) {
-            // Use real Binance data from API
+            // Use real Binance data from API with proper validation
             const realData = data.data;
+            const totalValue = realData.totalValue || 0;
+            const todayChange = realData.todayChange || 0;
+            const todayPercentage = realData.todayPercentage || 0;
+            const totalReturn = realData.totalReturn || 0;
+            const totalReturnPercentage = realData.totalReturnPercentage || 0;
+            const netDeposits = realData.netDeposits || 0;
+            const holdingsCount = realData.holdingsCount || 0;
+
+            const isEmptyPortfolio = totalValue === 0;
+            
             setPortfolioData({
-              totalValue: `$${realData.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-              todayChange: `${realData.todayChange >= 0 ? '+' : ''}$${Math.abs(realData.todayChange).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-              todayPercentage: `${realData.todayPercentage >= 0 ? '+' : ''}${realData.todayPercentage.toFixed(2)}%`,
-              totalReturn: `${realData.totalReturn >= 0 ? '+' : ''}$${Math.abs(realData.totalReturn).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-              totalReturnPercentage: `${realData.totalReturnPercentage >= 0 ? '+' : ''}${realData.totalReturnPercentage.toFixed(2)}%`,
-              holdingsCount: realData.holdingsCount,
-              netDeposits: `$${realData.netDeposits.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              totalValue: formatCurrency(totalValue),
+              todayChange: isEmptyPortfolio ? "$0.00" : formatChangeWithSign(todayChange),
+              todayPercentage: isEmptyPortfolio ? "0%" : formatPercentage(todayPercentage),
+              totalReturn: isEmptyPortfolio ? "$0.00" : formatChangeWithSign(totalReturn),
+              totalReturnPercentage: isEmptyPortfolio ? "0%" : formatPercentage(totalReturnPercentage),
+              holdingsCount: holdingsCount,
+              netDeposits: formatCurrency(netDeposits)
             });
             
             // Cache the data
@@ -194,6 +260,17 @@ const PortfolioSummary = () => {
           } else {
             console.error('Binance API returned error:', data?.error);
             setDataSource('Binance API (Error)');
+            setPortfolioData({
+              totalValue: "$0.00",
+              todayChange: "$0.00",
+              todayPercentage: "0%",
+              totalReturn: "$0.00",
+              totalReturnPercentage: "0%",
+              holdingsCount: 0,
+              netDeposits: "$0.00"
+            });
+            setHasRealData(false);
+            
             toast({
               title: "Binance API Error",
               description: data?.error || 'Failed to fetch Binance data',
@@ -202,73 +279,24 @@ const PortfolioSummary = () => {
             throw new Error(data?.error || 'Failed to fetch Binance data');
           }
         } else if (portfolioType === 'crypto') {
-          console.log('Fetching crypto portfolio data from CoinGecko');
-          setDataSource('CoinGecko API');
+          console.log('Loading sample crypto portfolio data');
+          setDataSource('Sample Crypto Data');
           
-          // Call the crypto API function to get real data
-          const { data, error } = await supabase.functions.invoke('crypto-api', {
-            body: { portfolioId: selectedPortfolio }
+          // Use sample crypto data
+          setPortfolioData({
+            totalValue: "$15,432.18",
+            todayChange: "+$542.33",
+            todayPercentage: "+3.64%",
+            totalReturn: "+$3,432.18",
+            totalReturnPercentage: "+28.6%",
+            holdingsCount: 8,
+            netDeposits: "$12,000.00"
           });
-
-          if (error) {
-            console.error('Error fetching crypto data:', error);
-            setDataSource('Sample Crypto Data');
-            // Use fallback crypto data
-            setPortfolioData({
-              totalValue: "$15,432.18",
-              todayChange: "+$542.33",
-              todayPercentage: "+3.64%",
-              totalReturn: "+$3,432.18",
-              totalReturnPercentage: "+28.6%",
-              holdingsCount: 8,
-              netDeposits: "$12,000.00"
-            });
-            setHasRealData(true);
-            toast({
-              title: "Using Sample Data",
-              description: "Crypto API is unavailable. Showing sample portfolio data.",
-              variant: "default",
-            });
-          } else if (data?.success) {
-            // Use real crypto data from API
-            const realData = data.data;
-            setPortfolioData({
-              totalValue: `$${realData.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-              todayChange: `${realData.todayChange >= 0 ? '+' : ''}$${Math.abs(realData.todayChange).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-              todayPercentage: `${realData.todayPercentage >= 0 ? '+' : ''}${realData.todayPercentage.toFixed(2)}%`,
-              totalReturn: `${realData.totalReturn >= 0 ? '+' : ''}$${Math.abs(realData.totalReturn).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-              totalReturnPercentage: `${realData.totalReturnPercentage >= 0 ? '+' : ''}${realData.totalReturnPercentage.toFixed(2)}%`,
-              holdingsCount: realData.holdingsCount,
-              netDeposits: `$${realData.netDeposits.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-            });
-            
-            setHasRealData(true);
-            setDataSource('CoinGecko API');
-            console.log('Real crypto data loaded successfully:', realData);
-            
-            toast({
-              title: "Live Crypto Data",
-              description: "Portfolio updated with real-time cryptocurrency prices from CoinGecko",
-              variant: "default",
-            });
-          } else {
-            console.error('Crypto API returned error:', data?.error);
-            setDataSource('Sample Crypto Data');
-            // Use fallback crypto data
-            setPortfolioData({
-              totalValue: "$15,432.18",
-              todayChange: "+$542.33",
-              todayPercentage: "+3.64%",
-              totalReturn: "+$3,432.18",
-              totalReturnPercentage: "+28.6%",
-              holdingsCount: 8,
-              netDeposits: "$12,000.00"
-            });
-            setHasRealData(true);
-          }
+          setHasRealData(true);
         } else {
           console.log('Loading sample stock portfolio data for user portfolio');
           setDataSource('Manual Portfolio');
+          
           // Sample data for user-created portfolios
           setPortfolioData({
             totalValue: "$12,543.87",
@@ -284,9 +312,18 @@ const PortfolioSummary = () => {
       } catch (error) {
         console.error('Error fetching portfolio data:', error);
         
-        // Keep zero values on error for connected portfolios
+        // Always show consistent zero values on error for connected portfolios
         if (selectedPortfolio === localStorage.getItem('trading212_portfolio_id') || 
             selectedPortfolio === localStorage.getItem('binance_portfolio_id')) {
+          setPortfolioData({
+            totalValue: "$0.00",
+            todayChange: "$0.00",
+            todayPercentage: "0%",
+            totalReturn: "$0.00",
+            totalReturnPercentage: "0%",
+            holdingsCount: 0,
+            netDeposits: "$0.00"
+          });
           setHasRealData(false);
           setDataSource(dataSource + ' (Error)');
         }
@@ -353,7 +390,7 @@ const PortfolioSummary = () => {
                 </p>
                 <p className="text-xs text-yellow-600 mt-1">
                   {selectedPortfolio === localStorage.getItem('trading212_portfolio_id') 
-                    ? "Trading212 API connection failed. Please check your API key in Data Integration page and ensure your Trading212 account has positions."
+                    ? "Trading212 API connection failed or your account has no positions. Please check your API key in Data Integration page."
                     : selectedPortfolio === localStorage.getItem('binance_portfolio_id')
                     ? "Binance API connection failed. Please check your API keys in Data Integration page."
                     : "This portfolio has no holdings. Add some holdings manually or connect it to a broker."}
@@ -410,6 +447,7 @@ const PortfolioSummary = () => {
                 <span className="font-medium">Data Source: </span>
                 <span className={
                   dataSource.includes('Error') ? 'text-red-600' :
+                  dataSource.includes('Rate Limited') ? 'text-orange-600' :
                   dataSource.includes('Cached') ? 'text-orange-600' :
                   dataSource.includes('API') ? 'text-green-600' :
                   'text-gray-600'
