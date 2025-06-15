@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CheckCircle, XCircle, Loader2, AlertCircle, Key, Shield, Zap, Database } from "lucide-react";
-import BrokerCard from "@/components/BrokerCard";
+import { BrokerCard } from "@/components/BrokerCard";
 import ApiKeyManager from "@/components/ApiKeyManager";
 import { toast } from "@/hooks/use-toast";
 
