@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { PortfolioProvider } from "@/contexts/PortfolioContext";
-import { DividendOverview } from "@/components/Dividends/DividendOverview";
+import { DividendOverviewEnhanced } from "@/components/Dividends/DividendOverviewEnhanced";
 import { DividendGrowth } from "@/components/Dividends/DividendGrowth";
 import { DividendScores } from "@/components/Dividends/DividendScores";
 import { DividendReport } from "@/components/Dividends/DividendReport";
@@ -22,7 +22,7 @@ const DividendStats = () => {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold">Dividend Statistics</h1>
-              <p className="text-muted-foreground">Detailed analysis of your dividend income and portfolio</p>
+              <p className="text-muted-foreground">Comprehensive analysis of your dividend income and portfolio with 500+ stock database</p>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Currency: {defaultCurrency}</span>
@@ -39,13 +39,16 @@ const DividendStats = () => {
             </TabsList>
             
             <TabsContent value="overview" className="space-y-6">
-              <DividendOverview />
+              <DividendOverviewEnhanced />
             </TabsContent>
             
             <TabsContent value="performance" className="space-y-6">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle>Dividend Portfolio Performance</CardTitle>
+                  <div className="text-sm text-muted-foreground">
+                    Enhanced with 500+ stock database
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <DividendPerformanceTable />

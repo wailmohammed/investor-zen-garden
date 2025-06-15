@@ -3,11 +3,13 @@ import React, { useEffect, useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePortfolio } from "@/contexts/PortfolioContext";
 import { supabase } from "@/integrations/supabase/client";
 import { calculateDividendIncome } from "@/services/dividendCalculator";
-import { RefreshCw, TrendingUp, TrendingDown } from "lucide-react";
+import { RefreshCw, TrendingUp, TrendingDown, AlertCircle, CheckCircle } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 
 interface DividendPerformanceData {
   symbol: string;
@@ -22,12 +24,23 @@ interface DividendPerformanceData {
   safetyScore: number;
 }
 
+interface DividendStats {
+  totalPositions: number;
+  symbolsMatched: number;
+  dividendPayingStocks: number;
+  databaseSize: number;
+  coveragePercentage: number;
+}
+
 const DividendPerformanceTable = () => {
   const { user } = useAuth();
   const { selectedPortfolio } = usePortfolio();
   const [performanceData, setPerformanceData] = useState<DividendPerformanceData[]>([]);
+  const [stats, setStats] = useState<DividendStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [rateLimitRetry, setRateLimitRetry] = useState<number | null>(null);
 
   const fetchPerformanceData = async (forceRefresh = false) => {
     if (!user || !selectedPortfolio) {
@@ -36,6 +49,7 @@ const DividendPerformanceTable = () => {
     }
 
     setLoading(true);
+    setError(null);
     if (forceRefresh) setRefreshing(true);
 
     try {
@@ -44,12 +58,47 @@ const DividendPerformanceTable = () => {
       if (selectedPortfolio === trading212PortfolioId) {
         console.log('Fetching Trading212 dividend performance data');
         
-        const { data, error } = await supabase.functions.invoke('trading212-sync', {
+        const { data, error: functionError } = await supabase.functions.invoke('trading212-sync', {
           body: { portfolioId: selectedPortfolio }
         });
 
-        if (error) {
-          console.error('Error fetching Trading212 data:', error);
+        if (functionError) {
+          console.error('Error fetching Trading212 data:', functionError);
+          setError('Failed to fetch Trading212 data. Please try again.');
+          setPerformanceData([]);
+          return;
+        }
+
+        if (data?.error) {
+          if (data.error === 'RATE_LIMITED') {
+            setError(`Trading212 API rate limit reached. ${data.message}`);
+            if (data.retryAfter) {
+              setRateLimitRetry(data.retryAfter);
+              // Set up countdown timer
+              const interval = setInterval(() => {
+                setRateLimitRetry(prev => {
+                  if (prev && prev > 1) {
+                    return prev - 1;
+                  } else {
+                    clearInterval(interval);
+                    return null;
+                  }
+                });
+              }, 1000);
+            }
+            toast({
+              title: "Rate Limited",
+              description: data.message,
+              variant: "destructive",
+            });
+          } else {
+            setError(data.message || 'Unknown error occurred');
+            toast({
+              title: "Error",
+              description: data.message || 'Failed to fetch dividend data',
+              variant: "destructive",
+            });
+          }
           setPerformanceData([]);
           return;
         }
@@ -58,6 +107,9 @@ const DividendPerformanceTable = () => {
           const positions = data.data.positions;
           const dividendResults = calculateDividendIncome(positions);
           
+          // Set statistics
+          setStats(dividendResults.stats);
+          
           const performanceResults = dividendResults.dividendPayingStocks.map((stock: any) => ({
             ...stock,
             performance: Math.random() * 20 - 10, // Mock performance data
@@ -65,15 +117,28 @@ const DividendPerformanceTable = () => {
           }));
           
           setPerformanceData(performanceResults);
+          
+          toast({
+            title: "Data Updated",
+            description: `Analyzed ${positions.length} positions, found ${dividendResults.dividendPayingStocks.length} dividend-paying stocks`,
+          });
         } else {
           setPerformanceData([]);
+          setError('No portfolio data available');
         }
       } else {
         setPerformanceData([]);
+        setError('Please select a Trading212 portfolio');
       }
     } catch (error) {
       console.error("Error fetching dividend performance data:", error);
+      setError('Failed to fetch dividend data. Please check your connection.');
       setPerformanceData([]);
+      toast({
+        title: "Connection Error",
+        description: "Failed to fetch dividend data. Please check your connection.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -111,7 +176,10 @@ const DividendPerformanceTable = () => {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-48">
-        <p>Loading dividend performance data...</p>
+        <div className="flex items-center gap-2">
+          <RefreshCw className="h-4 w-4 animate-spin" />
+          <p>Loading dividend performance data...</p>
+        </div>
       </div>
     );
   }
@@ -137,12 +205,48 @@ const DividendPerformanceTable = () => {
           variant="outline" 
           size="sm"
           onClick={() => fetchPerformanceData(true)}
-          disabled={refreshing}
+          disabled={refreshing || rateLimitRetry !== null}
         >
           <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-          Refresh Data
+          {rateLimitRetry ? `Retry in ${rateLimitRetry}s` : 'Refresh Data'}
         </Button>
       </div>
+
+      {/* Statistics Display */}
+      {stats && (
+        <Alert>
+          <CheckCircle className="h-4 w-4" />
+          <AlertDescription>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+              <div>
+                <span className="font-medium">Total Positions:</span> {stats.totalPositions}
+              </div>
+              <div>
+                <span className="font-medium">Matched:</span> {stats.symbolsMatched}
+              </div>
+              <div>
+                <span className="font-medium">Dividend Paying:</span> {stats.dividendPayingStocks}
+              </div>
+              <div>
+                <span className="font-medium">Database Size:</span> {stats.databaseSize}
+              </div>
+              <div>
+                <span className="font-medium">Coverage:</span> {stats.coveragePercentage}%
+              </div>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Error Display */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            {error}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {performanceData.length > 0 ? (
         <div className="rounded-md border">
@@ -203,7 +307,7 @@ const DividendPerformanceTable = () => {
             No dividend performance data available
           </p>
           <p className="text-sm text-muted-foreground">
-            Connect your Trading212 portfolio to view dividend performance analysis
+            {error ? 'Please resolve the error and try again' : 'Connect your Trading212 portfolio to view dividend performance analysis'}
           </p>
         </div>
       )}
