@@ -12,6 +12,7 @@ import Portfolio from "@/pages/Portfolio";
 import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import DividendStats from '@/pages/DividendStats';
 
 const queryClient = new QueryClient();
 
@@ -45,6 +46,11 @@ function App() {
                     <Route path="/portfolios" element={
                       <ProtectedRoute>
                         <Portfolio />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/dividend-stats" element={
+                      <ProtectedRoute>
+                        <DividendStats />
                       </ProtectedRoute>
                     } />
                     <Route path="*" element={<Navigate to="/" replace />} />

@@ -49,10 +49,13 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const refreshPortfolios = async () => {
     if (!user?.id) {
+      setPortfolios([]);
+      setSelectedPortfolioState('');
       setIsLoading(false);
       return;
     }
 
+    setIsLoading(true);
     try {
       console.log('Fetching portfolios for user:', user.id);
       const { data, error } = await supabase
