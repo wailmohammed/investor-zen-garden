@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,12 +32,22 @@ const BrokerIntegrationContent = () => {
 
   console.log("Data Integration page - User:", user?.email);
 
-  const handleCSVUpload = (data: any[]) => {
-    setCsvData(data);
-    toast({
-      title: "CSV Data Loaded",
-      description: `${data.length} items ready to import`,
-    });
+  // Load selected API portfolio from localStorage on component mount
+  useEffect(() => {
+    const savedApiPortfolio = localStorage.getItem('selected_api_portfolio');
+    if (savedApiPortfolio && portfolios.some(p => p.id === savedApiPortfolio)) {
+      setSelectedApiPortfolio(savedApiPortfolio);
+    }
+  }, [portfolios]);
+
+  // Save selected API portfolio to localStorage whenever it changes
+  const handleApiPortfolioChange = (portfolioId: string) => {
+    setSelectedApiPortfolio(portfolioId);
+    if (portfolioId) {
+      localStorage.setItem('selected_api_portfolio', portfolioId);
+    } else {
+      localStorage.removeItem('selected_api_portfolio');
+    }
   };
 
   // Trading212 connection handlers
@@ -298,7 +308,7 @@ const BrokerIntegrationContent = () => {
                 <PortfolioSelector
                   portfolios={portfolios}
                   value={selectedApiPortfolio}
-                  onValueChange={setSelectedApiPortfolio}
+                  onValueChange={handleApiPortfolioChange}
                   label="Portfolio for API Connections"
                   placeholder="Select a portfolio for API connections"
                 />
@@ -455,7 +465,7 @@ const BrokerIntegrationContent = () => {
                       <PortfolioSelector
                         portfolios={portfolios}
                         value={selectedApiPortfolio}
-                        onValueChange={setSelectedApiPortfolio}
+                        onValueChange={handleApiPortfolioChange}
                         label="Test Portfolio"
                         placeholder="Select a portfolio to test API connection"
                       />
