@@ -1,9 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -28,9 +27,12 @@ const BrokerIntegrationContent = () => {
   const [csvData, setCsvData] = useState<any[]>([]);
   const [connectionLoading, setConnectionLoading] = useState<{ [key: string]: boolean }>({});
   const { user } = useAuth();
-  const { portfolios, selectedPortfolio, setSelectedPortfolio } = usePortfolio();
+  const { portfolios, selectedPortfolio, setSelectedPortfolio, isLoading } = usePortfolio();
 
-  console.log("Data Integration page - User:", user?.email);
+  console.log("BrokerIntegration - User:", user?.email);
+  console.log("BrokerIntegration - Portfolios:", portfolios);
+  console.log("BrokerIntegration - Selected Portfolio:", selectedPortfolio);
+  console.log("BrokerIntegration - Loading:", isLoading);
 
   const handleCSVUpload = (data: any[]) => {
     setCsvData(data);
@@ -196,6 +198,17 @@ const BrokerIntegrationContent = () => {
   const trading212Connected = !!localStorage.getItem('trading212_portfolio_id');
   const binanceConnected = !!localStorage.getItem('binance_portfolio_id');
 
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <span className="ml-2">Loading portfolios...</span>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -224,29 +237,14 @@ const BrokerIntegrationContent = () => {
       )}
 
       <Tabs defaultValue="brokers" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-8">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="brokers">🏢 Brokers</TabsTrigger>
-          <TabsTrigger value="sync" disabled={!hasPortfolios}>🔄 Sync</TabsTrigger>
           <TabsTrigger value="portfolios">📊 Portfolios</TabsTrigger>
           <TabsTrigger value="holdings" disabled={!hasPortfolios}>💼 Holdings</TabsTrigger>
           <TabsTrigger value="dividends" disabled={!hasPortfolios}>💰 Dividends</TabsTrigger>
           <TabsTrigger value="watchlists" disabled={!hasPortfolios}>👁️ Watchlists</TabsTrigger>
           <TabsTrigger value="api-config">🔑 API Keys</TabsTrigger>
-          <TabsTrigger value="testing" disabled={!hasPortfolios}>🧪 Testing</TabsTrigger>
         </TabsList>
-
-        <TabsContent value="sync" className="space-y-6">
-          {selectedPortfolio ? (
-            <SyncManager portfolioId={selectedPortfolio} />
-          ) : (
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                Please select a portfolio first to manage data synchronization.
-              </AlertDescription>
-            </Alert>
-          )}
-        </TabsContent>
 
         <TabsContent value="brokers" className="space-y-6">
           {/* Connection Status Overview */}
@@ -289,7 +287,7 @@ const BrokerIntegrationContent = () => {
                   <XCircle className="h-5 w-5 text-gray-600" />
                   <div>
                     <p className="font-medium">Interactive Brokers</p>
-                    <p className="text-sm text-muted-foreground">Not Connected</p>
+                    <p className="text-sm text-muted-foreground">Coming Soon</p>
                   </div>
                 </div>
               </div>
@@ -335,7 +333,7 @@ const BrokerIntegrationContent = () => {
             <BrokerCard
               name="Trading212"
               logo="/trading212-logo.svg"
-              description="Connect your Trading212 account to automatically sync your portfolio and dividend data with real-time portfolio sync, dividend tracking, and performance analytics."
+              description="Connect your Trading212 account to automatically sync your portfolio and dividend data."
               status={trading212Connected ? 'connected' : 'not_connected'}
               onConnect={handleTrading212Connect}
               onDisconnect={handleTrading212Disconnect}
@@ -345,7 +343,7 @@ const BrokerIntegrationContent = () => {
             <BrokerCard
               name="Binance"
               logo="/binance-logo.svg"
-              description="Connect your Binance account to track your cryptocurrency portfolio with crypto portfolio tracking, real-time prices, and transaction history."
+              description="Connect your Binance account to track your cryptocurrency portfolio."
               status={binanceConnected ? 'connected' : 'not_connected'}
               onConnect={handleBinanceConnect}
               onDisconnect={handleBinanceDisconnect}
@@ -355,7 +353,7 @@ const BrokerIntegrationContent = () => {
             <BrokerCard
               name="Interactive Brokers"
               logo="/interactive-brokers-logo.svg"
-              description="Professional trading platform integration for comprehensive portfolio management with global markets access, advanced analytics, and options tracking."
+              description="Professional trading platform integration for comprehensive portfolio management."
               status="not_connected"
               onConnect={() => toast({
                 title: "Coming Soon",
@@ -366,7 +364,7 @@ const BrokerIntegrationContent = () => {
             <BrokerCard
               name="eToro"
               logo="/etoro-logo.svg"
-              description="Social trading platform with copy trading and portfolio insights including social trading, copy portfolios, and multi-asset tracking."
+              description="Social trading platform with copy trading and portfolio insights."
               status="not_connected"
               onConnect={() => toast({
                 title: "Coming Soon",
@@ -444,152 +442,6 @@ const BrokerIntegrationContent = () => {
           </Alert>
 
           <ApiKeyManager />
-        </TabsContent>
-
-        <TabsContent value="testing" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Zap className="h-5 w-5" />
-                API Connection Testing
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <p className="text-muted-foreground">
-                Test your API connections to ensure they're working correctly and can access your account data.
-              </p>
-
-              {!hasPortfolios && (
-                <Alert>
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    Create a portfolio first to test API connections.
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              {hasPortfolios && (
-                <>
-                  {/* Portfolio Selection for Testing */}
-                  <Card className="bg-blue-50">
-                    <CardHeader>
-                      <CardTitle className="text-lg">Select Portfolio for Testing</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <PortfolioSelector
-                        portfolios={portfolios}
-                        value={selectedPortfolio}
-                        onValueChange={setSelectedPortfolio}
-                        label="Test Portfolio"
-                        placeholder="Select a portfolio to test API connection"
-                      />
-                    </CardContent>
-                  </Card>
-
-                  {/* Binance API Test */}
-                  <div className="border rounded-lg p-4 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <img src="/binance-logo.svg" alt="Binance" className="w-8 h-8" />
-                        <div>
-                          <h3 className="font-medium">Binance API Test</h3>
-                          <p className="text-sm text-muted-foreground">Test your Binance API connection</p>
-                        </div>
-                      </div>
-                      <Button 
-                        onClick={testBinanceConnection}
-                        disabled={isTestingBinance || !selectedPortfolio}
-                        variant="outline"
-                      >
-                        {isTestingBinance ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Testing...
-                          </>
-                        ) : (
-                          <>
-                            <Key className="h-4 w-4 mr-2" />
-                            Test Connection
-                          </>
-                        )}
-                      </Button>
-                    </div>
-
-                    {binanceTestResult && (
-                      <Alert variant={binanceTestResult === 'success' ? 'default' : 'destructive'}>
-                        {binanceTestResult === 'success' ? (
-                          <CheckCircle className="h-4 w-4" />
-                        ) : (
-                          <XCircle className="h-4 w-4" />
-                        )}
-                        <AlertDescription>
-                          {binanceTestResult === 'success' 
-                            ? 'Binance API connection test successful! Your API keys are configured correctly and connected to your portfolio.'
-                            : 'Binance API connection test failed. Please check your API keys and portfolio selection.'
-                          }
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                  </div>
-                </>
-              )}
-
-              {/* Trading212 API Test */}
-              <div className="border rounded-lg p-4 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <img src="/trading212-logo.svg" alt="Trading212" className="w-8 h-8" />
-                    <div>
-                      <h3 className="font-medium">Trading212 API Test</h3>
-                      <p className="text-sm text-muted-foreground">Test your Trading212 API connection</p>
-                    </div>
-                  </div>
-                  <Button variant="outline" disabled>
-                    <CheckCircle className="h-4 w-4 mr-2 text-green-600" />
-                    Connected
-                  </Button>
-                </div>
-                <Alert>
-                  <CheckCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    Trading212 connection is active and working properly. Portfolio data is being synced successfully with database storage.
-                  </AlertDescription>
-                </Alert>
-              </div>
-
-              {/* Connection Guidelines */}
-              <Card className="bg-blue-50">
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Shield className="h-5 w-5" />
-                    Security Guidelines
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-start gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
-                    <p className="text-sm">Always use read-only API keys when available</p>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
-                    <p className="text-sm">Enable IP restrictions on your API keys</p>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
-                    <p className="text-sm">Never share your API keys or secret keys</p>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
-                    <p className="text-sm">Monitor your API usage regularly</p>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
-                    <p className="text-sm">Data is automatically stored in database for offline access</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </CardContent>
-          </Card>
         </TabsContent>
       </Tabs>
     </div>
