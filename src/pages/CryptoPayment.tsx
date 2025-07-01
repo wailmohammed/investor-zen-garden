@@ -26,57 +26,124 @@ const CryptoPayment = () => {
 
   useEffect(() => {
     const fetchCryptoData = async () => {
+      console.log('Starting crypto data fetch...');
+      setIsLoading(true);
+      setError(null);
+
       if (!selectedPortfolio || !user) {
+        console.log('No portfolio or user selected');
         setIsLoading(false);
         return;
       }
 
       try {
-        setIsLoading(true);
-        setError(null);
-
         if (isTrading212Portfolio) {
           console.log('Fetching Trading212 crypto data for portfolio:', selectedPortfolio);
           
-          // Call Trading212 sync to get real data
-          const { data, error: syncError } = await supabase.functions.invoke('trading212-sync', {
-            body: { portfolioId: selectedPortfolio }
-          });
+          // First try to get cached data from database
+          const { data: cachedData } = await supabase
+            .from('portfolio_metadata')
+            .select('*')
+            .eq('portfolio_id', selectedPortfolio)
+            .eq('broker_type', 'trading212')
+            .single();
 
-          if (syncError) {
-            throw new Error(`Trading212 sync error: ${syncError.message}`);
-          }
+          const { data: cachedPositions } = await supabase
+            .from('portfolio_positions')
+            .select('*')
+            .eq('portfolio_id', selectedPortfolio)
+            .eq('broker_type', 'trading212');
 
-          if (data?.success && data.data) {
-            const realData = data.data;
+          if (cachedData && cachedPositions) {
+            console.log('Using cached Trading212 data');
             
-            // Filter crypto positions (you can customize this logic based on your needs)
-            const cryptoPositions = realData.positions?.filter((pos: any) => 
+            // Filter for crypto-like positions (you can adjust this logic)
+            const cryptoPositions = cachedPositions.filter((pos: any) => 
               pos.symbol.includes('BTC') || 
               pos.symbol.includes('ETH') || 
-              pos.symbol.includes('CRYPTO') ||
-              pos.symbol.length <= 4 // Many crypto symbols are short
-            ) || [];
+              pos.symbol.includes('USDT') ||
+              pos.symbol.includes('BNB') ||
+              pos.symbol.includes('ADA') ||
+              pos.symbol.includes('DOT') ||
+              pos.symbol.includes('LINK') ||
+              pos.symbol.length <= 5 // Many crypto symbols are short
+            );
 
-            setCryptoData(cryptoPositions);
+            const formattedCryptoPositions = cryptoPositions.map((pos: any) => ({
+              symbol: pos.symbol,
+              quantity: pos.quantity,
+              currentPrice: pos.current_price,
+              marketValue: pos.market_value,
+              unrealizedPnL: pos.unrealized_pnl,
+              averagePrice: pos.average_price
+            }));
+
+            setCryptoData(formattedCryptoPositions);
             
             setPortfolioSummary({
-              totalValue: realData.totalValue || 0,
-              todayChange: realData.todayChange || 0,
-              todayPercentage: realData.todayPercentage || 0,
-              cryptoCount: cryptoPositions.length,
-              cashBalance: realData.cashBalance || 0
+              totalValue: cachedData.total_value || 0,
+              todayChange: cachedData.today_change || 0,
+              todayPercentage: cachedData.today_change_percentage || 0,
+              cryptoCount: formattedCryptoPositions.length,
+              cashBalance: cachedData.cash_balance || 0
             });
 
-            toast({
-              title: "Trading212 Data Loaded",
-              description: `Found ${cryptoPositions.length} crypto positions from ${realData.positions?.length || 0} total positions`,
-            });
+            if (formattedCryptoPositions.length > 0) {
+              toast({
+                title: "Trading212 Data Loaded",
+                description: `Found ${formattedCryptoPositions.length} crypto positions from cached data`,
+              });
+            }
           } else {
-            throw new Error('No data received from Trading212 API');
+            console.log('No cached data found, trying to sync...');
+            
+            // Try to sync fresh data
+            const { data: syncData, error: syncError } = await supabase.functions.invoke('trading212-sync', {
+              body: { portfolioId: selectedPortfolio }
+            });
+
+            if (syncError) {
+              console.error('Trading212 sync error:', syncError);
+              throw new Error(`Trading212 sync error: ${syncError.message}`);
+            }
+
+            if (syncData?.success && syncData.data) {
+              const realData = syncData.data;
+              console.log('Fresh Trading212 data received:', realData);
+              
+              // Filter crypto positions from real data
+              const cryptoPositions = realData.positions?.filter((pos: any) => 
+                pos.symbol.includes('BTC') || 
+                pos.symbol.includes('ETH') || 
+                pos.symbol.includes('USDT') ||
+                pos.symbol.includes('BNB') ||
+                pos.symbol.includes('ADA') ||
+                pos.symbol.includes('DOT') ||
+                pos.symbol.includes('LINK') ||
+                pos.symbol.length <= 5
+              ) || [];
+
+              setCryptoData(cryptoPositions);
+              
+              setPortfolioSummary({
+                totalValue: realData.totalValue || 0,
+                todayChange: realData.todayChange || 0,
+                todayPercentage: realData.todayPercentage || 0,
+                cryptoCount: cryptoPositions.length,
+                cashBalance: realData.cashBalance || 0
+              });
+
+              toast({
+                title: "Trading212 Data Synced",
+                description: `Found ${cryptoPositions.length} crypto positions from ${realData.positions?.length || 0} total positions`,
+              });
+            } else {
+              throw new Error('No data received from Trading212 API');
+            }
           }
         } else {
           // Mock crypto data for non-Trading212 portfolios
+          console.log('Using mock crypto data for non-Trading212 portfolio');
           const mockCryptoData = [
             {
               symbol: 'BTC',
@@ -108,8 +175,19 @@ const CryptoPayment = () => {
       } catch (error: any) {
         console.error('Error fetching crypto data:', error);
         setError(error.message || 'Failed to fetch crypto data');
+        
+        // Set empty state on error
+        setCryptoData([]);
+        setPortfolioSummary({
+          totalValue: 0,
+          todayChange: 0,
+          todayPercentage: 0,
+          cryptoCount: 0,
+          cashBalance: 0
+        });
+        
         toast({
-          title: "Error",
+          title: "Error Loading Data",
           description: error.message || 'Failed to fetch crypto data',
           variant: "destructive",
         });
