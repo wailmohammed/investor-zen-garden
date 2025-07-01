@@ -1,250 +1,277 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { useToast } from '@/hooks/use-toast';
-import { Bitcoin, CreditCard, Wallet } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/contexts/AuthContext';
-import DashboardLayout from '@/components/DashboardLayout';
 
-const cryptoOptions = [
-  { id: 'btc', name: 'Bitcoin (BTC)', icon: <Bitcoin className="h-6 w-6" />, address: '3FZbgi29cpjq2GjdwV8eyHuJJnkLtktZc5' },
-  { id: 'eth', name: 'Ethereum (ETH)', icon: <CreditCard className="h-6 w-6" />, address: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F' },
-  { id: 'xrp', name: 'Ripple (XRP)', icon: <CreditCard className="h-6 w-6" />, address: 'rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh' },
-  { id: 'dog', name: 'Dogecoin (DOGE)', icon: <Wallet className="h-6 w-6" />, address: 'D8vFz4p1L37jdg9Hm1DdeZ5vxbY7NphHwU' },
-  { id: 'sol', name: 'Solana (SOL)', icon: <CreditCard className="h-6 w-6" />, address: '5YNmRHBD3FQ9dJhYzuJ3tRYKPJ8gjE1GgakhrfxkUB7q' },
-  { id: 'usdt', name: 'Tether (USDT)', icon: <CreditCard className="h-6 w-6" />, address: 'TEaLa1dmcmvRpYK7ZWjByh1nqK4xvL7qxB' }
-];
-
-interface PaymentForm {
-  amount: string;
-  cryptoType: string;
-}
+import React, { useState, useEffect } from 'react';
+import DashboardLayout from "@/components/DashboardLayout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { usePortfolio } from "@/contexts/PortfolioContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { Loader2, TrendingUp, TrendingDown, Wallet, DollarSign } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 
 const CryptoPayment = () => {
-  const [selectedCrypto, setSelectedCrypto] = useState(cryptoOptions[0]);
-  const [step, setStep] = useState<'select' | 'confirm' | 'complete'>('select');
-  const [formData, setFormData] = useState<PaymentForm>({
-    amount: '100',
-    cryptoType: 'btc'
-  });
-  const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
-  const navigate = useNavigate();
   const { user } = useAuth();
+  const { selectedPortfolio, portfolios } = usePortfolio();
+  const [cryptoData, setCryptoData] = useState<any[]>([]);
+  const [portfolioSummary, setPortfolioSummary] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleCryptoSelect = (crypto: typeof cryptoOptions[0]) => {
-    setSelectedCrypto(crypto);
-    setFormData({...formData, cryptoType: crypto.id});
-  };
+  // Check if this is a Trading212 connected portfolio
+  const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
+  const isTrading212Portfolio = selectedPortfolio === trading212PortfolioId;
+  const currentPortfolio = portfolios.find(p => p.id === selectedPortfolio);
 
-  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({...formData, amount: e.target.value});
-  };
+  useEffect(() => {
+    const fetchCryptoData = async () => {
+      if (!selectedPortfolio || !user) {
+        setIsLoading(false);
+        return;
+      }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!formData.amount || parseFloat(formData.amount) <= 0) {
-      toast({
-        title: "Invalid amount",
-        description: "Please enter a valid amount.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    setStep('confirm');
-  };
+      try {
+        setIsLoading(true);
+        setError(null);
 
-  const handleConfirmPayment = async () => {
-    try {
-      setLoading(true);
-      
-      // Record the payment in Supabase
-      const { error } = await supabase.from('crypto_payments').insert({
-        user_id: user?.id,
-        amount: parseFloat(formData.amount),
-        crypto_type: formData.cryptoType,
-        status: 'pending',
-        wallet_address: selectedCrypto.address
-      });
-      
-      if (error) throw error;
-      
-      // In a real app, you might integrate with a crypto payment service here
-      
-      toast({
-        title: "Payment initiated",
-        description: "Please send the crypto to the provided address.",
-      });
-      
-      setStep('complete');
-    } catch (error: any) {
-      console.error('Payment error:', error);
-      toast({
-        title: "Payment error",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+        if (isTrading212Portfolio) {
+          console.log('Fetching Trading212 crypto data for portfolio:', selectedPortfolio);
+          
+          // Call Trading212 sync to get real data
+          const { data, error: syncError } = await supabase.functions.invoke('trading212-sync', {
+            body: { portfolioId: selectedPortfolio }
+          });
+
+          if (syncError) {
+            throw new Error(`Trading212 sync error: ${syncError.message}`);
+          }
+
+          if (data?.success && data.data) {
+            const realData = data.data;
+            
+            // Filter crypto positions (you can customize this logic based on your needs)
+            const cryptoPositions = realData.positions?.filter((pos: any) => 
+              pos.symbol.includes('BTC') || 
+              pos.symbol.includes('ETH') || 
+              pos.symbol.includes('CRYPTO') ||
+              pos.symbol.length <= 4 // Many crypto symbols are short
+            ) || [];
+
+            setCryptoData(cryptoPositions);
+            
+            setPortfolioSummary({
+              totalValue: realData.totalValue || 0,
+              todayChange: realData.todayChange || 0,
+              todayPercentage: realData.todayPercentage || 0,
+              cryptoCount: cryptoPositions.length,
+              cashBalance: realData.cashBalance || 0
+            });
+
+            toast({
+              title: "Trading212 Data Loaded",
+              description: `Found ${cryptoPositions.length} crypto positions from ${realData.positions?.length || 0} total positions`,
+            });
+          } else {
+            throw new Error('No data received from Trading212 API');
+          }
+        } else {
+          // Mock crypto data for non-Trading212 portfolios
+          const mockCryptoData = [
+            {
+              symbol: 'BTC',
+              quantity: 0.5,
+              currentPrice: 65000,
+              marketValue: 32500,
+              unrealizedPnL: 2500,
+              averagePrice: 60000
+            },
+            {
+              symbol: 'ETH',
+              quantity: 2.5,
+              currentPrice: 3200,
+              marketValue: 8000,
+              unrealizedPnL: 800,
+              averagePrice: 2880
+            }
+          ];
+
+          setCryptoData(mockCryptoData);
+          setPortfolioSummary({
+            totalValue: 40500,
+            todayChange: 1200,
+            todayPercentage: 3.05,
+            cryptoCount: 2,
+            cashBalance: 0
+          });
+        }
+      } catch (error: any) {
+        console.error('Error fetching crypto data:', error);
+        setError(error.message || 'Failed to fetch crypto data');
+        toast({
+          title: "Error",
+          description: error.message || 'Failed to fetch crypto data',
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchCryptoData();
+  }, [selectedPortfolio, user, isTrading212Portfolio]);
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <span className="ml-2">Loading crypto portfolio data...</span>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
-      <div className="container mx-auto max-w-4xl py-8">
-        <h1 className="text-3xl font-bold mb-6">Crypto Payment</h1>
-        
-        {step === 'select' && (
+      <div className="space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold flex items-center gap-2">
+              💰 Crypto Portfolio
+              {isTrading212Portfolio && <Badge variant="default" className="bg-green-100 text-green-800">Live Trading212 Data</Badge>}
+            </h1>
+            <p className="text-muted-foreground">
+              {selectedPortfolio ? `Portfolio: ${currentPortfolio?.name || 'Unknown'}` : 'Select a portfolio to view crypto holdings'}
+            </p>
+          </div>
+        </div>
+
+        {!selectedPortfolio ? (
           <Card>
-            <CardHeader>
-              <CardTitle>Select Payment Method</CardTitle>
-              <CardDescription>Choose your preferred cryptocurrency</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="crypto" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="crypto">Cryptocurrency</TabsTrigger>
-                  <TabsTrigger value="fiat" disabled>Fiat (Coming Soon)</TabsTrigger>
-                </TabsList>
-                <TabsContent value="crypto" className="mt-4">
-                  <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="amount">Amount (USD)</Label>
-                      <Input 
-                        id="amount"
-                        type="number" 
-                        placeholder="Enter amount" 
-                        value={formData.amount}
-                        onChange={handleAmountChange}
-                        min="1"
-                        required
-                      />
+            <CardContent className="p-6">
+              <p className="text-center text-muted-foreground">
+                Please select a portfolio to view your crypto holdings
+              </p>
+            </CardContent>
+          </Card>
+        ) : error ? (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : (
+          <>
+            {/* Portfolio Summary */}
+            {portfolioSummary && (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2">
+                      <Wallet className="h-4 w-4 text-blue-600" />
+                      <span className="text-sm text-muted-foreground">Total Value</span>
                     </div>
-                    
-                    <div className="space-y-2">
-                      <Label>Select Cryptocurrency</Label>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                        {cryptoOptions.map((crypto) => (
-                          <div 
-                            key={crypto.id}
-                            className={`flex items-center p-4 border rounded-lg cursor-pointer transition-colors ${
-                              selectedCrypto.id === crypto.id 
-                                ? 'bg-primary/10 border-primary' 
-                                : 'hover:bg-accent'
-                            }`}
-                            onClick={() => handleCryptoSelect(crypto)}
-                          >
-                            <div className="mr-3">{crypto.icon}</div>
-                            <div>
-                              <p className="font-medium">{crypto.name}</p>
-                            </div>
+                    <p className="text-2xl font-bold">
+                      ${portfolioSummary.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2">
+                      {portfolioSummary.todayChange >= 0 ? (
+                        <TrendingUp className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <TrendingDown className="h-4 w-4 text-red-600" />
+                      )}
+                      <span className="text-sm text-muted-foreground">Today's Change</span>
+                    </div>
+                    <p className={`text-2xl font-bold ${portfolioSummary.todayChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {portfolioSummary.todayChange >= 0 ? '+' : ''}${Math.abs(portfolioSummary.todayChange).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <p className={`text-sm ${portfolioSummary.todayPercentage >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {portfolioSummary.todayPercentage >= 0 ? '+' : ''}{portfolioSummary.todayPercentage.toFixed(2)}%
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="h-4 w-4 text-blue-600" />
+                      <span className="text-sm text-muted-foreground">Crypto Assets</span>
+                    </div>
+                    <p className="text-2xl font-bold">{portfolioSummary.cryptoCount}</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2">
+                      <Wallet className="h-4 w-4 text-green-600" />
+                      <span className="text-sm text-muted-foreground">Cash Balance</span>
+                    </div>
+                    <p className="text-2xl font-bold">
+                      ${portfolioSummary.cashBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Crypto Holdings */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Crypto Holdings</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {cryptoData.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground mb-4">
+                      {isTrading212Portfolio 
+                        ? "No crypto positions found in your Trading212 portfolio" 
+                        : "No crypto holdings available"}
+                    </p>
+                    {isTrading212Portfolio && (
+                      <Button asChild>
+                        <a href="/brokers" className="inline-flex items-center gap-2">
+                          Manage Trading212 Connection
+                        </a>
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {cryptoData.map((crypto, index) => (
+                      <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div className="flex-1">
+                          <div className="font-medium text-lg">{crypto.symbol}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {crypto.quantity} @ ${crypto.currentPrice?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </div>
-                        ))}
+                          {crypto.averagePrice && (
+                            <div className="text-xs text-muted-foreground">
+                              Avg: ${crypto.averagePrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <div className="font-medium">
+                            ${crypto.marketValue?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </div>
+                          {crypto.unrealizedPnL !== undefined && (
+                            <div className={`text-sm ${crypto.unrealizedPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {crypto.unrealizedPnL >= 0 ? '+' : ''}${crypto.unrealizedPnL.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    
-                    <Button type="submit" className="w-full">Continue to Payment</Button>
-                  </form>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-        )}
-        
-        {step === 'confirm' && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Confirm Payment</CardTitle>
-              <CardDescription>Please review your payment details</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-1">
-                <p className="text-sm font-medium">Amount</p>
-                <p className="text-2xl font-bold">${formData.amount} USD</p>
-              </div>
-              
-              <div className="space-y-1">
-                <p className="text-sm font-medium">Payment Method</p>
-                <div className="flex items-center">
-                  {selectedCrypto.icon}
-                  <span className="ml-2">{selectedCrypto.name}</span>
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Send to this address:</p>
-                <div className="p-3 bg-accent rounded-md break-all font-mono text-sm">
-                  {selectedCrypto.address}
-                </div>
-                <Button 
-                  variant="outline" 
-                  className="w-full"
-                  onClick={() => {
-                    navigator.clipboard.writeText(selectedCrypto.address);
-                    toast({
-                      title: "Address copied",
-                      description: "The wallet address has been copied to your clipboard.",
-                    });
-                  }}
-                >
-                  Copy Address
-                </Button>
-              </div>
-            </CardContent>
-            <CardFooter className="flex flex-col space-y-2">
-              <Button 
-                className="w-full" 
-                disabled={loading}
-                onClick={handleConfirmPayment}
-              >
-                {loading ? "Processing..." : "I've sent the payment"}
-              </Button>
-              <Button 
-                variant="outline" 
-                className="w-full"
-                onClick={() => setStep('select')}
-                disabled={loading}
-              >
-                Go Back
-              </Button>
-            </CardFooter>
-          </Card>
-        )}
-        
-        {step === 'complete' && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Payment Initiated</CardTitle>
-              <CardDescription>We're waiting for your transaction to be confirmed</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex flex-col items-center justify-center py-6">
-                <div className="rounded-full bg-primary/10 p-4 mb-4">
-                  <Wallet className="h-12 w-12 text-primary" />
-                </div>
-                <h3 className="text-xl font-semibold mb-2">Transaction Pending</h3>
-                <p className="text-center text-muted-foreground">
-                  We'll notify you once your payment of ${formData.amount} in {selectedCrypto.name} is confirmed.
-                  This typically takes 10-60 minutes depending on the network.
-                </p>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button 
-                className="w-full"
-                onClick={() => navigate('/dashboard')}
-              >
-                Return to Dashboard
-              </Button>
-            </CardFooter>
-          </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
         )}
       </div>
     </DashboardLayout>

@@ -14,6 +14,7 @@ import { DividendDataProvider } from "@/contexts/DividendDataContext";
 import DividendStats from './pages/DividendStats';
 import Index from './pages/Index';
 import BrokerIntegration from './pages/BrokerIntegration';
+import CryptoPayment from './pages/CryptoPayment';
 
 // Create QueryClient instance
 const queryClient = new QueryClient();
@@ -35,6 +36,7 @@ function App() {
                   <Route path="/dividends" element={<Dividends />} />
                   <Route path="/dividend-stats" element={<DividendStats />} />
                   <Route path="/brokers" element={<BrokerIntegration />} />
+                  <Route path="/payment/crypto" element={<CryptoPayment />} />
                 </Routes>
               </DividendDataProvider>
             </PortfolioProvider>
