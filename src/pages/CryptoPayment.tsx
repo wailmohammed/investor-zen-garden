@@ -1,498 +1,289 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { usePortfolio } from "@/contexts/PortfolioContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, TrendingUp, TrendingDown, Wallet, DollarSign, RefreshCw } from "lucide-react";
+import { Loader2, CreditCard, Shield, CheckCircle, ArrowLeft } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 
 const CryptoPayment = () => {
   const { user } = useAuth();
-  const { selectedPortfolio, portfolios } = usePortfolio();
-  const [cryptoData, setCryptoData] = useState<any[]>([]);
-  const [portfolioSummary, setPortfolioSummary] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [lastUpdate, setLastUpdate] = useState<string>('');
+  const navigate = useNavigate();
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<string>('Premium');
+  const [paymentMethod, setPaymentMethod] = useState<'bitcoin' | 'ethereum' | 'usdt'>('bitcoin');
 
-  // Check if this is a Trading212 connected portfolio
-  const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
-  const isTrading212Portfolio = selectedPortfolio === trading212PortfolioId;
-  const currentPortfolio = portfolios.find(p => p.id === selectedPortfolio);
-
-  const fetchCachedData = async () => {
-    if (!selectedPortfolio || !user) return null;
-
-    try {
-      console.log('Fetching cached Trading212 data...');
-      
-      // Get cached metadata
-      const { data: cachedData } = await supabase
-        .from('portfolio_metadata')
-        .select('*')
-        .eq('portfolio_id', selectedPortfolio)
-        .eq('broker_type', 'trading212')
-        .maybeSingle();
-
-      // Get cached positions
-      const { data: cachedPositions } = await supabase
-        .from('portfolio_positions')
-        .select('*')
-        .eq('portfolio_id', selectedPortfolio)
-        .eq('broker_type', 'trading212');
-
-      if (cachedData && cachedPositions && cachedPositions.length > 0) {
-        console.log('Found cached data:', { metadata: cachedData, positions: cachedPositions.length });
-        
-        // Filter for crypto-like positions
-        const cryptoPositions = cachedPositions.filter((pos: any) => {
-          const symbol = pos.symbol.toLowerCase();
-          return symbol.includes('btc') || 
-                 symbol.includes('eth') || 
-                 symbol.includes('usdt') ||
-                 symbol.includes('bnb') ||
-                 symbol.includes('ada') ||
-                 symbol.includes('dot') ||
-                 symbol.includes('link') ||
-                 symbol.includes('sol') ||
-                 symbol.includes('avax') ||
-                 symbol.includes('matic') ||
-                 symbol.includes('crypto') ||
-                 pos.symbol.length <= 5; // Many crypto symbols are short
-        });
-
-        const formattedCryptoPositions = cryptoPositions.map((pos: any) => ({
-          symbol: pos.symbol,
-          quantity: pos.quantity,
-          currentPrice: pos.current_price,
-          marketValue: pos.market_value,
-          unrealizedPnL: pos.unrealized_pnl,
-          averagePrice: pos.average_price
-        }));
-
-        setCryptoData(formattedCryptoPositions);
-        
-        setPortfolioSummary({
-          totalValue: cachedData.total_value || 0,
-          todayChange: cachedData.today_change || 0,
-          todayPercentage: cachedData.today_change_percentage || 0,
-          cryptoCount: formattedCryptoPositions.length,
-          cashBalance: cachedData.cash_balance || 0
-        });
-
-        setLastUpdate(cachedData.last_sync_at || 'Unknown');
-        
-        return {
-          success: true,
-          cryptoCount: formattedCryptoPositions.length,
-          fromCache: true
-        };
-      }
-      
-      return null;
-    } catch (error) {
-      console.error('Error fetching cached data:', error);
-      return null;
+  const plans = [
+    {
+      name: 'Premium',
+      price: '$19',
+      cryptoPrice: { bitcoin: '0.0003 BTC', ethereum: '0.006 ETH', usdt: '19 USDT' },
+      description: 'Advanced tools for active investors',
+      features: [
+        'Up to 10 portfolios',
+        'Unlimited investment tracking',
+        'Advanced analytics and reports',
+        'Real-time data updates',
+        'Dividend tracking and forecasting',
+        'Custom watchlists',
+        'Tax optimization suggestions',
+        'Priority email & chat support',
+      ],
+      highlighted: true,
+    },
+    {
+      name: 'Professional',
+      price: '$39',
+      cryptoPrice: { bitcoin: '0.0006 BTC', ethereum: '0.012 ETH', usdt: '39 USDT' },
+      description: 'For serious investors and professionals',
+      features: [
+        'All Premium features',
+        'Unlimited portfolios',
+        'API access',
+        'Advanced screening tools',
+        'Portfolio risk analysis',
+        'Priority phone support',
+        'Dedicated account manager',
+      ],
+      highlighted: false,
     }
-  };
+  ];
 
-  const syncFreshData = async () => {
-    if (!selectedPortfolio || !user) return;
+  const currentPlan = plans.find(p => p.name === selectedPlan);
+
+  const handleCryptoPayment = async () => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to process payment",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsProcessing(true);
 
     try {
-      console.log('Attempting to sync fresh Trading212 data...');
-      
-      const { data: syncData, error: syncError } = await supabase.functions.invoke('trading212-sync', {
-        body: { portfolioId: selectedPortfolio }
+      // Record the crypto payment intent
+      const { data, error } = await supabase
+        .from('crypto_payments')
+        .insert({
+          user_id: user.id,
+          amount: selectedPlan === 'Premium' ? 19 : 39,
+          currency: paymentMethod.toUpperCase(),
+          status: 'pending'
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Simulate crypto payment processing
+      toast({
+        title: "Crypto Payment Initiated",
+        description: `Please send ${currentPlan?.cryptoPrice[paymentMethod]} to the wallet address shown below`,
       });
 
-      console.log('Trading212 sync response:', { data: syncData, error: syncError });
-
-      if (syncError) {
-        console.error('Trading212 sync error:', syncError);
-        throw new Error(`Trading212 sync failed: ${syncError.message}`);
-      }
-
-      if (syncData?.success && syncData.data) {
-        const realData = syncData.data;
-        console.log('Fresh Trading212 data received:', realData);
-        
-        // Filter crypto positions from real data
-        const allPositions = realData.positions || [];
-        const cryptoPositions = allPositions.filter((pos: any) => {
-          const symbol = pos.symbol.toLowerCase();
-          return symbol.includes('btc') || 
-                 symbol.includes('eth') || 
-                 symbol.includes('usdt') ||
-                 symbol.includes('bnb') ||
-                 symbol.includes('ada') ||
-                 symbol.includes('dot') ||
-                 symbol.includes('link') ||
-                 symbol.includes('sol') ||
-                 symbol.includes('avax') ||
-                 symbol.includes('matic') ||
-                 symbol.includes('crypto') ||
-                 pos.symbol.length <= 5;
-        });
-
-        setCryptoData(cryptoPositions);
-        
-        setPortfolioSummary({
-          totalValue: realData.totalValue || 0,
-          todayChange: realData.todayChange || 0,
-          todayPercentage: realData.todayPercentage || 0,
-          cryptoCount: cryptoPositions.length,
-          cashBalance: realData.cashBalance || 0
-        });
-
-        setLastUpdate(new Date().toISOString());
-
-        toast({
-          title: "Trading212 Data Synced",
-          description: `Found ${cryptoPositions.length} crypto positions from ${allPositions.length} total positions`,
-        });
-
-        return { success: true, cryptoCount: cryptoPositions.length };
-      } else if (syncData?.error === 'RATE_LIMITED') {
-        throw new Error('Trading212 API rate limited. Using cached data.');
-      } else {
-        throw new Error('No fresh data available from Trading212 API');
-      }
     } catch (error: any) {
-      console.error('Fresh data sync failed:', error);
-      throw error;
-    }
-  };
-
-  useEffect(() => {
-    const fetchCryptoData = async () => {
-      console.log('Starting crypto data fetch...');
-      setIsLoading(true);
-      setError(null);
-
-      if (!selectedPortfolio || !user) {
-        console.log('No portfolio or user selected');
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        if (isTrading212Portfolio) {
-          console.log('Fetching Trading212 crypto data for portfolio:', selectedPortfolio);
-          
-          // Try cached data first
-          const cachedResult = await fetchCachedData();
-          
-          if (cachedResult?.success) {
-            console.log('Using cached data successfully');
-            setIsLoading(false);
-            
-            if (cachedResult.cryptoCount > 0) {
-              toast({
-                title: "Cached Data Loaded",
-                description: `Showing ${cachedResult.cryptoCount} crypto positions from cached data`,
-              });
-            }
-
-            // Try to sync fresh data in background, but don't block UI
-            try {
-              await syncFreshData();
-            } catch (syncError: any) {
-              console.log('Background sync failed, keeping cached data:', syncError.message);
-              // Show a subtle notification about using cached data
-              if (syncError.message.includes('rate limited')) {
-                toast({
-                  title: "Using Cached Data",
-                  description: "Trading212 API is rate limited. Showing latest cached data.",
-                  variant: "default",
-                });
-              }
-            }
-          } else {
-            // No cached data, try fresh sync
-            try {
-              await syncFreshData();
-            } catch (syncError: any) {
-              console.error('Fresh sync failed and no cached data available:', syncError);
-              
-              // Set empty state but don't show as error - just informational
-              setCryptoData([]);
-              setPortfolioSummary({
-                totalValue: 0,
-                todayChange: 0,
-                todayPercentage: 0,
-                cryptoCount: 0,
-                cashBalance: 0
-              });
-              
-              setError(`Unable to load Trading212 data: ${syncError.message}`);
-            }
-          }
-        } else {
-          // Mock crypto data for non-Trading212 portfolios
-          console.log('Using mock crypto data for non-Trading212 portfolio');
-          const mockCryptoData = [
-            {
-              symbol: 'BTC',
-              quantity: 0.5,
-              currentPrice: 65000,
-              marketValue: 32500,
-              unrealizedPnL: 2500,
-              averagePrice: 60000
-            },
-            {
-              symbol: 'ETH',
-              quantity: 2.5,
-              currentPrice: 3200,
-              marketValue: 8000,
-              unrealizedPnL: 800,
-              averagePrice: 2880
-            }
-          ];
-
-          setCryptoData(mockCryptoData);
-          setPortfolioSummary({
-            totalValue: 40500,
-            todayChange: 1200,
-            todayPercentage: 3.05,
-            cryptoCount: 2,
-            cashBalance: 0
-          });
-          setLastUpdate(new Date().toISOString());
-        }
-      } catch (error: any) {
-        console.error('Error in fetchCryptoData:', error);
-        setError(error.message || 'Failed to fetch crypto data');
-        
-        // Set empty state
-        setCryptoData([]);
-        setPortfolioSummary({
-          totalValue: 0,
-          todayChange: 0,
-          todayPercentage: 0,
-          cryptoCount: 0,
-          cashBalance: 0
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchCryptoData();
-  }, [selectedPortfolio, user, isTrading212Portfolio]);
-
-  const handleRefresh = async () => {
-    if (!isTrading212Portfolio) return;
-    
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      await syncFreshData();
+      console.error('Crypto payment error:', error);
       toast({
-        title: "Data Refreshed",
-        description: "Trading212 data has been updated successfully",
-      });
-    } catch (error: any) {
-      console.error('Manual refresh failed:', error);
-      toast({
-        title: "Refresh Failed",
-        description: error.message || "Failed to refresh data",
+        title: "Payment Error",
+        description: error.message || "Failed to initiate crypto payment",
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsProcessing(false);
     }
   };
 
-  if (isLoading) {
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin" />
-          <span className="ml-2">Loading crypto portfolio data...</span>
-        </div>
-      </DashboardLayout>
-    );
-  }
+  const cryptoWallets = {
+    bitcoin: '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa',
+    ethereum: '0x742d35Cc6634C0532925a3b8D17B2ba2e9F0d8B5',
+    usdt: '0x742d35Cc6634C0532925a3b8D17B2ba2e9F0d8B5'
+  };
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="flex items-center gap-4 mb-6">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(-1)}
+            className="gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Button>
           <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              💰 Crypto Portfolio
-              {isTrading212Portfolio && <Badge variant="default" className="bg-green-100 text-green-800">Live Trading212 Data</Badge>}
-            </h1>
+            <h1 className="text-3xl font-bold">Crypto Payment</h1>
             <p className="text-muted-foreground">
-              {selectedPortfolio ? `Portfolio: ${currentPortfolio?.name || 'Unknown'}` : 'Select a portfolio to view crypto holdings'}
+              Pay for your subscription using cryptocurrency
             </p>
-            {lastUpdate && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Last updated: {new Date(lastUpdate).toLocaleString()}
-              </p>
-            )}
           </div>
-          
-          {isTrading212Portfolio && (
-            <Button 
-              onClick={handleRefresh} 
-              disabled={isLoading}
-              variant="outline"
-              size="sm"
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-              Refresh Data
-            </Button>
-          )}
         </div>
 
-        {!selectedPortfolio ? (
-          <Card>
-            <CardContent className="p-6">
-              <p className="text-center text-muted-foreground">
-                Please select a portfolio to view your crypto holdings
-              </p>
-            </CardContent>
-          </Card>
-        ) : error ? (
-          <Alert>
-            <AlertDescription className="flex items-center justify-between">
-              <span>{error}</span>
-              {isTrading212Portfolio && (
-                <Button onClick={handleRefresh} size="sm" variant="outline">
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Retry
-                </Button>
-              )}
-            </AlertDescription>
-          </Alert>
-        ) : (
-          <>
-            {/* Portfolio Summary */}
-            {portfolioSummary && (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-2">
-                      <Wallet className="h-4 w-4 text-blue-600" />
-                      <span className="text-sm text-muted-foreground">Total Value</span>
+        {/* Plan Selection */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5" />
+              Select Your Plan
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2">
+              {plans.map((plan) => (
+                <div 
+                  key={plan.name}
+                  className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                    selectedPlan === plan.name 
+                      ? 'border-blue-500 bg-blue-50' 
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                  onClick={() => setSelectedPlan(plan.name)}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-lg font-semibold">{plan.name}</h3>
+                    <div className="text-right">
+                      <div className="text-xl font-bold">{plan.price}</div>
+                      <div className="text-sm text-muted-foreground">/month</div>
                     </div>
-                    <p className="text-2xl font-bold">
-                      ${portfolioSummary.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-2">
-                      {portfolioSummary.todayChange >= 0 ? (
-                        <TrendingUp className="h-4 w-4 text-green-600" />
-                      ) : (
-                        <TrendingDown className="h-4 w-4 text-red-600" />
-                      )}
-                      <span className="text-sm text-muted-foreground">Today's Change</span>
-                    </div>
-                    <p className={`text-2xl font-bold ${portfolioSummary.todayChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {portfolioSummary.todayChange >= 0 ? '+' : ''}${Math.abs(portfolioSummary.todayChange).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </p>
-                    <p className={`text-sm ${portfolioSummary.todayPercentage >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {portfolioSummary.todayPercentage >= 0 ? '+' : ''}{portfolioSummary.todayPercentage.toFixed(2)}%
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-blue-600" />
-                      <span className="text-sm text-muted-foreground">Crypto Assets</span>
-                    </div>
-                    <p className="text-2xl font-bold">{portfolioSummary.cryptoCount}</p>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-2">
-                      <Wallet className="h-4 w-4 text-green-600" />
-                      <span className="text-sm text-muted-foreground">Cash Balance</span>
-                    </div>
-                    <p className="text-2xl font-bold">
-                      ${portfolioSummary.cashBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {/* Crypto Holdings */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Crypto Holdings</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {cryptoData.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-muted-foreground mb-4">
-                      {isTrading212Portfolio 
-                        ? "No crypto positions found in your Trading212 portfolio" 
-                        : "No crypto holdings available"}
-                    </p>
-                    {isTrading212Portfolio && (
-                      <div className="space-y-2">
-                        <Button onClick={handleRefresh} variant="outline">
-                          <RefreshCw className="h-4 w-4 mr-2" />
-                          Refresh Data
-                        </Button>
-                        <p className="text-xs text-muted-foreground">
-                          Or <Button variant="link" className="p-0 h-auto" asChild>
-                            <a href="/brokers">manage your Trading212 connection</a>
-                          </Button>
-                        </p>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-3">{plan.description}</p>
+                  <div className="space-y-1">
+                    {plan.features.slice(0, 3).map((feature, index) => (
+                      <div key={index} className="flex items-center gap-2 text-sm">
+                        <CheckCircle className="h-3 w-3 text-green-600" />
+                        <span>{feature}</span>
+                      </div>
+                    ))}
+                    {plan.features.length > 3 && (
+                      <div className="text-xs text-muted-foreground">
+                        +{plan.features.length - 3} more features
                       </div>
                     )}
                   </div>
-                ) : (
-                  <div className="space-y-4">
-                    {cryptoData.map((crypto, index) => (
-                      <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex-1">
-                          <div className="font-medium text-lg">{crypto.symbol}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {crypto.quantity} @ ${crypto.currentPrice?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </div>
-                          {crypto.averagePrice && (
-                            <div className="text-xs text-muted-foreground">
-                              Avg: ${crypto.averagePrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </div>
-                          )}
-                        </div>
-                        <div className="text-right">
-                          <div className="font-medium">
-                            ${crypto.marketValue?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </div>
-                          {crypto.unrealizedPnL !== undefined && (
-                            <div className={`text-sm ${crypto.unrealizedPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {crypto.unrealizedPnL >= 0 ? '+' : ''}${crypto.unrealizedPnL.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Crypto Method Selection */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Select Cryptocurrency</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 md:grid-cols-3">
+              {(['bitcoin', 'ethereum', 'usdt'] as const).map((crypto) => (
+                <div
+                  key={crypto}
+                  className={`p-4 border rounded-lg cursor-pointer text-center transition-all ${
+                    paymentMethod === crypto
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                  onClick={() => setPaymentMethod(crypto)}
+                >
+                  <div className="font-semibold capitalize mb-1">{crypto}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {currentPlan?.cryptoPrice[crypto]}
                   </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Payment Instructions */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Payment Instructions
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Alert>
+              <CheckCircle className="h-4 w-4" />
+              <AlertDescription>
+                Send exactly <strong>{currentPlan?.cryptoPrice[paymentMethod]}</strong> to the wallet address below
+              </AlertDescription>
+            </Alert>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                {paymentMethod.toUpperCase()} Wallet Address:
+              </label>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 p-2 bg-gray-100 rounded text-sm font-mono">
+                  {cryptoWallets[paymentMethod]}
+                </code>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    navigator.clipboard.writeText(cryptoWallets[paymentMethod]);
+                    toast({
+                      title: "Copied!",
+                      description: "Wallet address copied to clipboard",
+                    });
+                  }}
+                >
+                  Copy
+                </Button>
+              </div>
+            </div>
+
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <h4 className="font-medium text-yellow-800 mb-2">Important Notes:</h4>
+              <ul className="text-sm text-yellow-700 space-y-1">
+                <li>• Send the exact amount to avoid payment delays</li>
+                <li>• Payment confirmation may take 10-60 minutes</li>
+                <li>• Your subscription will be activated automatically after confirmation</li>
+                <li>• Contact support if you don't receive confirmation within 2 hours</li>
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Confirm Payment Button */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-semibold">Total Amount</div>
+                <div className="text-sm text-muted-foreground">
+                  {currentPlan?.price}/month • {currentPlan?.cryptoPrice[paymentMethod]}
+                </div>
+              </div>
+              <Button 
+                onClick={handleCryptoPayment}
+                disabled={isProcessing || !user}
+                className="gap-2"
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="h-4 w-4" />
+                    I've Sent Payment
+                  </>
                 )}
-              </CardContent>
-            </Card>
-          </>
-        )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </DashboardLayout>
   );
