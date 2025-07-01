@@ -360,20 +360,26 @@ const PortfolioSummary = () => {
         ) : (
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <StatCard
-              title="Total Value"
+              label="Total Value"
               value={portfolioData.totalValue}
-              change={portfolioData.todayChange}
-              changePercent={portfolioData.todayPercentage}
+              change={{
+                value: portfolioData.todayChange,
+                percentage: portfolioData.todayPercentage,
+                isPositive: !portfolioData.todayChange.includes('-')
+              }}
             />
             <StatCard
-              title="Total Return"
+              label="Total Return"
               value={portfolioData.totalReturn}
-              change={portfolioData.totalReturnPercentage}
+              change={{
+                value: portfolioData.totalReturnPercentage,
+                percentage: portfolioData.totalReturnPercentage,
+                isPositive: !portfolioData.totalReturn.includes('-')
+              }}
             />
             <StatCard
-              title="Holdings"
+              label="Holdings"
               value={portfolioData.holdingsCount.toString()}
-              subtitle={hasRealData ? dataSource : 'Demo Data'}
             />
           </div>
         )}
