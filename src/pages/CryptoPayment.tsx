@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { usePortfolio } from "@/contexts/PortfolioContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, TrendingUp, TrendingDown, Wallet, DollarSign } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, Wallet, DollarSign, RefreshCw } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 const CryptoPayment = () => {
@@ -18,11 +18,156 @@ const CryptoPayment = () => {
   const [portfolioSummary, setPortfolioSummary] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<string>('');
 
   // Check if this is a Trading212 connected portfolio
   const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
   const isTrading212Portfolio = selectedPortfolio === trading212PortfolioId;
   const currentPortfolio = portfolios.find(p => p.id === selectedPortfolio);
+
+  const fetchCachedData = async () => {
+    if (!selectedPortfolio || !user) return null;
+
+    try {
+      console.log('Fetching cached Trading212 data...');
+      
+      // Get cached metadata
+      const { data: cachedData } = await supabase
+        .from('portfolio_metadata')
+        .select('*')
+        .eq('portfolio_id', selectedPortfolio)
+        .eq('broker_type', 'trading212')
+        .maybeSingle();
+
+      // Get cached positions
+      const { data: cachedPositions } = await supabase
+        .from('portfolio_positions')
+        .select('*')
+        .eq('portfolio_id', selectedPortfolio)
+        .eq('broker_type', 'trading212');
+
+      if (cachedData && cachedPositions && cachedPositions.length > 0) {
+        console.log('Found cached data:', { metadata: cachedData, positions: cachedPositions.length });
+        
+        // Filter for crypto-like positions
+        const cryptoPositions = cachedPositions.filter((pos: any) => {
+          const symbol = pos.symbol.toLowerCase();
+          return symbol.includes('btc') || 
+                 symbol.includes('eth') || 
+                 symbol.includes('usdt') ||
+                 symbol.includes('bnb') ||
+                 symbol.includes('ada') ||
+                 symbol.includes('dot') ||
+                 symbol.includes('link') ||
+                 symbol.includes('sol') ||
+                 symbol.includes('avax') ||
+                 symbol.includes('matic') ||
+                 symbol.includes('crypto') ||
+                 pos.symbol.length <= 5; // Many crypto symbols are short
+        });
+
+        const formattedCryptoPositions = cryptoPositions.map((pos: any) => ({
+          symbol: pos.symbol,
+          quantity: pos.quantity,
+          currentPrice: pos.current_price,
+          marketValue: pos.market_value,
+          unrealizedPnL: pos.unrealized_pnl,
+          averagePrice: pos.average_price
+        }));
+
+        setCryptoData(formattedCryptoPositions);
+        
+        setPortfolioSummary({
+          totalValue: cachedData.total_value || 0,
+          todayChange: cachedData.today_change || 0,
+          todayPercentage: cachedData.today_change_percentage || 0,
+          cryptoCount: formattedCryptoPositions.length,
+          cashBalance: cachedData.cash_balance || 0
+        });
+
+        setLastUpdate(cachedData.last_sync_at || 'Unknown');
+        
+        return {
+          success: true,
+          cryptoCount: formattedCryptoPositions.length,
+          fromCache: true
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error fetching cached data:', error);
+      return null;
+    }
+  };
+
+  const syncFreshData = async () => {
+    if (!selectedPortfolio || !user) return;
+
+    try {
+      console.log('Attempting to sync fresh Trading212 data...');
+      
+      const { data: syncData, error: syncError } = await supabase.functions.invoke('trading212-sync', {
+        body: { portfolioId: selectedPortfolio }
+      });
+
+      console.log('Trading212 sync response:', { data: syncData, error: syncError });
+
+      if (syncError) {
+        console.error('Trading212 sync error:', syncError);
+        throw new Error(`Trading212 sync failed: ${syncError.message}`);
+      }
+
+      if (syncData?.success && syncData.data) {
+        const realData = syncData.data;
+        console.log('Fresh Trading212 data received:', realData);
+        
+        // Filter crypto positions from real data
+        const allPositions = realData.positions || [];
+        const cryptoPositions = allPositions.filter((pos: any) => {
+          const symbol = pos.symbol.toLowerCase();
+          return symbol.includes('btc') || 
+                 symbol.includes('eth') || 
+                 symbol.includes('usdt') ||
+                 symbol.includes('bnb') ||
+                 symbol.includes('ada') ||
+                 symbol.includes('dot') ||
+                 symbol.includes('link') ||
+                 symbol.includes('sol') ||
+                 symbol.includes('avax') ||
+                 symbol.includes('matic') ||
+                 symbol.includes('crypto') ||
+                 pos.symbol.length <= 5;
+        });
+
+        setCryptoData(cryptoPositions);
+        
+        setPortfolioSummary({
+          totalValue: realData.totalValue || 0,
+          todayChange: realData.todayChange || 0,
+          todayPercentage: realData.todayPercentage || 0,
+          cryptoCount: cryptoPositions.length,
+          cashBalance: realData.cashBalance || 0
+        });
+
+        setLastUpdate(new Date().toISOString());
+
+        toast({
+          title: "Trading212 Data Synced",
+          description: `Found ${cryptoPositions.length} crypto positions from ${allPositions.length} total positions`,
+        });
+
+        return { success: true, cryptoCount: cryptoPositions.length };
+      } else if (syncData?.error === 'RATE_LIMITED') {
+        throw new Error('Trading212 API rate limited. Using cached data.');
+      } else {
+        throw new Error('No fresh data available from Trading212 API');
+      }
+    } catch (error: any) {
+      console.error('Fresh data sync failed:', error);
+      throw error;
+    }
+  };
 
   useEffect(() => {
     const fetchCryptoData = async () => {
@@ -40,105 +185,52 @@ const CryptoPayment = () => {
         if (isTrading212Portfolio) {
           console.log('Fetching Trading212 crypto data for portfolio:', selectedPortfolio);
           
-          // First try to get cached data from database
-          const { data: cachedData } = await supabase
-            .from('portfolio_metadata')
-            .select('*')
-            .eq('portfolio_id', selectedPortfolio)
-            .eq('broker_type', 'trading212')
-            .single();
-
-          const { data: cachedPositions } = await supabase
-            .from('portfolio_positions')
-            .select('*')
-            .eq('portfolio_id', selectedPortfolio)
-            .eq('broker_type', 'trading212');
-
-          if (cachedData && cachedPositions) {
-            console.log('Using cached Trading212 data');
+          // Try cached data first
+          const cachedResult = await fetchCachedData();
+          
+          if (cachedResult?.success) {
+            console.log('Using cached data successfully');
+            setIsLoading(false);
             
-            // Filter for crypto-like positions (you can adjust this logic)
-            const cryptoPositions = cachedPositions.filter((pos: any) => 
-              pos.symbol.includes('BTC') || 
-              pos.symbol.includes('ETH') || 
-              pos.symbol.includes('USDT') ||
-              pos.symbol.includes('BNB') ||
-              pos.symbol.includes('ADA') ||
-              pos.symbol.includes('DOT') ||
-              pos.symbol.includes('LINK') ||
-              pos.symbol.length <= 5 // Many crypto symbols are short
-            );
-
-            const formattedCryptoPositions = cryptoPositions.map((pos: any) => ({
-              symbol: pos.symbol,
-              quantity: pos.quantity,
-              currentPrice: pos.current_price,
-              marketValue: pos.market_value,
-              unrealizedPnL: pos.unrealized_pnl,
-              averagePrice: pos.average_price
-            }));
-
-            setCryptoData(formattedCryptoPositions);
-            
-            setPortfolioSummary({
-              totalValue: cachedData.total_value || 0,
-              todayChange: cachedData.today_change || 0,
-              todayPercentage: cachedData.today_change_percentage || 0,
-              cryptoCount: formattedCryptoPositions.length,
-              cashBalance: cachedData.cash_balance || 0
-            });
-
-            if (formattedCryptoPositions.length > 0) {
+            if (cachedResult.cryptoCount > 0) {
               toast({
-                title: "Trading212 Data Loaded",
-                description: `Found ${formattedCryptoPositions.length} crypto positions from cached data`,
+                title: "Cached Data Loaded",
+                description: `Showing ${cachedResult.cryptoCount} crypto positions from cached data`,
               });
+            }
+
+            // Try to sync fresh data in background, but don't block UI
+            try {
+              await syncFreshData();
+            } catch (syncError: any) {
+              console.log('Background sync failed, keeping cached data:', syncError.message);
+              // Show a subtle notification about using cached data
+              if (syncError.message.includes('rate limited')) {
+                toast({
+                  title: "Using Cached Data",
+                  description: "Trading212 API is rate limited. Showing latest cached data.",
+                  variant: "default",
+                });
+              }
             }
           } else {
-            console.log('No cached data found, trying to sync...');
-            
-            // Try to sync fresh data
-            const { data: syncData, error: syncError } = await supabase.functions.invoke('trading212-sync', {
-              body: { portfolioId: selectedPortfolio }
-            });
-
-            if (syncError) {
-              console.error('Trading212 sync error:', syncError);
-              throw new Error(`Trading212 sync error: ${syncError.message}`);
-            }
-
-            if (syncData?.success && syncData.data) {
-              const realData = syncData.data;
-              console.log('Fresh Trading212 data received:', realData);
+            // No cached data, try fresh sync
+            try {
+              await syncFreshData();
+            } catch (syncError: any) {
+              console.error('Fresh sync failed and no cached data available:', syncError);
               
-              // Filter crypto positions from real data
-              const cryptoPositions = realData.positions?.filter((pos: any) => 
-                pos.symbol.includes('BTC') || 
-                pos.symbol.includes('ETH') || 
-                pos.symbol.includes('USDT') ||
-                pos.symbol.includes('BNB') ||
-                pos.symbol.includes('ADA') ||
-                pos.symbol.includes('DOT') ||
-                pos.symbol.includes('LINK') ||
-                pos.symbol.length <= 5
-              ) || [];
-
-              setCryptoData(cryptoPositions);
-              
+              // Set empty state but don't show as error - just informational
+              setCryptoData([]);
               setPortfolioSummary({
-                totalValue: realData.totalValue || 0,
-                todayChange: realData.todayChange || 0,
-                todayPercentage: realData.todayPercentage || 0,
-                cryptoCount: cryptoPositions.length,
-                cashBalance: realData.cashBalance || 0
+                totalValue: 0,
+                todayChange: 0,
+                todayPercentage: 0,
+                cryptoCount: 0,
+                cashBalance: 0
               });
-
-              toast({
-                title: "Trading212 Data Synced",
-                description: `Found ${cryptoPositions.length} crypto positions from ${realData.positions?.length || 0} total positions`,
-              });
-            } else {
-              throw new Error('No data received from Trading212 API');
+              
+              setError(`Unable to load Trading212 data: ${syncError.message}`);
             }
           }
         } else {
@@ -171,12 +263,13 @@ const CryptoPayment = () => {
             cryptoCount: 2,
             cashBalance: 0
           });
+          setLastUpdate(new Date().toISOString());
         }
       } catch (error: any) {
-        console.error('Error fetching crypto data:', error);
+        console.error('Error in fetchCryptoData:', error);
         setError(error.message || 'Failed to fetch crypto data');
         
-        // Set empty state on error
+        // Set empty state
         setCryptoData([]);
         setPortfolioSummary({
           totalValue: 0,
@@ -185,12 +278,6 @@ const CryptoPayment = () => {
           cryptoCount: 0,
           cashBalance: 0
         });
-        
-        toast({
-          title: "Error Loading Data",
-          description: error.message || 'Failed to fetch crypto data',
-          variant: "destructive",
-        });
       } finally {
         setIsLoading(false);
       }
@@ -198,6 +285,30 @@ const CryptoPayment = () => {
 
     fetchCryptoData();
   }, [selectedPortfolio, user, isTrading212Portfolio]);
+
+  const handleRefresh = async () => {
+    if (!isTrading212Portfolio) return;
+    
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      await syncFreshData();
+      toast({
+        title: "Data Refreshed",
+        description: "Trading212 data has been updated successfully",
+      });
+    } catch (error: any) {
+      console.error('Manual refresh failed:', error);
+      toast({
+        title: "Refresh Failed",
+        description: error.message || "Failed to refresh data",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -222,7 +333,24 @@ const CryptoPayment = () => {
             <p className="text-muted-foreground">
               {selectedPortfolio ? `Portfolio: ${currentPortfolio?.name || 'Unknown'}` : 'Select a portfolio to view crypto holdings'}
             </p>
+            {lastUpdate && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Last updated: {new Date(lastUpdate).toLocaleString()}
+              </p>
+            )}
           </div>
+          
+          {isTrading212Portfolio && (
+            <Button 
+              onClick={handleRefresh} 
+              disabled={isLoading}
+              variant="outline"
+              size="sm"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+              Refresh Data
+            </Button>
+          )}
         </div>
 
         {!selectedPortfolio ? (
@@ -234,8 +362,16 @@ const CryptoPayment = () => {
             </CardContent>
           </Card>
         ) : error ? (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
+          <Alert>
+            <AlertDescription className="flex items-center justify-between">
+              <span>{error}</span>
+              {isTrading212Portfolio && (
+                <Button onClick={handleRefresh} size="sm" variant="outline">
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Retry
+                </Button>
+              )}
+            </AlertDescription>
           </Alert>
         ) : (
           <>
@@ -311,11 +447,17 @@ const CryptoPayment = () => {
                         : "No crypto holdings available"}
                     </p>
                     {isTrading212Portfolio && (
-                      <Button asChild>
-                        <a href="/brokers" className="inline-flex items-center gap-2">
-                          Manage Trading212 Connection
-                        </a>
-                      </Button>
+                      <div className="space-y-2">
+                        <Button onClick={handleRefresh} variant="outline">
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Refresh Data
+                        </Button>
+                        <p className="text-xs text-muted-foreground">
+                          Or <Button variant="link" className="p-0 h-auto" asChild>
+                            <a href="/brokers">manage your Trading212 connection</a>
+                          </Button>
+                        </p>
+                      </div>
                     )}
                   </div>
                 ) : (
