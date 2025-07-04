@@ -7,18 +7,35 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useDividendData } from "@/contexts/DividendDataContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePortfolio } from "@/contexts/PortfolioContext";
-import { TrendingUp, DollarSign, PieChart, Database, Target, AlertCircle } from "lucide-react";
+import { TrendingUp, DollarSign, PieChart, Database, Target, AlertCircle, Save } from "lucide-react";
 
 const DividendOverviewEnhanced = () => {
   const { user } = useAuth();
   const { selectedPortfolio } = usePortfolio();
+  
+  // Add error boundary protection
+  let dividendData;
+  try {
+    dividendData = useDividendData();
+  } catch (error) {
+    console.log('DividendDataProvider not available:', error);
+    return (
+      <Alert>
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          Dividend tracking not available. Please check your portfolio configuration.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
   const {
     dividends,
     loading,
     apiCallsToday,
     maxApiCallsPerDay,
     getDividendSummary
-  } = useDividendData();
+  } = dividendData;
 
   if (loading && dividends.length === 0) {
     return (
@@ -43,7 +60,7 @@ const DividendOverviewEnhanced = () => {
       <Alert>
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
-          Please select a portfolio to view dividend data.
+          Please select a portfolio to view dividend data from the database.
         </AlertDescription>
       </Alert>
     );
@@ -54,7 +71,7 @@ const DividendOverviewEnhanced = () => {
       <Alert>
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
-          No saved dividend data found. Use the dividend tracker to detect and save your dividend stocks.
+          No saved dividend data found in database. Use the dividend tracker to detect and save your dividend stocks.
         </AlertDescription>
       </Alert>
     );
@@ -73,8 +90,9 @@ const DividendOverviewEnhanced = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalAnnualIncome.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">
-              ${(totalAnnualIncome / 12).toFixed(2)} per month
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <Save className="h-3 w-3 text-green-500" />
+              From database • ${(totalAnnualIncome / 12).toFixed(2)}/month
             </p>
           </CardContent>
         </Card>
@@ -86,8 +104,9 @@ const DividendOverviewEnhanced = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{averageYield.toFixed(2)}%</div>
-            <p className="text-xs text-muted-foreground">
-              Portfolio average
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <Database className="h-3 w-3 text-blue-500" />
+              Portfolio average from saved data
             </p>
           </CardContent>
         </Card>
@@ -99,7 +118,8 @@ const DividendOverviewEnhanced = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalStocks}</div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <Database className="h-3 w-3 text-green-500" />
               Saved in database
             </p>
           </CardContent>
@@ -113,7 +133,7 @@ const DividendOverviewEnhanced = () => {
           <CardContent>
             <div className="text-2xl font-bold">{apiCallsToday}/{maxApiCallsPerDay}</div>
             <p className="text-xs text-muted-foreground">
-              Calls used today
+              Daily limit • Database priority
             </p>
           </CardContent>
         </Card>
@@ -126,6 +146,7 @@ const DividendOverviewEnhanced = () => {
             <CardTitle className="text-lg flex items-center gap-2">
               <Target className="h-5 w-5" />
               Portfolio Analysis
+              <Badge className="bg-green-100 text-green-800">Database</Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -177,6 +198,7 @@ const DividendOverviewEnhanced = () => {
             <CardTitle className="text-lg flex items-center gap-2">
               <Database className="h-5 w-5" />
               Data Management
+              <Badge className="bg-blue-100 text-blue-800">Persistent</Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -220,7 +242,11 @@ const DividendOverviewEnhanced = () => {
       {/* Income Breakdown */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Income Breakdown</CardTitle>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <DollarSign className="h-5 w-5" />
+            Income Breakdown
+            <Badge className="bg-green-100 text-green-800">From Database</Badge>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-4">
@@ -240,6 +266,9 @@ const DividendOverviewEnhanced = () => {
               <div className="text-xl font-bold text-orange-600">${(totalAnnualIncome / 52).toFixed(2)}</div>
               <p className="text-sm text-muted-foreground">Weekly Average</p>
             </div>
+          </div>
+          <div className="mt-4 text-center text-xs text-muted-foreground">
+            💾 All calculations based on persistent database records
           </div>
         </CardContent>
       </Card>
