@@ -33,7 +33,7 @@ const DividendTracking = () => {
 
   const { totalAnnualIncome, totalStocks, averageYield } = getDividendSummary();
 
-  // Prepare monthly income projection data for the chart
+  // Prepare monthly income projection data for the chart from database
   const monthlyData = totalAnnualIncome > 0 ? [
     { month: "Jan", income: (totalAnnualIncome / 12) * 0.95 },
     { month: "Feb", income: (totalAnnualIncome / 12) * 0.88 },
@@ -74,7 +74,7 @@ const DividendTracking = () => {
         </CardHeader>
         <CardContent>
           <div className="flex justify-center items-center h-48">
-            <p className="text-muted-foreground">Select a portfolio to view saved dividend data</p>
+            <p className="text-muted-foreground">Select a portfolio to view saved dividend data from database</p>
           </div>
         </CardContent>
       </Card>
@@ -103,14 +103,14 @@ const DividendTracking = () => {
               disabled={loading}
             >
               <Database className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Load Saved Data
+              Load Database Data
             </Button>
           </div>
         </div>
 
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Save className="h-4 w-4 text-green-500" />
-          <span>All data saved to database • {totalStocks} dividend stocks • Persistent storage</span>
+          <Database className="h-4 w-4 text-green-500" />
+          <span>All data from database • {totalStocks} dividend stocks • Persistent storage</span>
           {lastSync && (
             <>
               <span>•</span>
@@ -138,8 +138,8 @@ const DividendTracking = () => {
                 label="Annual Income" 
                 value={`$${totalAnnualIncome.toFixed(2)}`} 
                 change={{
-                  value: "From saved data",
-                  percentage: "Database",
+                  value: "Database source",
+                  percentage: "Persistent",
                   isPositive: true
                 }}
                 icon={<DollarSign className="h-4 w-4" />}
@@ -148,8 +148,8 @@ const DividendTracking = () => {
                 label="Monthly Average" 
                 value={`$${(totalAnnualIncome / 12).toFixed(2)}`} 
                 change={{
-                  value: "Calculated",
-                  percentage: "Persistent",
+                  value: "From database",
+                  percentage: "Calculated",
                   isPositive: true
                 }}
                 icon={<Calendar className="h-4 w-4" />}
@@ -158,8 +158,8 @@ const DividendTracking = () => {
                 label="Dividend Stocks" 
                 value={`${totalStocks}`} 
                 change={{
-                  value: "Saved records",
-                  percentage: "Database",
+                  value: "Database records",
+                  percentage: "Saved",
                   isPositive: true
                 }}
                 icon={<Shield className="h-4 w-4" />}
@@ -168,8 +168,8 @@ const DividendTracking = () => {
                 label="Average Yield" 
                 value={`${averageYield.toFixed(2)}%`} 
                 change={{
-                  value: "Calculated",
-                  percentage: "From saved",
+                  value: "Database calc",
+                  percentage: "Live",
                   isPositive: true
                 }}
                 icon={<Percent className="h-4 w-4" />}
@@ -182,9 +182,9 @@ const DividendTracking = () => {
               className="space-y-4"
             >
               <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="holdings">💾 Saved Holdings</TabsTrigger>
+                <TabsTrigger value="holdings">💾 Database Holdings</TabsTrigger>
                 <TabsTrigger value="projections">📊 Projections</TabsTrigger>
-                <TabsTrigger value="system">⚡ Data Management</TabsTrigger>
+                <TabsTrigger value="system">⚡ Data Status</TabsTrigger>
               </TabsList>
               
               <TabsContent value="holdings" className="space-y-4">
@@ -197,7 +197,7 @@ const DividendTracking = () => {
                         <TableHead>Dividend/Share</TableHead>
                         <TableHead>Annual Income</TableHead>
                         <TableHead>Yield</TableHead>
-                        <TableHead>Source</TableHead>
+                        <TableHead>Database Source</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -214,8 +214,9 @@ const DividendTracking = () => {
                           </TableCell>
                           <TableCell>{dividend.dividend_yield.toFixed(2)}%</TableCell>
                           <TableCell>
-                            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                              💾 {dividend.detection_source === 'portfolio_data' ? 'Portfolio DB' : 'API → DB'}
+                            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded flex items-center gap-1">
+                              <Database className="h-3 w-3" />
+                              {dividend.detection_source === 'portfolio_data' ? 'Portfolio DB' : 'API → DB'}
                             </span>
                           </TableCell>
                         </TableRow>
@@ -236,7 +237,7 @@ const DividendTracking = () => {
                   </BarChart>
                 </ResponsiveContainer>
                 <div className="text-center text-sm text-muted-foreground">
-                  💾 Projected annual dividend income: ${totalAnnualIncome.toFixed(2)} from saved database records
+                  💾 Projected annual dividend income: ${totalAnnualIncome.toFixed(2)} from database records
                 </div>
               </TabsContent>
               
@@ -244,18 +245,18 @@ const DividendTracking = () => {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
                     <Database className="h-8 w-8 mb-2 text-green-600" />
-                    <div className="text-xs uppercase text-muted-foreground">Data Storage</div>
+                    <div className="text-xs uppercase text-muted-foreground">Storage</div>
                     <div className="text-lg font-bold mt-1">Database</div>
                   </div>
                   <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
                     <Save className="h-8 w-8 mb-2 text-blue-600" />
-                    <div className="text-xs uppercase text-muted-foreground">Saved Records</div>
+                    <div className="text-xs uppercase text-muted-foreground">Records</div>
                     <div className="text-lg font-bold mt-1">{totalStocks}</div>
                   </div>
                   <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
-                    <Zap className="h-8 w-8 mb-2 text-purple-600" />
-                    <div className="text-xs uppercase text-muted-foreground">API Sync</div>
-                    <div className="text-lg font-bold mt-1">Available</div>
+                    <CheckCircle className="h-8 w-8 mb-2 text-green-600" />
+                    <div className="text-xs uppercase text-muted-foreground">Status</div>
+                    <div className="text-lg font-bold mt-1">Active</div>
                   </div>
                   <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
                     <RefreshCw className="h-8 w-8 mb-2 text-orange-600" />
@@ -264,11 +265,11 @@ const DividendTracking = () => {
                   </div>
                 </div>
                 <div className="text-sm text-center text-muted-foreground mt-4">
-                  💾 <strong>Database-First Approach:</strong> All dividend data is saved to the database for persistence.
+                  💾 <strong>Database-First System:</strong> All dividend data is persistently stored in the database.
                   <br />
-                  🔄 Use "Sync API" to get fresh data from APIs when needed. Use "Load Saved Data" to refresh from database.
+                  🔄 Use "Sync API" only when you need fresh data. Use "Load Database Data" to refresh from saved records.
                   <br />
-                  ⚡ API calls are limited but data persists forever in your database.
+                  ⚡ API calls are limited but database data persists forever and loads instantly.
                 </div>
               </TabsContent>
             </Tabs>
@@ -277,10 +278,10 @@ const DividendTracking = () => {
           <div className="flex flex-col items-center justify-center h-48 text-center">
             <Database className="h-12 w-12 text-blue-500 mb-4" />
             <p className="text-muted-foreground mb-2">
-              No saved dividend data found
+              No saved dividend data found in database
             </p>
             <p className="text-sm text-muted-foreground mb-4">
-              Click "Sync API" to fetch and save dividend data to the database, or "Load Saved Data" to refresh.
+              Click "Sync API" to fetch and save dividend data to the database, or "Load Database Data" to refresh.
             </p>
             <div className="flex gap-2">
               <Button 
@@ -296,7 +297,7 @@ const DividendTracking = () => {
                 disabled={loading}
               >
                 <Database className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                Load Saved Data
+                Load Database Data
               </Button>
             </div>
           </div>

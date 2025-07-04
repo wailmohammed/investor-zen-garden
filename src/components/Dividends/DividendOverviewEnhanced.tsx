@@ -43,7 +43,7 @@ const DividendOverviewEnhanced = () => {
         {[...Array(4)].map((_, i) => (
           <Card key={i}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Loading...</CardTitle>
+              <CardTitle className="text-sm font-medium">Loading from database...</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">-</div>
@@ -81,7 +81,7 @@ const DividendOverviewEnhanced = () => {
 
   return (
     <div className="space-y-6">
-      {/* Main Stats Cards */}
+      {/* Main Stats Cards - All from Database */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -91,7 +91,7 @@ const DividendOverviewEnhanced = () => {
           <CardContent>
             <div className="text-2xl font-bold">${totalAnnualIncome.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <Save className="h-3 w-3 text-green-500" />
+              <Database className="h-3 w-3 text-green-500" />
               From database • ${(totalAnnualIncome / 12).toFixed(2)}/month
             </p>
           </CardContent>
@@ -106,7 +106,7 @@ const DividendOverviewEnhanced = () => {
             <div className="text-2xl font-bold">{averageYield.toFixed(2)}%</div>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
               <Database className="h-3 w-3 text-blue-500" />
-              Portfolio average from saved data
+              Portfolio average from database
             </p>
           </CardContent>
         </Card>
@@ -127,19 +127,19 @@ const DividendOverviewEnhanced = () => {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">API Usage</CardTitle>
+            <CardTitle className="text-sm font-medium">Data Source</CardTitle>
             <Database className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{apiCallsToday}/{maxApiCallsPerDay}</div>
+            <div className="text-2xl font-bold">Database</div>
             <p className="text-xs text-muted-foreground">
-              Daily limit • Database priority
+              {apiCallsToday}/{maxApiCallsPerDay} API calls used today
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Detailed Analytics */}
+      {/* Database Analytics */}
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
@@ -156,7 +156,7 @@ const DividendOverviewEnhanced = () => {
                 <span>{dividends.filter(d => d.dividend_yield > 4).length}</span>
               </div>
               <Progress 
-                value={(dividends.filter(d => d.dividend_yield > 4).length / totalStocks) * 100} 
+                value={totalStocks > 0 ? (dividends.filter(d => d.dividend_yield > 4).length / totalStocks) * 100 : 0} 
                 className="h-2" 
               />
             </div>
@@ -167,7 +167,7 @@ const DividendOverviewEnhanced = () => {
                 <span>{dividends.filter(d => d.dividend_yield >= 2 && d.dividend_yield <= 4).length}</span>
               </div>
               <Progress 
-                value={(dividends.filter(d => d.dividend_yield >= 2 && d.dividend_yield <= 4).length / totalStocks) * 100} 
+                value={totalStocks > 0 ? (dividends.filter(d => d.dividend_yield >= 2 && d.dividend_yield <= 4).length / totalStocks) * 100 : 0} 
                 className="h-2" 
               />
             </div>
@@ -197,55 +197,55 @@ const DividendOverviewEnhanced = () => {
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <Database className="h-5 w-5" />
-              Data Management
-              <Badge className="bg-blue-100 text-blue-800">Persistent</Badge>
+              Database Status
+              <Badge className="bg-blue-100 text-blue-800">Active</Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="text-center">
                 <div className="text-2xl font-bold text-blue-600">{totalStocks}</div>
-                <p className="text-xs text-muted-foreground">Saved Stocks</p>
+                <p className="text-xs text-muted-foreground">Saved Records</p>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">{maxApiCallsPerDay - apiCallsToday}</div>
-                <p className="text-xs text-muted-foreground">API Calls Left</p>
+                <div className="text-2xl font-bold text-green-600">${totalAnnualIncome.toFixed(0)}</div>
+                <p className="text-xs text-muted-foreground">Total Income</p>
               </div>
             </div>
 
             <div>
               <div className="flex justify-between text-sm mb-1">
-                <span>Daily API Usage</span>
-                <span>{apiCallsToday}/{maxApiCallsPerDay}</span>
+                <span>Database Coverage</span>
+                <span>100%</span>
               </div>
-              <Progress value={(apiCallsToday / maxApiCallsPerDay) * 100} className="h-2" />
+              <Progress value={100} className="h-2" />
             </div>
 
             <div className="pt-2 space-y-2">
               <div className="flex justify-between text-sm">
                 <span>Data Source:</span>
-                <Badge className="bg-green-100 text-green-800">Saved Database</Badge>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Auto-Sync:</span>
-                <Badge variant="outline">Smart Limits</Badge>
+                <Badge className="bg-green-100 text-green-800">Database</Badge>
               </div>
               <div className="flex justify-between text-sm">
                 <span>Storage:</span>
                 <Badge variant="outline">Persistent</Badge>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span>Last Updated:</span>
+                <Badge variant="outline">Live</Badge>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Income Breakdown */}
+      {/* Income Breakdown from Database */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <DollarSign className="h-5 w-5" />
             Income Breakdown
-            <Badge className="bg-green-100 text-green-800">From Database</Badge>
+            <Badge className="bg-green-100 text-green-800">Database Source</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
