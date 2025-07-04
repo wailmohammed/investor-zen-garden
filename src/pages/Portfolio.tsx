@@ -11,8 +11,11 @@ import { TrendingUp, TrendingDown, DollarSign, Percent, BarChart3, PieChart as P
 import { PortfolioProvider, usePortfolio } from "@/contexts/PortfolioContext";
 import { PortfolioSelector } from "@/components/ui/portfolio-selector";
 import { supabase } from "@/integrations/supabase/client";
+import { getSavedDividendData } from "@/services/dividendService";
+import { useAuth } from "@/contexts/AuthContext";
 
 const PortfolioContent = () => {
+  const { user } = useAuth();
   const { portfolios, selectedPortfolio, setSelectedPortfolio, isLoading } = usePortfolio();
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [holdings, setHoldings] = useState<any[]>([]);
@@ -34,10 +37,10 @@ const PortfolioContent = () => {
   const currentPortfolio = portfolios.find(p => p.id === selectedPortfolio);
   const portfolioType = currentPortfolio?.portfolio_type || 'stock';
 
-  // Fetch real portfolio data
+  // Fetch real portfolio data from saved database
   useEffect(() => {
-    const fetchRealPortfolioData = async () => {
-      if (!selectedPortfolio) {
+    const fetchSavedPortfolioData = async () => {
+      if (!selectedPortfolio || !user?.id) {
         // Reset to empty state
         setHoldings([]);
         setPortfolioData({
@@ -57,80 +60,91 @@ const PortfolioContent = () => {
 
       try {
         setIsLoadingData(true);
-        console.log('Fetching real data for portfolio:', selectedPortfolio, 'Type:', portfolioType);
-        
-        const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
-        const binancePortfolioId = localStorage.getItem('binance_portfolio_id');
-        
-        if (selectedPortfolio === trading212PortfolioId) {
-          // Fetch Trading212 data
-          console.log('Fetching Trading212 portfolio data');
+        console.log('Fetching saved data for portfolio:', selectedPortfolio);
+
+        // Get saved portfolio metadata
+        const { data: savedMetadata } = await supabase
+          .from('portfolio_metadata')
+          .select('*')
+          .eq('portfolio_id', selectedPortfolio)
+          .eq('user_id', user.id)
+          .single();
+
+        // Get saved portfolio positions
+        const { data: savedPositions } = await supabase
+          .from('portfolio_positions')
+          .select('*')
+          .eq('portfolio_id', selectedPortfolio)
+          .eq('user_id', user.id);
+
+        // Get saved dividend data
+        const savedDividends = await getSavedDividendData(user.id, selectedPortfolio);
+
+        if (savedMetadata && savedPositions) {
+          console.log('Using saved portfolio data from database');
           
-          // Try to get cached data first
-          const { data: cachedMetadata } = await supabase
-            .from('portfolio_metadata')
-            .select('*')
-            .eq('portfolio_id', selectedPortfolio)
-            .eq('broker_type', 'trading212')
-            .single();
+          // Set portfolio summary data from saved metadata
+          setPortfolioData({
+            totalValue: savedMetadata.total_value || 0,
+            totalGainLoss: savedMetadata.total_return || 0,
+            totalGainLossPercent: savedMetadata.total_return_percentage || 0,
+            todayChange: savedMetadata.today_change || 0,
+            todayChangePercent: savedMetadata.today_change_percentage || 0,
+            holdingsCount: savedMetadata.holdings_count || 0,
+            dividendYield: savedDividends.length > 0 
+              ? savedDividends.reduce((sum, d) => sum + d.dividend_yield, 0) / savedDividends.length 
+              : 2.1
+          });
 
-          const { data: cachedPositions } = await supabase
-            .from('portfolio_positions')
-            .select('*')
-            .eq('portfolio_id', selectedPortfolio)
-            .eq('broker_type', 'trading212');
+          // Set holdings data from saved positions
+          const formattedHoldings = savedPositions.map((position: any) => ({
+            symbol: position.symbol,
+            name: position.symbol,
+            shares: position.quantity,
+            avgPrice: position.average_price,
+            currentPrice: position.current_price,
+            value: position.market_value,
+            gainLoss: position.unrealized_pnl,
+            gainLossPercent: position.average_price > 0 ? ((position.current_price - position.average_price) / position.average_price) * 100 : 0,
+            sector: "Technology", // Can be enhanced with sector data
+            dividendYield: 1.5, // Can be enhanced with dividend data
+            weight: savedMetadata.total_value > 0 ? (position.market_value / savedMetadata.total_value) * 100 : 0
+          }));
+          
+          setHoldings(formattedHoldings);
 
-          if (cachedMetadata && cachedPositions) {
-            console.log('Using cached Trading212 data');
-            
-            // Set portfolio summary data
-            setPortfolioData({
-              totalValue: cachedMetadata.total_value || 0,
-              totalGainLoss: cachedMetadata.total_return || 0,
-              totalGainLossPercent: cachedMetadata.total_return_percentage || 0,
-              todayChange: cachedMetadata.today_change || 0,
-              todayChangePercent: cachedMetadata.today_change_percentage || 0,
-              holdingsCount: cachedMetadata.holdings_count || 0,
-              dividendYield: 2.1 // Estimated
-            });
+          // Generate performance data based on saved metadata
+          const baseValue = savedMetadata.total_value - savedMetadata.total_return;
+          setPerformanceData([
+            { date: "Jan", value: baseValue * 0.95, benchmark: baseValue * 0.97 },
+            { date: "Feb", value: baseValue * 0.98, benchmark: baseValue * 0.99 },
+            { date: "Mar", value: baseValue * 1.02, benchmark: baseValue * 1.01 },
+            { date: "Apr", value: baseValue * 1.05, benchmark: baseValue * 1.03 },
+            { date: "May", value: baseValue * 1.03, benchmark: baseValue * 1.04 },
+            { date: "Jun", value: savedMetadata.total_value, benchmark: baseValue * 1.05 }
+          ]);
 
-            // Set holdings data
-            const formattedHoldings = cachedPositions.map((position: any) => ({
-              symbol: position.symbol,
-              name: position.symbol,
-              shares: position.quantity,
-              avgPrice: position.average_price,
-              currentPrice: position.current_price,
-              value: position.market_value,
-              gainLoss: position.unrealized_pnl,
-              gainLossPercent: position.average_price > 0 ? ((position.current_price - position.average_price) / position.average_price) * 100 : 0,
-              sector: "Technology", // Default sector
-              dividendYield: 1.5, // Default yield
-              weight: cachedMetadata.total_value > 0 ? (position.market_value / cachedMetadata.total_value) * 100 : 0
-            }));
-            
-            setHoldings(formattedHoldings);
+          // Generate sector allocation (can be enhanced with actual sector data)
+          setSectorAllocation([
+            { name: "Technology", value: 65.4, color: "#8884d8" },
+            { name: "Healthcare", value: 18.2, color: "#82ca9d" },
+            { name: "Finance", value: 12.1, color: "#ffc658" },
+            { name: "Consumer", value: 4.3, color: "#ff7300" },
+          ]);
 
-            // Generate performance data based on current value
-            const baseValue = cachedMetadata.total_value - cachedMetadata.total_return;
-            setPerformanceData([
-              { date: "Jan", value: baseValue * 0.95, benchmark: baseValue * 0.97 },
-              { date: "Feb", value: baseValue * 0.98, benchmark: baseValue * 0.99 },
-              { date: "Mar", value: baseValue * 1.02, benchmark: baseValue * 1.01 },
-              { date: "Apr", value: baseValue * 1.05, benchmark: baseValue * 1.03 },
-              { date: "May", value: baseValue * 1.03, benchmark: baseValue * 1.04 },
-              { date: "Jun", value: cachedMetadata.total_value, benchmark: baseValue * 1.05 }
+          // Generate dividend data from saved dividend records
+          if (savedDividends.length > 0) {
+            const totalAnnualIncome = savedDividends.reduce((sum, d) => sum + d.estimated_annual_income, 0);
+            setMonthlyDividends([
+              { month: "Jan", amount: totalAnnualIncome / 12 * 0.95 },
+              { month: "Feb", amount: totalAnnualIncome / 12 * 0.88 },
+              { month: "Mar", amount: totalAnnualIncome / 12 * 1.15 },
+              { month: "Apr", amount: totalAnnualIncome / 12 * 0.92 },
+              { month: "May", amount: totalAnnualIncome / 12 * 1.08 },
+              { month: "Jun", amount: totalAnnualIncome / 12 * 1.22 },
             ]);
-
-            // Generate sector allocation
-            setSectorAllocation([
-              { name: "Technology", value: 65.4, color: "#8884d8" },
-              { name: "Healthcare", value: 18.2, color: "#82ca9d" },
-              { name: "Finance", value: 12.1, color: "#ffc658" },
-              { name: "Consumer", value: 4.3, color: "#ff7300" },
-            ]);
-
-            // Generate dividend data
+          } else {
+            // Default dividend data
             setMonthlyDividends([
               { month: "Jan", amount: 45.20 },
               { month: "Feb", amount: 52.30 },
@@ -140,70 +154,21 @@ const PortfolioContent = () => {
               { month: "Jun", amount: 67.20 },
             ]);
           }
-        } else if (selectedPortfolio === binancePortfolioId) {
-          // Binance crypto data (placeholder for now)
-          setPortfolioData({
-            totalValue: 15420.50,
-            totalGainLoss: 2340.89,
-            totalGainLossPercent: 17.89,
-            todayChange: 890.32,
-            todayChangePercent: 6.12,
-            holdingsCount: 8,
-            dividendYield: 0
-          });
-          setHoldings([
-            { symbol: 'BTC', name: 'Bitcoin', shares: 0.5, currentPrice: 45000, value: 22500, gainLoss: 2500, gainLossPercent: 12.5, weight: 45.2 },
-            { symbol: 'ETH', name: 'Ethereum', shares: 8, currentPrice: 3200, value: 25600, gainLoss: 1800, gainLossPercent: 7.6, weight: 32.8 },
-          ]);
+
         } else {
-          // Fetch data from user's custom portfolio
-          console.log('Fetching custom portfolio data');
-          
-          // Fetch dividends for this portfolio
-          const { data: dividendsData } = await supabase
-            .from('dividends')
-            .select('*')
-            .eq('portfolio_id', selectedPortfolio);
-
-          // Calculate portfolio metrics from dividends and other data
-          const totalDividends = dividendsData?.reduce((sum, div) => sum + Number(div.total_received), 0) || 0;
-          
-          setPortfolioData({
-            totalValue: totalDividends * 20, // Estimate based on dividend yield
-            totalGainLoss: totalDividends * 2,
-            totalGainLossPercent: 8.5,
-            todayChange: 245.67,
-            todayChangePercent: 1.2,
-            holdingsCount: dividendsData?.length || 0,
-            dividendYield: 3.1
-          });
-
-          // Create holdings from dividend data
-          const holdingsFromDividends = dividendsData?.map((dividend: any) => ({
-            symbol: dividend.symbol,
-            name: dividend.company_name || dividend.symbol,
-            shares: dividend.shares_owned || 100,
-            avgPrice: 150, // Estimate
-            currentPrice: 162, // Estimate
-            value: (dividend.shares_owned || 100) * 162,
-            gainLoss: (dividend.shares_owned || 100) * 12,
-            gainLossPercent: 8.0,
-            sector: "Mixed",
-            dividendYield: dividend.dividend_amount / 162 * 100,
-            weight: 100 / (dividendsData?.length || 1)
-          })) || [];
-
-          setHoldings(holdingsFromDividends);
+          console.log('No saved data found, showing empty state');
+          // If no saved data, show empty state or prompt to sync
         }
+
       } catch (error) {
-        console.error('Error fetching portfolio data:', error);
+        console.error('Error fetching saved portfolio data:', error);
       } finally {
         setIsLoadingData(false);
       }
     };
 
-    fetchRealPortfolioData();
-  }, [selectedPortfolio, portfolioType]);
+    fetchSavedPortfolioData();
+  }, [selectedPortfolio, user?.id]);
 
   if (isLoading) {
     return (
@@ -223,12 +188,11 @@ const PortfolioContent = () => {
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
             📊 Portfolio Analysis
-            <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-              {selectedPortfolio === localStorage.getItem('trading212_portfolio_id') ? 'Trading212' : 
-               selectedPortfolio === localStorage.getItem('binance_portfolio_id') ? 'Binance' : 'Live Data'}
+            <Badge variant="secondary" className="bg-green-100 text-green-800">
+              Saved Data
             </Badge>
           </h1>
-          <p className="text-muted-foreground">Comprehensive view of your investment holdings and performance</p>
+          <p className="text-muted-foreground">Comprehensive view of your saved portfolio data and performance</p>
         </div>
         
         {portfolios.length > 0 && (
@@ -265,7 +229,7 @@ const PortfolioContent = () => {
             <div className="text-muted-foreground">
               <PieChartIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p className="text-lg font-medium">Select a Portfolio</p>
-              <p>Choose a portfolio from the dropdown to view your holdings and analysis</p>
+              <p>Choose a portfolio from the dropdown to view your saved portfolio data</p>
             </div>
           </CardContent>
         </Card>
@@ -273,7 +237,7 @@ const PortfolioContent = () => {
         <Card>
           <CardContent className="p-8 text-center">
             <div className="text-muted-foreground">
-              <div className="animate-pulse">Loading portfolio data...</div>
+              <div className="animate-pulse">Loading saved portfolio data...</div>
             </div>
           </CardContent>
         </Card>
@@ -320,7 +284,7 @@ const PortfolioContent = () => {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{portfolioData.holdingsCount}</div>
-                <p className="text-xs text-muted-foreground">Active positions</p>
+                <p className="text-xs text-muted-foreground">Saved positions</p>
               </CardContent>
             </Card>
 
@@ -331,7 +295,7 @@ const PortfolioContent = () => {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{portfolioData.dividendYield.toFixed(2)}%</div>
-                <p className="text-xs text-muted-foreground">Weighted average</p>
+                <p className="text-xs text-muted-foreground">From saved data</p>
               </CardContent>
             </Card>
           </div>
@@ -349,8 +313,9 @@ const PortfolioContent = () => {
                 <Card>
                   <CardContent className="p-8 text-center">
                     <div className="text-muted-foreground">
-                      <p className="text-lg font-medium">No Holdings Found</p>
-                      <p>This portfolio doesn't have any holdings data yet.</p>
+                      <p className="text-lg font-medium">No Saved Holdings Found</p>
+                      <p>This portfolio doesn't have any saved holdings data yet.</p>
+                      <p className="text-sm mt-2">Sync your portfolio data to see holdings here.</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -359,7 +324,7 @@ const PortfolioContent = () => {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <BarChart3 className="h-5 w-5" />
-                      Current Holdings
+                      Saved Holdings
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -489,8 +454,8 @@ const PortfolioContent = () => {
                       <TrendingUp className="h-4 w-4 text-green-600" />
                       <span className="text-sm font-medium">YTD Return</span>
                     </div>
-                    <div className="text-2xl font-bold text-green-600">+24.6%</div>
-                    <p className="text-xs text-muted-foreground">vs S&P 500: +18.2%</p>
+                    <div className="text-2xl font-bold text-green-600">+{portfolioData.totalGainLossPercent.toFixed(1)}%</div>
+                    <p className="text-xs text-muted-foreground">From saved data</p>
                   </CardContent>
                 </Card>
 
@@ -498,10 +463,10 @@ const PortfolioContent = () => {
                   <CardContent className="p-6">
                     <div className="flex items-center gap-2 mb-2">
                       <BarChart3 className="h-4 w-4 text-blue-600" />
-                      <span className="text-sm font-medium">Sharpe Ratio</span>
+                      <span className="text-sm font-medium">Holdings Count</span>
                     </div>
-                    <div className="text-2xl font-bold">1.34</div>
-                    <p className="text-xs text-muted-foreground">Risk-adjusted return</p>
+                    <div className="text-2xl font-bold">{portfolioData.holdingsCount}</div>
+                    <p className="text-xs text-muted-foreground">Saved positions</p>
                   </CardContent>
                 </Card>
 
@@ -509,10 +474,12 @@ const PortfolioContent = () => {
                   <CardContent className="p-6">
                     <div className="flex items-center gap-2 mb-2">
                       <Target className="h-4 w-4 text-purple-600" />
-                      <span className="text-sm font-medium">Max Drawdown</span>
+                      <span className="text-sm font-medium">Today's Change</span>
                     </div>
-                    <div className="text-2xl font-bold text-red-600">-8.4%</div>
-                    <p className="text-xs text-muted-foreground">Peak to trough</p>
+                    <div className={`text-2xl font-bold ${portfolioData.todayChangePercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {portfolioData.todayChangePercent >= 0 ? '+' : ''}{portfolioData.todayChangePercent.toFixed(2)}%
+                    </div>
+                    <p className="text-xs text-muted-foreground">From saved data</p>
                   </CardContent>
                 </Card>
               </div>
@@ -634,23 +601,23 @@ const PortfolioContent = () => {
                   <CardContent className="space-y-4">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Total Received (YTD)</span>
-                      <span className="font-medium">$333.70</span>
+                      <span className="font-medium">${monthlyDividends.reduce((sum, month) => sum + month.amount, 0).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Monthly Average</span>
-                      <span className="font-medium">$55.62</span>
+                      <span className="font-medium">${(monthlyDividends.reduce((sum, month) => sum + month.amount, 0) / monthlyDividends.length).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Projected Annual</span>
-                      <span className="font-medium">$740.20</span>
+                      <span className="font-medium">${(monthlyDividends.reduce((sum, month) => sum + month.amount, 0) * 2).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Yield on Cost</span>
-                      <span className="font-medium">2.8%</span>
+                      <span className="font-medium">{portfolioData.dividendYield.toFixed(2)}%</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Next Payment</span>
-                      <span className="font-medium">Jul 15 ($68.30)</span>
+                      <span className="text-muted-foreground">Data Source</span>
+                      <span className="font-medium">Saved Database</span>
                     </div>
                   </CardContent>
                 </Card>
