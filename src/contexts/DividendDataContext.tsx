@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { usePortfolio } from './PortfolioContext';
@@ -106,7 +105,7 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   };
 
-  // Sync API data to database
+  // Enhanced sync API data to database with smart duplicate prevention
   const syncApiDataToDatabase = async () => {
     if (!user?.id || !selectedPortfolio) return;
 
@@ -124,15 +123,16 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       setState(prev => ({ ...prev, loading: true }));
 
-      console.log('Syncing API data to database');
+      console.log('Syncing API data to database with smart duplicate prevention');
 
-      // Call the dividend detection function with auto-save enabled
+      // Call the dividend detection function with enhanced saving
       const { data, error } = await supabase.functions.invoke('dividend-detection', {
         body: {
           portfolioId: selectedPortfolio,
           userId: user.id,
-          autoSave: true, // This ensures API data is saved to database
-          usePortfolioData: false // Use API, not cached data
+          autoSave: true,
+          usePortfolioData: false,
+          smartSync: true // Enable smart sync to prevent duplicates
         }
       });
 
@@ -153,9 +153,13 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
           canMakeApiCall: newCount < state.maxApiCallsPerDay
         }));
 
+        const newRecords = data.newCount || 0;
+        const updatedRecords = data.updatedCount || 0;
+        const totalRecords = data.dividendStocksFound || 0;
+
         toast({
           title: "API Data Synced Successfully",
-          description: `Saved ${data.dividendStocksFound || 0} dividend stocks to database. API calls remaining: ${state.maxApiCallsPerDay - newCount}`,
+          description: `Processed ${totalRecords} dividend stocks: ${newRecords} new, ${updatedRecords} updated. API calls remaining: ${state.maxApiCallsPerDay - newCount}`,
         });
 
         // Reload saved data to reflect changes

@@ -1,40 +1,98 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Dividend, DividendPortfolio } from "@/models/dividend";
 
-// Enhanced service to save and retrieve dividend data from database
+// Enhanced service to save and retrieve dividend data from database with duplicate prevention
 export const saveDividendDataToDatabase = async (userId: string, portfolioId: string, dividendData: any[]) => {
-  console.log(`Saving ${dividendData.length} dividend records to database`);
+  console.log(`Checking existing data before saving ${dividendData.length} dividend records`);
   
   try {
-    const recordsToSave = dividendData.map(dividend => ({
-      user_id: userId,
-      portfolio_id: portfolioId,
-      symbol: dividend.symbol,
-      company_name: dividend.company || dividend.symbol,
-      annual_dividend: dividend.annualDividend || dividend.annual_dividend || 0,
-      dividend_yield: dividend.yield || dividend.dividend_yield || 0,
-      frequency: dividend.frequency || 'quarterly',
-      ex_dividend_date: dividend.exDate || dividend.ex_dividend_date || null,
-      payment_date: dividend.paymentDate || dividend.payment_date || null,
-      shares_owned: dividend.shares || dividend.shares_owned || null,
-      estimated_annual_income: dividend.totalAnnualIncome || dividend.estimated_annual_income || 0,
-      detection_source: dividend.apiSource || dividend.detection_source || 'api',
-      detected_at: new Date().toISOString(),
-      is_active: true
-    }));
-
-    // Use upsert to avoid duplicates
-    const { data, error } = await supabase
+    // First, check what data already exists
+    const { data: existingData } = await supabase
       .from('detected_dividends')
-      .upsert(recordsToSave, {
-        onConflict: 'user_id,portfolio_id,symbol'
+      .select('symbol, annual_dividend, dividend_yield')
+      .eq('user_id', userId)
+      .eq('portfolio_id', portfolioId)
+      .eq('is_active', true);
+
+    const existingSymbols = new Map();
+    if (existingData) {
+      existingData.forEach(item => {
+        existingSymbols.set(item.symbol, {
+          annual_dividend: item.annual_dividend,
+          dividend_yield: item.dividend_yield
+        });
       });
+    }
 
-    if (error) throw error;
+    // Filter out records that are identical to existing ones
+    const newRecords = [];
+    const updateRecords = [];
 
-    console.log(`Successfully saved ${recordsToSave.length} dividend records`);
-    return { success: true, savedCount: recordsToSave.length };
+    dividendData.forEach(dividend => {
+      const symbol = dividend.symbol;
+      const existing = existingSymbols.get(symbol);
+      
+      const recordData = {
+        user_id: userId,
+        portfolio_id: portfolioId,
+        symbol: symbol,
+        company_name: dividend.company || dividend.symbol,
+        annual_dividend: dividend.annualDividend || dividend.annual_dividend || 0,
+        dividend_yield: dividend.yield || dividend.dividend_yield || 0,
+        frequency: dividend.frequency || 'quarterly',
+        ex_dividend_date: dividend.exDate || dividend.ex_dividend_date || null,
+        payment_date: dividend.paymentDate || dividend.payment_date || null,
+        shares_owned: dividend.shares || dividend.shares_owned || null,
+        estimated_annual_income: dividend.totalAnnualIncome || dividend.estimated_annual_income || 0,
+        detection_source: dividend.apiSource || dividend.detection_source || 'api',
+        detected_at: new Date().toISOString(),
+        is_active: true
+      };
+
+      if (!existing) {
+        // New record
+        newRecords.push(recordData);
+      } else {
+        // Check if data has changed
+        const hasChanged = 
+          existing.annual_dividend !== recordData.annual_dividend ||
+          existing.dividend_yield !== recordData.dividend_yield;
+        
+        if (hasChanged) {
+          recordData.updated_at = new Date().toISOString();
+          updateRecords.push(recordData);
+        }
+      }
+    });
+
+    console.log(`Found ${newRecords.length} new records and ${updateRecords.length} records to update`);
+
+    let savedCount = 0;
+
+    // Insert new records
+    if (newRecords.length > 0) {
+      const { error: insertError } = await supabase
+        .from('detected_dividends')
+        .insert(newRecords);
+
+      if (insertError) throw insertError;
+      savedCount += newRecords.length;
+    }
+
+    // Update existing records
+    if (updateRecords.length > 0) {
+      for (const record of updateRecords) {
+        const { error: updateError } = await supabase
+          .from('detected_dividends')
+          .upsert(record, { onConflict: 'user_id,portfolio_id,symbol' });
+
+        if (updateError) throw updateError;
+      }
+      savedCount += updateRecords.length;
+    }
+
+    console.log(`Successfully processed ${savedCount} dividend records (${newRecords.length} new, ${updateRecords.length} updated)`);
+    return { success: true, savedCount, newCount: newRecords.length, updatedCount: updateRecords.length };
   } catch (error) {
     console.error('Error saving dividend data:', error);
     throw error;
@@ -69,47 +127,111 @@ export const getSavedDividendData = async (userId: string, portfolioId?: string)
   }
 };
 
-// Save portfolio positions from Trading212 API
+// Enhanced portfolio positions saving with duplicate prevention
 export const savePortfolioPositions = async (userId: string, portfolioId: string, positions: any[], brokerType = 'trading212') => {
-  console.log(`Saving ${positions.length} portfolio positions to database`);
+  console.log(`Checking existing positions before saving ${positions.length} portfolio positions`);
   
   try {
-    const positionsToSave = positions.map(position => ({
-      user_id: userId,
-      portfolio_id: portfolioId,
-      broker_type: brokerType,
-      symbol: position.ticker || position.symbol,
-      quantity: position.quantity || 0,
-      average_price: position.averagePrice || position.average_price || 0,
-      current_price: position.currentPrice || position.current_price || 0,
-      market_value: position.quantity * (position.currentPrice || position.current_price || 0),
-      unrealized_pnl: position.ppl || position.unrealized_pnl || 0,
-      last_updated: new Date().toISOString()
-    }));
-
-    // Use upsert to update existing positions
-    const { data, error } = await supabase
+    // Check existing positions
+    const { data: existingPositions } = await supabase
       .from('portfolio_positions')
-      .upsert(positionsToSave, {
-        onConflict: 'user_id,portfolio_id,symbol'
+      .select('symbol, quantity, current_price, market_value')
+      .eq('user_id', userId)
+      .eq('portfolio_id', portfolioId);
+
+    const existingMap = new Map();
+    if (existingPositions) {
+      existingPositions.forEach(pos => {
+        existingMap.set(pos.symbol, {
+          quantity: pos.quantity,
+          current_price: pos.current_price,
+          market_value: pos.market_value
+        });
       });
+    }
 
-    if (error) throw error;
+    const newPositions = [];
+    const updatePositions = [];
 
-    console.log(`Successfully saved ${positionsToSave.length} portfolio positions`);
-    return { success: true, savedCount: positionsToSave.length };
+    positions.forEach(position => {
+      const symbol = position.ticker || position.symbol;
+      const existing = existingMap.get(symbol);
+      
+      const positionData = {
+        user_id: userId,
+        portfolio_id: portfolioId,
+        broker_type: brokerType,
+        symbol: symbol,
+        quantity: position.quantity || 0,
+        average_price: position.averagePrice || position.average_price || 0,
+        current_price: position.currentPrice || position.current_price || 0,
+        market_value: position.quantity * (position.currentPrice || position.current_price || 0),
+        unrealized_pnl: position.ppl || position.unrealized_pnl || 0,
+        last_updated: new Date().toISOString()
+      };
+
+      if (!existing) {
+        newPositions.push(positionData);
+      } else {
+        // Check if significant data has changed (price or quantity)
+        const priceChanged = Math.abs(existing.current_price - positionData.current_price) > 0.01;
+        const quantityChanged = Math.abs(existing.quantity - positionData.quantity) > 0.000001;
+        
+        if (priceChanged || quantityChanged) {
+          positionData.updated_at = new Date().toISOString();
+          updatePositions.push(positionData);
+        }
+      }
+    });
+
+    console.log(`Found ${newPositions.length} new positions and ${updatePositions.length} positions to update`);
+
+    let savedCount = 0;
+
+    // Insert new positions
+    if (newPositions.length > 0) {
+      const { error: insertError } = await supabase
+        .from('portfolio_positions')
+        .insert(newPositions);
+
+      if (insertError) throw insertError;
+      savedCount += newPositions.length;
+    }
+
+    // Update existing positions
+    if (updatePositions.length > 0) {
+      for (const position of updatePositions) {
+        const { error: updateError } = await supabase
+          .from('portfolio_positions')
+          .upsert(position, { onConflict: 'user_id,portfolio_id,symbol' });
+
+        if (updateError) throw updateError;
+      }
+      savedCount += updatePositions.length;
+    }
+
+    console.log(`Successfully processed ${savedCount} positions (${newPositions.length} new, ${updatePositions.length} updated)`);
+    return { success: true, savedCount, newCount: newPositions.length, updatedCount: updatePositions.length };
   } catch (error) {
     console.error('Error saving portfolio positions:', error);
     throw error;
   }
 };
 
-// Save portfolio metadata
+// Enhanced portfolio metadata saving with change detection
 export const savePortfolioMetadata = async (userId: string, portfolioId: string, metadata: any, brokerType = 'trading212') => {
-  console.log(`Saving portfolio metadata to database`);
+  console.log(`Checking existing metadata before saving portfolio metadata`);
   
   try {
-    const metadataToSave = {
+    // Check if metadata already exists and if it has changed
+    const { data: existingMetadata } = await supabase
+      .from('portfolio_metadata')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('portfolio_id', portfolioId)
+      .single();
+
+    const newMetadata = {
       user_id: userId,
       portfolio_id: portfolioId,
       broker_type: brokerType,
@@ -123,16 +245,32 @@ export const savePortfolioMetadata = async (userId: string, portfolioId: string,
       last_sync_at: new Date().toISOString()
     };
 
-    const { data, error } = await supabase
-      .from('portfolio_metadata')
-      .upsert(metadataToSave, {
-        onConflict: 'user_id,portfolio_id'
-      });
+    // Check if update is needed
+    let shouldUpdate = !existingMetadata;
+    
+    if (existingMetadata) {
+      // Check if significant values have changed
+      const valueChanged = Math.abs(existingMetadata.total_value - newMetadata.total_value) > 0.01;
+      const returnChanged = Math.abs(existingMetadata.total_return - newMetadata.total_return) > 0.01;
+      const todayChanged = Math.abs(existingMetadata.today_change - newMetadata.today_change) > 0.01;
+      
+      shouldUpdate = valueChanged || returnChanged || todayChanged;
+    }
 
-    if (error) throw error;
+    if (shouldUpdate) {
+      const { error } = await supabase
+        .from('portfolio_metadata')
+        .upsert(newMetadata, { onConflict: 'user_id,portfolio_id' });
 
-    console.log('Successfully saved portfolio metadata');
-    return { success: true };
+      if (error) throw error;
+
+      console.log('Successfully updated portfolio metadata');
+      return { success: true, updated: true };
+    } else {
+      console.log('Portfolio metadata unchanged, skipping update');
+      return { success: true, updated: false };
+    }
+
   } catch (error) {
     console.error('Error saving portfolio metadata:', error);
     throw error;
