@@ -59,7 +59,6 @@ export const saveDividendDataToDatabase = async (userId: string, portfolioId: st
           existing.dividend_yield !== recordData.dividend_yield;
         
         if (hasChanged) {
-          recordData.updated_at = new Date().toISOString();
           updateRecords.push(recordData);
         }
       }
@@ -178,7 +177,6 @@ export const savePortfolioPositions = async (userId: string, portfolioId: string
         const quantityChanged = Math.abs(existing.quantity - positionData.quantity) > 0.000001;
         
         if (priceChanged || quantityChanged) {
-          positionData.updated_at = new Date().toISOString();
           updatePositions.push(positionData);
         }
       }
