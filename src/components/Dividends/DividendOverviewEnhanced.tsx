@@ -4,10 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { useDividendData } from "@/contexts/DividendDataContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePortfolio } from "@/contexts/PortfolioContext";
-import { TrendingUp, DollarSign, PieChart, Database, Target, AlertCircle, Save } from "lucide-react";
+import { TrendingUp, DollarSign, PieChart, Database, Target, AlertCircle, RefreshCw } from "lucide-react";
 
 const DividendOverviewEnhanced = () => {
   const { user } = useAuth();
@@ -32,9 +33,12 @@ const DividendOverviewEnhanced = () => {
   const {
     dividends,
     loading,
+    error,
     apiCallsToday,
     maxApiCallsPerDay,
-    getDividendSummary
+    getDividendSummary,
+    refreshDividendData,
+    syncApiDataToDatabase
   } = dividendData;
 
   if (loading && dividends.length === 0) {
@@ -55,6 +59,26 @@ const DividendOverviewEnhanced = () => {
     );
   }
 
+  if (error) {
+    return (
+      <Alert>
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          {error}
+          <Button 
+            onClick={refreshDividendData} 
+            variant="outline" 
+            size="sm" 
+            className="ml-2"
+          >
+            <RefreshCw className="h-4 w-4 mr-1" />
+            Retry
+          </Button>
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
   if (!selectedPortfolio) {
     return (
       <Alert>
@@ -68,12 +92,47 @@ const DividendOverviewEnhanced = () => {
 
   if (dividends.length === 0) {
     return (
-      <Alert>
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription>
-          No saved dividend data found in database. Use the dividend tracker to detect and save your dividend stocks.
-        </AlertDescription>
-      </Alert>
+      <div className="space-y-6">
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            No saved dividend data found in database for this portfolio.
+            <div className="flex gap-2 mt-3">
+              <Button onClick={syncApiDataToDatabase} size="sm">
+                Sync API Data
+              </Button>
+              <Button onClick={refreshDividendData} variant="outline" size="sm">
+                <RefreshCw className="h-4 w-4 mr-1" />
+                Refresh
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Database className="h-5 w-5" />
+              Get Started with Dividend Tracking
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-center py-8">
+            <Database className="h-16 w-16 mx-auto mb-4 text-blue-500" />
+            <h3 className="text-lg font-medium mb-2">No Dividend Data Yet</h3>
+            <p className="text-muted-foreground mb-4">
+              To start tracking your dividends, you need to sync your portfolio data or add dividend stocks manually.
+            </p>
+            <div className="flex justify-center gap-2">
+              <Button onClick={syncApiDataToDatabase}>
+                Sync Portfolio Data
+              </Button>
+              <Button variant="outline">
+                Add Manually
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
@@ -234,6 +293,16 @@ const DividendOverviewEnhanced = () => {
                 <span>Last Updated:</span>
                 <Badge variant="outline">Live</Badge>
               </div>
+            </div>
+            
+            <div className="flex gap-2 pt-2">
+              <Button onClick={refreshDividendData} variant="outline" size="sm" className="flex-1">
+                <RefreshCw className="h-3 w-3 mr-1" />
+                Refresh
+              </Button>
+              <Button onClick={syncApiDataToDatabase} size="sm" className="flex-1">
+                Sync API
+              </Button>
             </div>
           </CardContent>
         </Card>

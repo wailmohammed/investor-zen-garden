@@ -26,6 +26,7 @@ interface DividendDataState {
   apiCallsToday: number;
   maxApiCallsPerDay: number;
   canMakeApiCall: boolean;
+  error: string | null;
 }
 
 interface DividendDataContextType extends DividendDataState {
@@ -59,7 +60,8 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     lastSync: null,
     apiCallsToday: 0,
     maxApiCallsPerDay: 4,
-    canMakeApiCall: true
+    canMakeApiCall: true,
+    error: null
   });
 
   // Check API call limits
@@ -81,36 +83,50 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
   // Load saved dividend data from database
   const loadSavedDividendData = async () => {
     if (!user?.id || !selectedPortfolio) {
-      setState(prev => ({ ...prev, loading: false, dividends: [] }));
+      setState(prev => ({ ...prev, loading: false, dividends: [], error: null }));
       return;
     }
 
     try {
-      setState(prev => ({ ...prev, loading: true }));
+      setState(prev => ({ ...prev, loading: true, error: null }));
 
-      console.log('Loading saved dividend data from database');
+      console.log('Loading saved dividend data from database for portfolio:', selectedPortfolio);
       const savedData = await getSavedDividendData(user.id, selectedPortfolio);
 
       const lastSyncTime = localStorage.getItem(`dividend_last_sync_${selectedPortfolio}`);
 
       setState(prev => ({
         ...prev,
-        dividends: savedData,
+        dividends: savedData || [],
         loading: false,
-        lastSync: lastSyncTime
+        lastSync: lastSyncTime,
+        error: null
       }));
 
-      console.log(`Loaded ${savedData.length} dividend records from database`);
+      console.log(`Loaded ${savedData?.length || 0} dividend records from database`);
+
+      // If no data found, show helpful message
+      if (!savedData || savedData.length === 0) {
+        console.log('No dividend data found in database for this portfolio');
+      }
 
     } catch (error) {
       console.error('Error loading saved dividend data:', error);
-      setState(prev => ({ ...prev, loading: false, dividends: [] }));
+      setState(prev => ({ 
+        ...prev, 
+        loading: false, 
+        dividends: [], 
+        error: 'Failed to load dividend data from database'
+      }));
     }
   };
 
   // Mock sync API data to database (since edge function is failing)
   const syncApiDataToDatabase = async () => {
-    if (!user?.id || !selectedPortfolio) return;
+    if (!user?.id || !selectedPortfolio) {
+      setState(prev => ({ ...prev, error: 'Please select a portfolio first' }));
+      return;
+    }
 
     checkApiLimits();
 
@@ -124,7 +140,7 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
 
     try {
-      setState(prev => ({ ...prev, loading: true }));
+      setState(prev => ({ ...prev, loading: true, error: null }));
 
       console.log('Mock API sync - edge function unavailable');
       
@@ -144,7 +160,7 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       toast({
         title: "API Sync Attempted",
-        description: "Edge function unavailable. Using saved database data.",
+        description: "Edge function unavailable. Please add some sample dividend data manually or check your portfolio positions.",
         variant: "default",
       });
 
@@ -153,6 +169,10 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     } catch (error: any) {
       console.error('Error syncing API data:', error);
+      setState(prev => ({ 
+        ...prev, 
+        error: 'Failed to sync dividend data. Please try again later.'
+      }));
       toast({
         title: "Sync Failed",
         description: 'Edge function unavailable. Using saved data.',
@@ -170,6 +190,10 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   // Get dividend summary from saved data
   const getDividendSummary = () => {
+    if (!state.dividends || state.dividends.length === 0) {
+      return { totalAnnualIncome: 0, totalStocks: 0, averageYield: 0 };
+    }
+
     const totalAnnualIncome = state.dividends.reduce((sum, d) => sum + (d.estimated_annual_income || 0), 0);
     const totalStocks = state.dividends.length;
     const averageYield = totalStocks > 0 
@@ -182,10 +206,12 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
   // Load saved data when portfolio changes
   useEffect(() => {
     if (user?.id && selectedPortfolio) {
+      console.log('Portfolio changed, loading dividend data for:', selectedPortfolio);
       checkApiLimits();
       loadSavedDividendData();
     } else {
-      setState(prev => ({ ...prev, loading: false, dividends: [] }));
+      console.log('No user or portfolio selected, clearing dividend data');
+      setState(prev => ({ ...prev, loading: false, dividends: [], error: null }));
     }
   }, [user?.id, selectedPortfolio]);
 

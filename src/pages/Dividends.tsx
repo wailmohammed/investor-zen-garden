@@ -5,12 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { PortfolioProvider, usePortfolio } from "@/contexts/PortfolioContext";
+import { DividendDataProvider } from "@/contexts/DividendDataContext";
 import DividendManager from "@/components/Portfolio/DividendManager";
 import { PortfolioSelector } from "@/components/ui/portfolio-selector";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { getSavedDividendData } from "@/services/dividendService";
 import StatCard from "@/components/StatCard";
-import { BarChart3, DollarSign, TrendingUp, Shield, Calendar, PieChart, Target } from "lucide-react";
+import { BarChart3, DollarSign, TrendingUp, Shield, Calendar, PieChart, Target, Database } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -43,77 +44,56 @@ const DividendContent = () => {
   const { portfolios, selectedPortfolio, setSelectedPortfolio } = usePortfolio();
   const [activeTab, setActiveTab] = useState("overview");
 
-  // Fetch dividends for selected portfolio
+  // Fetch dividends from database for selected portfolio
   const { data: dividends = [], isLoading } = useQuery({
-    queryKey: ['dividends', user?.id, selectedPortfolio],
+    queryKey: ['saved-dividends', user?.id, selectedPortfolio],
     queryFn: async () => {
       if (!user?.id || !selectedPortfolio) return [];
       
-      const { data, error } = await supabase
-        .from('dividends')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('portfolio_id', selectedPortfolio)
-        .order('payment_date', { ascending: false });
-      
-      if (error) throw error;
+      console.log('Fetching saved dividend data for portfolio:', selectedPortfolio);
+      const data = await getSavedDividendData(user.id, selectedPortfolio);
+      console.log('Fetched dividend data:', data?.length || 0, 'records');
       return data || [];
     },
     enabled: !!user?.id && !!selectedPortfolio,
   });
 
-  // Calculate dividend statistics
+  // Calculate dividend statistics from database data
   const stats = React.useMemo(() => {
     if (!dividends.length) {
       return {
-        annualIncome: 2847.65,
-        monthlyAverage: 237.30,
-        portfolioYield: 3.2,
-        safetyScore: 94
+        annualIncome: 0,
+        monthlyAverage: 0,
+        portfolioYield: 0,
+        safetyScore: 0,
+        totalStocks: 0
       };
     }
 
-    const currentYear = new Date().getFullYear();
-    const currentYearDividends = dividends.filter(d => 
-      new Date(d.payment_date).getFullYear() === currentYear
-    );
-    
-    const annualIncome = currentYearDividends.reduce((sum, d) => sum + d.total_received, 0);
+    const annualIncome = dividends.reduce((sum, d) => sum + (d.estimated_annual_income || 0), 0);
     const monthlyAverage = annualIncome / 12;
+    const averageYield = dividends.reduce((sum, d) => sum + (d.dividend_yield || 0), 0) / dividends.length;
     
     return {
       annualIncome,
       monthlyAverage,
-      portfolioYield: 3.1,
-      safetyScore: 92
+      portfolioYield: averageYield,
+      safetyScore: 92, // Default safety score
+      totalStocks: dividends.length
     };
   }, [dividends]);
 
   // Group dividends by stock for holdings view
   const holdingsData: HoldingData[] = React.useMemo(() => {
-    const grouped = dividends.reduce((acc, dividend) => {
-      const key = dividend.symbol;
-      if (!acc[key]) {
-        acc[key] = {
-          symbol: dividend.symbol,
-          company: dividend.company_name || dividend.symbol,
-          shares: dividend.shares_owned || 0,
-          avgCost: 0,
-          yield: 0,
-          annualIncome: 0,
-          safety: 'High'
-        };
-      }
-      
-      const currentYear = new Date().getFullYear();
-      if (new Date(dividend.payment_date).getFullYear() === currentYear) {
-        acc[key].annualIncome += dividend.total_received;
-      }
-      
-      return acc;
-    }, {} as Record<string, HoldingData>);
-    
-    return Object.values(grouped);
+    return dividends.map(dividend => ({
+      symbol: dividend.symbol,
+      company: dividend.company_name || dividend.symbol,
+      shares: dividend.shares_owned || 0,
+      avgCost: 0, // Not available in current data
+      yield: dividend.dividend_yield || 0,
+      annualIncome: dividend.estimated_annual_income || 0,
+      safety: 'High' // Default safety rating
+    }));
   }, [dividends]);
 
   // Mock calendar data for demonstration
@@ -155,8 +135,8 @@ const DividendContent = () => {
       <div className="space-y-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">💰 Dividend Tracker</h1>
-            <p className="text-muted-foreground">Track, analyze and forecast your dividend income with enhanced AI detection</p>
+            <h1 className="text-3xl font-bold">💰 Database Dividend Tracker</h1>
+            <p className="text-muted-foreground">Track, analyze and forecast your dividend income from saved database data</p>
           </div>
         </div>
         
@@ -183,10 +163,13 @@ const DividendContent = () => {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
-            💰 Enhanced Dividend Tracker
-            <Badge variant="secondary" className="bg-blue-100 text-blue-800">AI-Powered</Badge>
+            💾 Database Dividend Tracker
+            <Badge variant="secondary" className="bg-green-100 text-green-800">
+              <Database className="h-3 w-3 mr-1" />
+              Database-Powered
+            </Badge>
           </h1>
-          <p className="text-muted-foreground">Track, analyze and forecast your dividend income with comprehensive API detection</p>
+          <p className="text-muted-foreground">Track, analyze and forecast your dividend income from persistent database storage</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" className="flex items-center gap-2">
@@ -212,9 +195,9 @@ const DividendContent = () => {
           label="Annual Income"
           value={`$${stats.annualIncome.toFixed(0)}`}
           change={{
-            value: "+$247.32",
-            percentage: "+9.5%",
-            isPositive: true
+            value: stats.annualIncome > 0 ? "+Database" : "No data",
+            percentage: stats.totalStocks > 0 ? `${stats.totalStocks} stocks` : "0 stocks",
+            isPositive: stats.annualIncome > 0
           }}
           icon={<DollarSign className="h-5 w-5" />}
         />
@@ -222,9 +205,9 @@ const DividendContent = () => {
           label="Monthly Average"
           value={`$${stats.monthlyAverage.toFixed(0)}`}
           change={{
-            value: "+$20.61",
-            percentage: "+9.5%",
-            isPositive: true
+            value: "From database",
+            percentage: "Calculated",
+            isPositive: stats.monthlyAverage > 0
           }}
           icon={<BarChart3 className="h-5 w-5" />}
         />
@@ -232,21 +215,21 @@ const DividendContent = () => {
           label="Portfolio Yield"
           value={`${stats.portfolioYield.toFixed(1)}%`}
           change={{
-            value: "+0.4%",
-            percentage: "+14.3%",
-            isPositive: true
+            value: "Database avg",
+            percentage: "Live calc",
+            isPositive: stats.portfolioYield > 0
           }}
           icon={<TrendingUp className="h-5 w-5" />}
         />
         <StatCard
-          label="Safety Score"
-          value={`${stats.safetyScore}`}
+          label="Database Records"
+          value={`${stats.totalStocks}`}
           change={{
-            value: "+3",
-            percentage: "+3.3%",
-            isPositive: true
+            value: "Saved stocks",
+            percentage: "Persistent",
+            isPositive: stats.totalStocks > 0
           }}
-          icon={<Shield className="h-5 w-5" />}
+          icon={<Database className="h-5 w-5" />}
         />
       </div>
 
@@ -466,9 +449,11 @@ const DividendContent = () => {
 const Dividends = () => {
   return (
     <PortfolioProvider>
-      <DashboardLayout>
-        <DividendContent />
-      </DashboardLayout>
+      <DividendDataProvider>
+        <DashboardLayout>
+          <DividendContent />
+        </DashboardLayout>
+      </DividendDataProvider>
     </PortfolioProvider>
   );
 };
