@@ -1,94 +1,35 @@
-import React, { useEffect, useState } from 'react';
+
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
-import { useAuth } from "@/contexts/AuthContext";
-import { usePortfolio } from "@/contexts/PortfolioContext";
-import { supabase } from "@/integrations/supabase/client";
-import { calculateDividendIncome } from "@/services/dividendCalculator";
+import { useDividendData } from "@/contexts/DividendDataContext";
 import { TrendingUp, Calendar, DollarSign } from "lucide-react";
 
-interface GrowthData {
-  totalAnnualIncome: number;
-  yearOverYearGrowth: number;
-  projectedGrowth: number;
-  dividendStocks: number;
-}
-
 const DividendGrowth = () => {
-  const { user } = useAuth();
-  const { selectedPortfolio } = usePortfolio();
-  const [growthData, setGrowthData] = useState<GrowthData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { dividends, loading, getDividendSummary } = useDividendData();
+  const { totalAnnualIncome, totalStocks } = getDividendSummary();
 
-  const fetchGrowthData = async () => {
-    if (!user || !selectedPortfolio) {
-      setLoading(false);
-      return;
-    }
+  // Mock growth data based on database dividend data
+  const yearOverYearGrowth = 8.5;
+  const projectedGrowth = 12.3;
 
-    setLoading(true);
-
-    try {
-      const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
-      
-      if (selectedPortfolio === trading212PortfolioId) {
-        console.log('Fetching Trading212 dividend growth data');
-        
-        const { data, error } = await supabase.functions.invoke('trading212-sync', {
-          body: { portfolioId: selectedPortfolio }
-        });
-
-        if (error) {
-          console.error('Error fetching Trading212 data:', error);
-          setGrowthData(null);
-          return;
-        }
-
-        if (data?.success && data.data?.positions) {
-          const positions = data.data.positions;
-          const dividendResults = await calculateDividendIncome(positions);
-          
-          setGrowthData({
-            totalAnnualIncome: dividendResults.totalAnnualIncome,
-            yearOverYearGrowth: 8.5, // Mock growth rate
-            projectedGrowth: 12.3, // Mock projected growth
-            dividendStocks: dividendResults.dividendPayingStocks.length
-          });
-        } else {
-          setGrowthData(null);
-        }
-      } else {
-        setGrowthData(null);
-      }
-    } catch (error) {
-      console.error("Error fetching dividend growth data:", error);
-      setGrowthData(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchGrowthData();
-  }, [user, selectedPortfolio]);
-
-  // Mock historical data for growth chart
-  const historicalData = [
-    { year: '2020', income: growthData ? growthData.totalAnnualIncome * 0.7 : 0, growth: 5.2 },
-    { year: '2021', income: growthData ? growthData.totalAnnualIncome * 0.8 : 0, growth: 7.1 },
-    { year: '2022', income: growthData ? growthData.totalAnnualIncome * 0.85 : 0, growth: 6.3 },
-    { year: '2023', income: growthData ? growthData.totalAnnualIncome * 0.92 : 0, growth: 8.7 },
-    { year: '2024', income: growthData ? growthData.totalAnnualIncome : 0, growth: growthData?.yearOverYearGrowth || 0 },
-  ];
+  // Historical data for growth chart (mock data based on current income)
+  const historicalData = totalAnnualIncome > 0 ? [
+    { year: '2020', income: totalAnnualIncome * 0.7, growth: 5.2 },
+    { year: '2021', income: totalAnnualIncome * 0.8, growth: 7.1 },
+    { year: '2022', income: totalAnnualIncome * 0.85, growth: 6.3 },
+    { year: '2023', income: totalAnnualIncome * 0.92, growth: 8.7 },
+    { year: '2024', income: totalAnnualIncome, growth: yearOverYearGrowth },
+  ] : [];
 
   // Projected future data
-  const projectedData = [
-    { year: '2024', income: growthData?.totalAnnualIncome || 0 },
-    { year: '2025', income: growthData ? growthData.totalAnnualIncome * 1.12 : 0 },
-    { year: '2026', income: growthData ? growthData.totalAnnualIncome * 1.26 : 0 },
-    { year: '2027', income: growthData ? growthData.totalAnnualIncome * 1.41 : 0 },
-    { year: '2028', income: growthData ? growthData.totalAnnualIncome * 1.58 : 0 },
-  ];
+  const projectedData = totalAnnualIncome > 0 ? [
+    { year: '2024', income: totalAnnualIncome },
+    { year: '2025', income: totalAnnualIncome * 1.12 },
+    { year: '2026', income: totalAnnualIncome * 1.26 },
+    { year: '2027', income: totalAnnualIncome * 1.41 },
+    { year: '2028', income: totalAnnualIncome * 1.58 },
+  ] : [];
 
   if (loading) {
     return (
@@ -107,14 +48,14 @@ const DividendGrowth = () => {
     );
   }
 
-  if (!growthData || !selectedPortfolio) {
+  if (totalStocks === 0) {
     return (
       <Card>
         <CardContent className="p-6">
           <div className="text-center">
             <p className="text-muted-foreground">No dividend growth data available</p>
             <p className="text-sm text-muted-foreground mt-2">
-              {!selectedPortfolio ? 'Select a portfolio to view dividend growth analysis' : 'Unable to load dividend growth data'}
+              Add some dividend data to view growth analysis
             </p>
           </div>
         </CardContent>
@@ -132,9 +73,9 @@ const DividendGrowth = () => {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${growthData.totalAnnualIncome.toFixed(2)}</div>
+            <div className="text-2xl font-bold">${totalAnnualIncome.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">
-              From {growthData.dividendStocks} dividend-paying stocks
+              From {totalStocks} dividend-paying stocks
             </p>
           </CardContent>
         </Card>
@@ -145,9 +86,9 @@ const DividendGrowth = () => {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">+{growthData.yearOverYearGrowth}%</div>
+            <div className="text-2xl font-bold text-green-600">+{yearOverYearGrowth}%</div>
             <p className="text-xs text-muted-foreground">
-              Compared to last year
+              Estimated growth rate
             </p>
           </CardContent>
         </Card>
@@ -158,7 +99,7 @@ const DividendGrowth = () => {
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">+{growthData.projectedGrowth}%</div>
+            <div className="text-2xl font-bold text-blue-600">+{projectedGrowth}%</div>
             <p className="text-xs text-muted-foreground">
               Expected next year
             </p>
@@ -256,15 +197,15 @@ const DividendGrowth = () => {
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">1 Year Target:</span>
-                  <span className="font-medium">${(growthData.totalAnnualIncome * 1.12).toFixed(2)}</span>
+                  <span className="font-medium">${(totalAnnualIncome * 1.12).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">3 Year Target:</span>
-                  <span className="font-medium">${(growthData.totalAnnualIncome * 1.41).toFixed(2)}</span>
+                  <span className="font-medium">${(totalAnnualIncome * 1.41).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">5 Year Target:</span>
-                  <span className="font-medium">${(growthData.totalAnnualIncome * 1.58).toFixed(2)}</span>
+                  <span className="font-medium">${(totalAnnualIncome * 1.58).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between border-t pt-3">
                   <span className="text-sm font-medium">CAGR (5-year):</span>

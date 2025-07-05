@@ -1,118 +1,51 @@
-import React, { useEffect, useState } from 'react';
+
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { useAuth } from "@/contexts/AuthContext";
-import { usePortfolio } from "@/contexts/PortfolioContext";
-import { supabase } from "@/integrations/supabase/client";
-import { calculateDividendIncome } from "@/services/dividendCalculator";
+import { useDividendData } from "@/contexts/DividendDataContext";
 import { Shield, TrendingUp, AlertTriangle, CheckCircle } from "lucide-react";
 
-interface DividendSafetyData {
-  symbol: string;
-  company: string;
-  safetyScore: number;
-  payoutRatio: number;
-  debtToEquity: number;
-  dividendGrowth: number;
-  yearsOfGrowth: number;
-  isSafe: boolean;
-  riskLevel: 'Low' | 'Medium' | 'High';
-  totalAnnualIncome: number;
-}
-
 const DividendScores = () => {
-  const { user } = useAuth();
-  const { selectedPortfolio } = usePortfolio();
-  const [safetyData, setSafetyData] = useState<DividendSafetyData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { dividends, loading, getDividendSummary } = useDividendData();
+  const { totalAnnualIncome, totalStocks, averageYield } = getDividendSummary();
 
-  const fetchSafetyData = async () => {
-    if (!user || !selectedPortfolio) {
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
+  // Generate safety scores based on dividend data
+  const generateSafetyData = () => {
+    return dividends.map((dividend) => {
+      // Mock safety data based on symbol
+      const safetyProfiles: Record<string, any> = {
+        'AAPL': { score: 95, payoutRatio: 14.8, debtToEquity: 1.2, dividendGrowth: 4.3, yearsOfGrowth: 12 },
+        'MSFT': { score: 98, payoutRatio: 27.2, debtToEquity: 0.4, dividendGrowth: 10.2, yearsOfGrowth: 20 },
+        'JNJ': { score: 96, payoutRatio: 43.5, debtToEquity: 0.5, dividendGrowth: 6.1, yearsOfGrowth: 60 },
+        'PG': { score: 92, payoutRatio: 58.1, debtToEquity: 0.7, dividendGrowth: 5.0, yearsOfGrowth: 67 },
+        'KO': { score: 90, payoutRatio: 68.5, debtToEquity: 1.8, dividendGrowth: 4.8, yearsOfGrowth: 61 },
+      };
       
-      if (selectedPortfolio === trading212PortfolioId) {
-        console.log('Fetching Trading212 dividend safety data');
-        
-        const { data, error } = await supabase.functions.invoke('trading212-sync', {
-          body: { portfolioId: selectedPortfolio }
-        });
+      const profile = safetyProfiles[dividend.symbol] || { 
+        score: 85, 
+        payoutRatio: 50, 
+        debtToEquity: 1.0, 
+        dividendGrowth: 3.0, 
+        yearsOfGrowth: 10 
+      };
 
-        if (error) {
-          console.error('Error fetching Trading212 data:', error);
-          setSafetyData([]);
-          return;
-        }
-
-        if (data?.success && data.data?.positions) {
-          const positions = data.data.positions;
-          const dividendResults = await calculateDividendIncome(positions);
-          
-          const safetyResults = dividendResults.dividendPayingStocks.map((stock: any) => {
-            const safetyScore = getSafetyScore(stock.symbol);
-            return {
-              ...stock,
-              safetyScore: safetyScore.score,
-              payoutRatio: safetyScore.payoutRatio,
-              debtToEquity: safetyScore.debtToEquity,
-              dividendGrowth: safetyScore.dividendGrowth,
-              yearsOfGrowth: safetyScore.yearsOfGrowth,
-              isSafe: safetyScore.score >= 80,
-              riskLevel: safetyScore.score >= 90 ? 'Low' : safetyScore.score >= 70 ? 'Medium' : 'High'
-            };
-          });
-          
-          setSafetyData(safetyResults);
-        } else {
-          setSafetyData([]);
-        }
-      } else {
-        setSafetyData([]);
-      }
-    } catch (error) {
-      console.error("Error fetching dividend safety data:", error);
-      setSafetyData([]);
-    } finally {
-      setLoading(false);
-    }
+      return {
+        symbol: dividend.symbol,
+        company: dividend.company_name || dividend.symbol,
+        safetyScore: profile.score,
+        payoutRatio: profile.payoutRatio,
+        debtToEquity: profile.debtToEquity,
+        dividendGrowth: profile.dividendGrowth,
+        yearsOfGrowth: profile.yearsOfGrowth,
+        totalAnnualIncome: dividend.estimated_annual_income,
+        isSafe: profile.score >= 80,
+        riskLevel: profile.score >= 90 ? 'Low' : profile.score >= 70 ? 'Medium' : 'High'
+      };
+    });
   };
 
-  useEffect(() => {
-    fetchSafetyData();
-  }, [user, selectedPortfolio]);
-
-  const getSafetyScore = (symbol: string) => {
-    // Mock safety data based on real dividend aristocrats
-    const safetyProfiles: Record<string, any> = {
-      'AAPL': { score: 95, payoutRatio: 14.8, debtToEquity: 1.2, dividendGrowth: 4.3, yearsOfGrowth: 12 },
-      'MSFT': { score: 98, payoutRatio: 27.2, debtToEquity: 0.4, dividendGrowth: 10.2, yearsOfGrowth: 20 },
-      'JNJ': { score: 96, payoutRatio: 43.5, debtToEquity: 0.5, dividendGrowth: 6.1, yearsOfGrowth: 60 },
-      'PG': { score: 92, payoutRatio: 58.1, debtToEquity: 0.7, dividendGrowth: 5.0, yearsOfGrowth: 67 },
-      'KO': { score: 90, payoutRatio: 68.5, debtToEquity: 1.8, dividendGrowth: 4.8, yearsOfGrowth: 61 },
-      'PEP': { score: 93, payoutRatio: 66.2, debtToEquity: 1.4, dividendGrowth: 6.2, yearsOfGrowth: 50 },
-      'WMT': { score: 88, payoutRatio: 40.1, debtToEquity: 1.6, dividendGrowth: 3.8, yearsOfGrowth: 49 },
-      'MCD': { score: 91, payoutRatio: 55.8, debtToEquity: 2.1, dividendGrowth: 7.5, yearsOfGrowth: 46 },
-      'JPM': { score: 85, payoutRatio: 32.4, debtToEquity: 1.8, dividendGrowth: 8.1, yearsOfGrowth: 12 },
-      'HD': { score: 89, payoutRatio: 45.2, debtToEquity: 2.3, dividendGrowth: 9.2, yearsOfGrowth: 14 },
-      'ARCC': { score: 75, payoutRatio: 85.3, debtToEquity: 3.2, dividendGrowth: 2.1, yearsOfGrowth: 8 },
-      'O': { score: 82, payoutRatio: 78.9, debtToEquity: 2.8, dividendGrowth: 3.5, yearsOfGrowth: 28 }
-    };
-    
-    return safetyProfiles[symbol] || { 
-      score: 85, 
-      payoutRatio: 50, 
-      debtToEquity: 1.0, 
-      dividendGrowth: 3.0, 
-      yearsOfGrowth: 10 
-    };
-  };
+  const safetyData = generateSafetyData();
 
   const getRiskBadge = (riskLevel: string) => {
     switch (riskLevel) {
@@ -160,14 +93,14 @@ const DividendScores = () => {
     );
   }
 
-  if (!selectedPortfolio || safetyData.length === 0) {
+  if (safetyData.length === 0) {
     return (
       <Card>
         <CardContent className="p-6">
           <div className="text-center">
             <p className="text-muted-foreground">No dividend safety data available</p>
             <p className="text-sm text-muted-foreground mt-2">
-              {!selectedPortfolio ? 'Select a portfolio to view dividend safety scores' : 'No dividend-paying stocks found in your portfolio'}
+              Add some dividend data to view safety scores
             </p>
           </div>
         </CardContent>
@@ -177,7 +110,6 @@ const DividendScores = () => {
 
   const avgSafetyScore = safetyData.reduce((sum, stock) => sum + stock.safetyScore, 0) / safetyData.length;
   const safeStocks = safetyData.filter(stock => stock.isSafe).length;
-  const totalAnnualIncome = safetyData.reduce((sum, stock) => sum + stock.totalAnnualIncome, 0);
 
   return (
     <div className="space-y-6">

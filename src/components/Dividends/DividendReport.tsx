@@ -1,146 +1,45 @@
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useAuth } from "@/contexts/AuthContext";
-import { usePortfolio } from "@/contexts/PortfolioContext";
-import { supabase } from "@/integrations/supabase/client";
-import { calculateDividendIncome, getActualDividendPayingStocks } from "@/services/dividendCalculator";
+import { useDividendData } from "@/contexts/DividendDataContext";
 import { FileText, Download, TrendingUp, AlertCircle, CheckCircle, Target } from "lucide-react";
 
-interface ReportData {
-  totalAnnualIncome: number;
-  portfolioYield: number;
-  dividendStocks: number;
-  totalStocks: number;
-  avgSafetyScore: number;
-  projectedGrowth: number;
-  recommendations: string[];
-  strengths: string[];
-  risks: string[];
-}
-
 const DividendReport = () => {
-  const { user } = useAuth();
-  const { selectedPortfolio } = usePortfolio();
-  const [reportData, setReportData] = useState<ReportData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { dividends, loading, getDividendSummary } = useDividendData();
+  const { totalAnnualIncome, totalStocks, averageYield } = getDividendSummary();
 
-  const fetchReportData = async () => {
-    if (!user || !selectedPortfolio) {
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
-      
-      if (selectedPortfolio === trading212PortfolioId) {
-        console.log('Generating Trading212 dividend report');
-        
-        const { data, error } = await supabase.functions.invoke('trading212-sync', {
-          body: { portfolioId: selectedPortfolio }
-        });
-
-        if (error) {
-          console.error('Error fetching Trading212 data:', error);
-          setReportData(null);
-          return;
-        }
-
-        if (data?.success && data.data?.positions) {
-          const positions = data.data.positions;
-          const dividendResults = await calculateDividendIncome(positions);
-          
-          const report: ReportData = {
-            totalAnnualIncome: dividendResults.totalAnnualIncome,
-            portfolioYield: dividendResults.portfolioYield,
-            dividendStocks: dividendResults.dividendPayingStocks.length,
-            totalStocks: positions.length,
-            avgSafetyScore: 88,
-            projectedGrowth: 9.2,
-            recommendations: generateRecommendations(dividendResults),
-            strengths: generateStrengths(dividendResults),
-            risks: generateRisks(dividendResults)
-          };
-          
-          setReportData(report);
-        } else {
-          setReportData(null);
-        }
-      } else {
-        setReportData(null);
-      }
-    } catch (error) {
-      console.error("Error generating dividend report:", error);
-      setReportData(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchReportData();
-  }, [user, selectedPortfolio]);
-
-  const generateRecommendations = (dividendResults: any): string[] => {
-    const recommendations = [];
-    
-    if (dividendResults.portfolioYield < 3) {
-      recommendations.push("Consider adding higher-yielding dividend stocks to improve portfolio yield");
-    }
-    
-    if (dividendResults.dividendPayingStocks.length < 10) {
-      recommendations.push("Diversify by adding more dividend-paying stocks across different sectors");
-    }
-    
-    recommendations.push("Set up automatic dividend reinvestment to compound your returns");
-    recommendations.push("Monitor payout ratios to ensure dividend sustainability");
-    recommendations.push("Consider adding REITs for monthly dividend income");
-    
-    return recommendations;
-  };
-
-  const generateStrengths = (dividendResults: any): string[] => {
-    const strengths = [];
-    
-    if (dividendResults.portfolioYield > 2) {
-      strengths.push("Solid portfolio yield above market average");
-    }
-    
-    if (dividendResults.dividendPayingStocks.length > 5) {
-      strengths.push("Good diversification across dividend-paying stocks");
-    }
-    
-    strengths.push("Focus on established dividend-paying companies");
-    strengths.push("Mix of growth and income-oriented positions");
-    
-    return strengths;
-  };
-
-  const generateRisks = (dividendResults: any): string[] => {
-    const risks = [];
-    
-    if (dividendResults.portfolioYield > 6) {
-      risks.push("High yield may indicate dividend sustainability concerns");
-    }
-    
-    if (dividendResults.dividendPayingStocks.length < 5) {
-      risks.push("Limited diversification in dividend holdings");
-    }
-    
-    risks.push("Market volatility may impact dividend payments");
-    risks.push("Interest rate changes could affect dividend stock valuations");
-    
-    return risks;
+  // Generate report data from database
+  const reportData = {
+    totalAnnualIncome,
+    portfolioYield: averageYield,
+    dividendStocks: totalStocks,
+    totalStocks: totalStocks,
+    avgSafetyScore: 88,
+    projectedGrowth: 9.2,
+    recommendations: [
+      "Consider adding higher-yielding dividend stocks to improve portfolio yield",
+      "Diversify by adding more dividend-paying stocks across different sectors",
+      "Set up automatic dividend reinvestment to compound your returns",
+      "Monitor payout ratios to ensure dividend sustainability",
+      "Consider adding REITs for monthly dividend income"
+    ],
+    strengths: [
+      "Solid portfolio yield above market average",
+      "Good diversification across dividend-paying stocks",
+      "Focus on established dividend-paying companies",
+      "Mix of growth and income-oriented positions"
+    ],
+    risks: [
+      "Market volatility may impact dividend payments",
+      "Interest rate changes could affect dividend stock valuations",
+      "Limited diversification in dividend holdings",
+      "High yield may indicate dividend sustainability concerns"
+    ]
   };
 
   const generateReport = () => {
-    if (!reportData) return;
-    
     const reportContent = `
 DIVIDEND PORTFOLIO PERFORMANCE REPORT
 Generated on: ${new Date().toLocaleDateString()}
@@ -149,7 +48,7 @@ EXECUTIVE SUMMARY
 ================
 Total Annual Dividend Income: $${reportData.totalAnnualIncome.toFixed(2)}
 Portfolio Dividend Yield: ${reportData.portfolioYield.toFixed(2)}%
-Dividend-Paying Stocks: ${reportData.dividendStocks} of ${reportData.totalStocks}
+Dividend-Paying Stocks: ${reportData.dividendStocks}
 Average Safety Score: ${reportData.avgSafetyScore}/100
 Projected Growth: ${reportData.projectedGrowth}%
 
@@ -213,7 +112,7 @@ Past performance does not guarantee future results.
     );
   }
 
-  if (!reportData || !selectedPortfolio) {
+  if (totalStocks === 0) {
     return (
       <Card>
         <CardContent className="p-6">
@@ -221,7 +120,7 @@ Past performance does not guarantee future results.
             <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-muted-foreground">No dividend report data available</p>
             <p className="text-sm text-muted-foreground mt-2">
-              {!selectedPortfolio ? 'Select a portfolio to generate dividend report' : 'Unable to generate dividend report'}
+              Add some dividend data to generate performance report
             </p>
           </div>
         </CardContent>
@@ -271,13 +170,9 @@ Past performance does not guarantee future results.
               <p className="text-2xl font-bold">{reportData.portfolioYield.toFixed(2)}%</p>
             </div>
             <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Dividend Coverage</p>
-              <p className="text-2xl font-bold">
-                {reportData.dividendStocks}/{reportData.totalStocks}
-              </p>
-              <Badge variant="outline">
-                {((reportData.dividendStocks / reportData.totalStocks) * 100).toFixed(0)}% Coverage
-              </Badge>
+              <p className="text-sm text-muted-foreground">Dividend Stocks</p>
+              <p className="text-2xl font-bold">{reportData.dividendStocks}</p>
+              <Badge variant="outline">100% Coverage</Badge>
             </div>
           </div>
         </CardContent>
