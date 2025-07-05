@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Database, TrendingUp, TrendingDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Database, TrendingUp, TrendingDown, RefreshCw } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePortfolio } from "@/contexts/PortfolioContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,42 +21,46 @@ const TopHoldings = () => {
   const { selectedPortfolio } = usePortfolio();
   const [holdings, setHoldings] = useState<Position[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchHoldings = async () => {
+    if (!user?.id || !selectedPortfolio) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      console.log('Loading holdings from database for portfolio:', selectedPortfolio);
+      setLoading(true);
+      setError(null);
+
+      const { data, error: queryError } = await supabase
+        .from('portfolio_positions')
+        .select('symbol, quantity, market_value, current_price, unrealized_pnl')
+        .eq('user_id', user.id)
+        .eq('portfolio_id', selectedPortfolio)
+        .order('market_value', { ascending: false })
+        .limit(5);
+
+      if (queryError) {
+        console.error('Error fetching holdings:', queryError);
+        setError('Failed to load holdings from database');
+        setHoldings([]);
+      } else {
+        setHoldings(data || []);
+        console.log(`Loaded ${data?.length || 0} holdings from database`);
+      }
+
+    } catch (error) {
+      console.error('Error loading holdings:', error);
+      setError('Failed to load holdings');
+      setHoldings([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchHoldings = async () => {
-      if (!user?.id || !selectedPortfolio) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        console.log('Loading holdings from database');
-        setLoading(true);
-
-        const { data, error } = await supabase
-          .from('portfolio_positions')
-          .select('symbol, quantity, market_value, current_price, unrealized_pnl')
-          .eq('user_id', user.id)
-          .eq('portfolio_id', selectedPortfolio)
-          .order('market_value', { ascending: false })
-          .limit(5);
-
-        if (error) {
-          console.error('Error fetching holdings:', error);
-          setHoldings([]);
-        } else {
-          setHoldings(data || []);
-          console.log(`Loaded ${data?.length || 0} holdings from database`);
-        }
-
-      } catch (error) {
-        console.error('Error loading holdings:', error);
-        setHoldings([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchHoldings();
   }, [user?.id, selectedPortfolio]);
 
@@ -82,6 +87,30 @@ const TopHoldings = () => {
     );
   }
 
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              Top Holdings
+              <Badge variant="destructive">Error</Badge>
+            </div>
+            <Button onClick={fetchHoldings} variant="outline" size="sm">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Retry
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-4">
+            <p className="text-destructive">{error}</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (!selectedPortfolio) {
     return (
       <Card>
@@ -98,12 +127,18 @@ const TopHoldings = () => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          Top Holdings
-          <Badge variant="secondary" className="bg-green-100 text-green-800">
-            <Database className="h-3 w-3 mr-1" />
-            Database
-          </Badge>
+        <CardTitle className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            Top Holdings
+            <Badge variant="secondary" className="bg-green-100 text-green-800">
+              <Database className="h-3 w-3 mr-1" />
+              Database ({holdings.length})
+            </Badge>
+          </div>
+          <Button onClick={fetchHoldings} variant="outline" size="sm">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
         </CardTitle>
       </CardHeader>
       <CardContent>

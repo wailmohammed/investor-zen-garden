@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, TrendingDown, DollarSign, BarChart3, ArrowUpRight, ArrowDownRight, Database } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { TrendingUp, TrendingDown, DollarSign, BarChart3, ArrowUpRight, ArrowDownRight, Database, RefreshCw } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePortfolio } from "@/contexts/PortfolioContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,74 +22,84 @@ const PortfolioSummary = () => {
     lastSync: null as string | null
   });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchPortfolioData = async () => {
+    if (!user?.id || !selectedPortfolio) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      console.log('Loading portfolio data from database for portfolio:', selectedPortfolio);
+      setLoading(true);
+      setError(null);
+      
+      // Get portfolio metadata
+      const { data: metadata, error: metadataError } = await supabase
+        .from('portfolio_metadata')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('portfolio_id', selectedPortfolio)
+        .maybeSingle();
+
+      // Get positions count and total value
+      const { data: positions, error: positionsError } = await supabase
+        .from('portfolio_positions')
+        .select('symbol, market_value, quantity, unrealized_pnl')
+        .eq('user_id', user.id)
+        .eq('portfolio_id', selectedPortfolio);
+
+      if (metadataError && metadataError.code !== 'PGRST116') {
+        console.error('Error fetching metadata:', metadataError);
+        setError('Failed to load portfolio metadata');
+      }
+
+      if (positionsError) {
+        console.error('Error fetching positions:', positionsError);
+        setError('Failed to load portfolio positions');
+      }
+
+      const holdingsCount = positions?.length || 0;
+      const totalPositionValue = positions?.reduce((sum, pos) => sum + (pos.market_value || 0), 0) || 0;
+      const totalUnrealizedPnl = positions?.reduce((sum, pos) => sum + (pos.unrealized_pnl || 0), 0) || 0;
+
+      if (metadata) {
+        setPortfolioData({
+          totalValue: metadata.total_value || totalPositionValue,
+          totalReturn: metadata.total_return || totalUnrealizedPnl,
+          totalReturnPercentage: metadata.total_return_percentage || 0,
+          todayChange: metadata.today_change || 0,
+          todayChangePercentage: metadata.today_change_percentage || 0,
+          holdingsCount,
+          cashBalance: metadata.cash_balance || 0,
+          lastSync: metadata.last_sync_at
+        });
+        console.log('Loaded portfolio metadata from database:', metadata);
+      } else if (holdingsCount > 0) {
+        // Use position data if no metadata
+        setPortfolioData(prev => ({
+          ...prev,
+          totalValue: totalPositionValue,
+          totalReturn: totalUnrealizedPnl,
+          totalReturnPercentage: totalPositionValue > 0 ? (totalUnrealizedPnl / (totalPositionValue - totalUnrealizedPnl)) * 100 : 0,
+          holdingsCount,
+          lastSync: new Date().toISOString()
+        }));
+        console.log('Using position data as fallback, found', holdingsCount, 'positions');
+      } else {
+        console.log('No portfolio data found in database');
+      }
+
+    } catch (error) {
+      console.error('Error loading portfolio data:', error);
+      setError('Failed to load portfolio data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchPortfolioData = async () => {
-      if (!user?.id || !selectedPortfolio) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        console.log('Loading portfolio data from database');
-        setLoading(true);
-        
-        // Get portfolio metadata
-        const { data: metadata, error: metadataError } = await supabase
-          .from('portfolio_metadata')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('portfolio_id', selectedPortfolio)
-          .maybeSingle();
-
-        // Get positions count
-        const { data: positions, error: positionsError } = await supabase
-          .from('portfolio_positions')
-          .select('symbol, market_value, quantity')
-          .eq('user_id', user.id)
-          .eq('portfolio_id', selectedPortfolio);
-
-        if (metadataError && metadataError.code !== 'PGRST116') {
-          console.error('Error fetching metadata:', metadataError);
-        }
-
-        if (positionsError) {
-          console.error('Error fetching positions:', positionsError);
-        }
-
-        const holdingsCount = positions?.length || 0;
-        const totalPositionValue = positions?.reduce((sum, pos) => sum + (pos.market_value || 0), 0) || 0;
-
-        if (metadata) {
-          setPortfolioData({
-            totalValue: metadata.total_value || totalPositionValue,
-            totalReturn: metadata.total_return || 0,
-            totalReturnPercentage: metadata.total_return_percentage || 0,
-            todayChange: metadata.today_change || 0,
-            todayChangePercentage: metadata.today_change_percentage || 0,
-            holdingsCount,
-            cashBalance: metadata.cash_balance || 0,
-            lastSync: metadata.last_sync_at
-          });
-          console.log('Loaded portfolio metadata from database');
-        } else if (holdingsCount > 0) {
-          // Use position data if no metadata
-          setPortfolioData(prev => ({
-            ...prev,
-            totalValue: totalPositionValue,
-            holdingsCount,
-            lastSync: new Date().toISOString()
-          }));
-          console.log('Using position data as fallback');
-        }
-
-      } catch (error) {
-        console.error('Error loading portfolio data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchPortfolioData();
   }, [user?.id, selectedPortfolio]);
 
@@ -115,6 +126,29 @@ const PortfolioSummary = () => {
     );
   }
 
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <DollarSign className="h-5 w-5" />
+            Portfolio Overview
+            <Badge variant="destructive">Error</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-4">
+            <p className="text-destructive mb-2">{error}</p>
+            <Button onClick={fetchPortfolioData} variant="outline" size="sm">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Retry
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (!selectedPortfolio) {
     return (
       <Card>
@@ -134,13 +168,19 @@ const PortfolioSummary = () => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <DollarSign className="h-5 w-5" />
-          Portfolio Overview
-          <Badge variant="secondary" className="bg-green-100 text-green-800">
-            <Database className="h-3 w-3 mr-1" />
-            Database
-          </Badge>
+        <CardTitle className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <DollarSign className="h-5 w-5" />
+            Portfolio Overview
+            <Badge variant="secondary" className="bg-green-100 text-green-800">
+              <Database className="h-3 w-3 mr-1" />
+              Database
+            </Badge>
+          </div>
+          <Button onClick={fetchPortfolioData} variant="outline" size="sm">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
         </CardTitle>
         {portfolioData.lastSync && (
           <p className="text-sm text-muted-foreground">
