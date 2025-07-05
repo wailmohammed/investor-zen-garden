@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useDividendData } from "@/contexts/DividendDataContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePortfolio } from "@/contexts/PortfolioContext";
+import { SampleDataButton } from "@/components/SampleDataButton";
 import { TrendingUp, DollarSign, PieChart, Database, Target, AlertCircle, RefreshCw } from "lucide-react";
 
 const DividendOverviewEnhanced = () => {
@@ -98,7 +99,8 @@ const DividendOverviewEnhanced = () => {
           <AlertDescription>
             No saved dividend data found in database for this portfolio.
             <div className="flex gap-2 mt-3">
-              <Button onClick={syncApiDataToDatabase} size="sm">
+              <SampleDataButton />
+              <Button onClick={syncApiDataToDatabase} variant="outline" size="sm">
                 Sync API Data
               </Button>
               <Button onClick={refreshDividendData} variant="outline" size="sm">
@@ -120,14 +122,12 @@ const DividendOverviewEnhanced = () => {
             <Database className="h-16 w-16 mx-auto mb-4 text-blue-500" />
             <h3 className="text-lg font-medium mb-2">No Dividend Data Yet</h3>
             <p className="text-muted-foreground mb-4">
-              To start tracking your dividends, you need to sync your portfolio data or add dividend stocks manually.
+              To start tracking your dividends, you can add sample data to see how it works, or sync your real portfolio data.
             </p>
             <div className="flex justify-center gap-2">
-              <Button onClick={syncApiDataToDatabase}>
+              <SampleDataButton />
+              <Button onClick={syncApiDataToDatabase} variant="outline">
                 Sync Portfolio Data
-              </Button>
-              <Button variant="outline">
-                Add Manually
               </Button>
             </div>
           </CardContent>
@@ -300,9 +300,7 @@ const DividendOverviewEnhanced = () => {
                 <RefreshCw className="h-3 w-3 mr-1" />
                 Refresh
               </Button>
-              <Button onClick={syncApiDataToDatabase} size="sm" className="flex-1">
-                Sync API
-              </Button>
+              <SampleDataButton />
             </div>
           </CardContent>
         </Card>
