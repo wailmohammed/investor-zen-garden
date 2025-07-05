@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
-import { Button } from "@/components/ui/button";
-import { ExternalLink } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { Database } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePortfolio } from "@/contexts/PortfolioContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,192 +13,114 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 interface AllocationData {
   name: string;
   value: number;
-  amount: string;
+  percentage: number;
 }
 
 const AssetAllocation = () => {
   const { user } = useAuth();
-  const { selectedPortfolio, portfolios } = usePortfolio();
-  const [allocationData, setAllocationData] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-
-  // Get current portfolio type
-  const currentPortfolio = portfolios.find(p => p.id === selectedPortfolio);
-  const portfolioType = currentPortfolio?.portfolio_type || 'stock';
+  const { selectedPortfolio } = usePortfolio();
+  const [allocationData, setAllocationData] = useState<AllocationData[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchAllocationData = async () => {
-      if (!selectedPortfolio) {
-        setAllocationData([]);
+      if (!user?.id || !selectedPortfolio) {
+        setLoading(false);
         return;
       }
 
-      const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
-      const binancePortfolioId = localStorage.getItem('binance_portfolio_id');
+      try {
+        console.log('Loading asset allocation from database');
+        setLoading(true);
 
-      if (selectedPortfolio === trading212PortfolioId) {
-        // Fetch real Trading212 allocation
-        try {
-          setIsLoading(true);
+        const { data, error } = await supabase
+          .from('portfolio_positions')
+          .select('symbol, market_value')
+          .eq('user_id', user.id)
+          .eq('portfolio_id', selectedPortfolio)
+          .gt('market_value', 0);
+
+        if (error) {
+          console.error('Error fetching allocation data:', error);
+          setAllocationData([]);
+        } else if (data && data.length > 0) {
+          const totalValue = data.reduce((sum, item) => sum + item.market_value, 0);
           
-          // Check for cached data first
-          const cachedData = localStorage.getItem('trading212_data');
-          if (cachedData) {
-            try {
-              const realData = JSON.parse(cachedData);
-              if (realData.positions && realData.positions.length > 0) {
-                const totalValue = realData.totalValue || realData.positions.reduce((sum: number, pos: any) => sum + pos.marketValue, 0);
-                if (totalValue > 0) {
-                  const formattedAllocation = realData.positions.slice(0, 10).map((position: any) => ({
-                    name: position.symbol,
-                    value: Number(((position.marketValue / totalValue) * 100).toFixed(1)),
-                    amount: `$${position.marketValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                  }));
-                  setAllocationData(formattedAllocation);
-                  setIsLoading(false);
-                  return;
-                }
-              }
-            } catch (parseError) {
-              console.error('Error parsing cached Trading212 data:', parseError);
-            }
-          }
+          // Group by first letter or sector (simplified)
+          const groupedData = data.reduce((acc: { [key: string]: number }, item) => {
+            const group = item.symbol.charAt(0); // Simple grouping by first letter
+            acc[group] = (acc[group] || 0) + item.market_value;
+            return acc;
+          }, {});
 
-          // Fetch fresh data if no cached data
-          const { data, error } = await supabase.functions.invoke('trading212-sync', {
-            body: { portfolioId: selectedPortfolio }
-          });
+          const allocation = Object.entries(groupedData)
+            .map(([name, value]) => ({
+              name: `Group ${name}`,
+              value,
+              percentage: (value / totalValue) * 100
+            }))
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 5); // Top 5 groups
 
-          if (error) throw error;
-
-          if (data?.success && data.data?.positions) {
-            const totalValue = data.data.totalValue || data.data.positions.reduce((sum: number, pos: any) => sum + pos.marketValue, 0);
-            if (totalValue > 0) {
-              const formattedAllocation = data.data.positions.slice(0, 10).map((position: any) => ({
-                name: position.symbol,
-                value: Number(((position.marketValue / totalValue) * 100).toFixed(1)),
-                amount: `$${position.marketValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-              }));
-              setAllocationData(formattedAllocation);
-              
-              // Cache the data
-              localStorage.setItem('trading212_data', JSON.stringify(data.data));
-            }
-          }
-        } catch (error) {
-          console.error('Error fetching Trading212 allocation:', error);
+          setAllocationData(allocation);
+          console.log(`Calculated allocation for ${data.length} positions`);
+        } else {
           setAllocationData([]);
-        } finally {
-          setIsLoading(false);
         }
-      } else if (selectedPortfolio === binancePortfolioId) {
-        // Fetch real Binance allocation
-        try {
-          setIsLoading(true);
-          const { data, error } = await supabase.functions.invoke('binance-api', {
-            body: { portfolioId: selectedPortfolio }
-          });
 
-          if (error) throw error;
-
-          if (data?.success && data.data?.holdings) {
-            const totalValue = data.data.totalValue;
-            const formattedAllocation = data.data.holdings.slice(0, 10).map((holding: any) => ({
-              name: holding.name || holding.symbol,
-              value: Number(((holding.value / totalValue) * 100).toFixed(1)),
-              amount: `$${holding.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-            }));
-            setAllocationData(formattedAllocation);
-          }
-        } catch (error) {
-          console.error('Error fetching Binance allocation:', error);
-          setAllocationData([]);
-        } finally {
-          setIsLoading(false);
-        }
-      } else if (portfolioType === 'crypto') {
-        // Fetch real crypto allocation from API
-        try {
-          setIsLoading(true);
-          const { data, error } = await supabase.functions.invoke('crypto-api', {
-            body: { portfolioId: selectedPortfolio }
-          });
-
-          if (error) throw error;
-
-          if (data?.success && data.data?.holdings) {
-            const totalValue = data.data.totalValue;
-            const formattedAllocation = data.data.holdings.map((holding: any) => ({
-              name: holding.name || holding.symbol,
-              value: Number(((holding.value / totalValue) * 100).toFixed(1)),
-              amount: `$${holding.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-            }));
-            setAllocationData(formattedAllocation);
-          }
-        } catch (error) {
-          console.error('Error fetching crypto allocation:', error);
-          setAllocationData([]);
-        } finally {
-          setIsLoading(false);
-        }
-      } else {
-        // Stock portfolio allocation
-        setAllocationData([
-          { name: 'Technology', value: 35, amount: '$89,180' },
-          { name: 'Healthcare', value: 20, amount: '$50,974' },
-          { name: 'Finance', value: 15, amount: '$38,231' },
-          { name: 'Consumer', value: 20, amount: '$50,974' },
-          { name: 'Energy', value: 10, amount: '$25,487' }
-        ]);
+      } catch (error) {
+        console.error('Error loading allocation data:', error);
+        setAllocationData([]);
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchAllocationData();
-  }, [selectedPortfolio, portfolioType]);
+  }, [user?.id, selectedPortfolio]);
 
-  if (!selectedPortfolio) {
+  if (loading) {
     return (
-      <Card className="w-full">
-        <CardHeader className="pb-2">
-          <CardTitle>Asset Allocation</CardTitle>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            Asset Allocation
+            <Badge variant="secondary">Loading...</Badge>
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-center text-muted-foreground py-4">
-            Select a portfolio to view allocation
-          </p>
+          <div className="h-[300px] animate-pulse bg-muted rounded"></div>
         </CardContent>
       </Card>
     );
   }
 
-  const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
-  const isTrading212 = selectedPortfolio === trading212PortfolioId;
+  if (!selectedPortfolio) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Asset Allocation</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground">Select a portfolio to view allocation</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
-    <Card className="w-full">
-      <CardHeader className="pb-2">
-        <CardTitle>Asset Allocation</CardTitle>
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          Asset Allocation
+          <Badge variant="secondary" className="bg-green-100 text-green-800">
+            <Database className="h-3 w-3 mr-1" />
+            Database
+          </Badge>
+        </CardTitle>
       </CardHeader>
       <CardContent>
-        {isLoading ? (
-          <div className="text-center py-4 text-muted-foreground">
-            Loading allocation data...
-          </div>
-        ) : allocationData.length === 0 ? (
-          <div className="text-center py-4">
-            <p className="text-muted-foreground mb-4">
-              {isTrading212 ? "No allocation data available from Trading212." : "No allocation data available"}
-            </p>
-            {isTrading212 && (
-              <Button asChild>
-                <a href="/broker-integration" className="inline-flex items-center gap-2">
-                  Refresh Trading212 Data
-                  <ExternalLink className="h-4 w-4" />
-                </a>
-              </Button>
-            )}
-          </div>
-        ) : (
+        {allocationData.length > 0 ? (
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -206,10 +128,9 @@ const AssetAllocation = () => {
                   data={allocationData}
                   cx="50%"
                   cy="50%"
-                  labelLine={false}
-                  label={({ name, value }) => `${name}: ${value}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
+                  innerRadius={60}
+                  outerRadius={100}
+                  paddingAngle={5}
                   dataKey="value"
                 >
                   {allocationData.map((entry, index) => (
@@ -217,14 +138,26 @@ const AssetAllocation = () => {
                   ))}
                 </Pie>
                 <Tooltip 
-                  formatter={(value: any, name: any, props: any) => [
-                    `${value}% (${props.payload.amount})`, 
-                    name
-                  ]} 
+                  formatter={(value: number) => [
+                    `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                    'Value'
+                  ]}
                 />
-                <Legend />
+                <Legend 
+                  formatter={(value, entry: any) => 
+                    `${value}: ${entry.payload.percentage.toFixed(1)}%`
+                  }
+                />
               </PieChart>
             </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <Database className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+            <p className="text-muted-foreground">No allocation data in database</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Sync your portfolio data to see asset allocation
+            </p>
           </div>
         )}
       </CardContent>

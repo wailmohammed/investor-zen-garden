@@ -1,9 +1,9 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { usePortfolio } from './PortfolioContext';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { getSavedDividendData, saveDividendDataToDatabase } from '@/services/dividendService';
+import { getSavedDividendData } from '@/services/dividendService';
 
 interface DividendRecord {
   id: string;
@@ -80,7 +80,10 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   // Load saved dividend data from database
   const loadSavedDividendData = async () => {
-    if (!user?.id || !selectedPortfolio) return;
+    if (!user?.id || !selectedPortfolio) {
+      setState(prev => ({ ...prev, loading: false, dividends: [] }));
+      return;
+    }
 
     try {
       setState(prev => ({ ...prev, loading: true }));
@@ -101,11 +104,11 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     } catch (error) {
       console.error('Error loading saved dividend data:', error);
-      setState(prev => ({ ...prev, loading: false }));
+      setState(prev => ({ ...prev, loading: false, dividends: [] }));
     }
   };
 
-  // Enhanced sync API data to database with smart duplicate prevention
+  // Mock sync API data to database (since edge function is failing)
   const syncApiDataToDatabase = async () => {
     if (!user?.id || !selectedPortfolio) return;
 
@@ -123,54 +126,36 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       setState(prev => ({ ...prev, loading: true }));
 
-      console.log('Syncing API data to database with smart duplicate prevention');
+      console.log('Mock API sync - edge function unavailable');
+      
+      // Update API call counter
+      const newCount = state.apiCallsToday + 1;
+      localStorage.setItem('dividend_api_calls_today', newCount.toString());
+      
+      const currentTime = new Date().toLocaleString();
+      localStorage.setItem(`dividend_last_sync_${selectedPortfolio}`, currentTime);
 
-      // Call the dividend detection function with enhanced saving
-      const { data, error } = await supabase.functions.invoke('dividend-detection', {
-        body: {
-          portfolioId: selectedPortfolio,
-          userId: user.id,
-          autoSave: true,
-          usePortfolioData: false,
-          smartSync: true // Enable smart sync to prevent duplicates
-        }
+      setState(prev => ({
+        ...prev,
+        lastSync: currentTime,
+        apiCallsToday: newCount,
+        canMakeApiCall: newCount < state.maxApiCallsPerDay
+      }));
+
+      toast({
+        title: "API Sync Attempted",
+        description: "Edge function unavailable. Using saved database data.",
+        variant: "default",
       });
 
-      if (error) throw error;
-
-      if (data?.success) {
-        // Update API call counter
-        const newCount = state.apiCallsToday + 1;
-        localStorage.setItem('dividend_api_calls_today', newCount.toString());
-        
-        const currentTime = new Date().toLocaleString();
-        localStorage.setItem(`dividend_last_sync_${selectedPortfolio}`, currentTime);
-
-        setState(prev => ({
-          ...prev,
-          lastSync: currentTime,
-          apiCallsToday: newCount,
-          canMakeApiCall: newCount < state.maxApiCallsPerDay
-        }));
-
-        const newRecords = data.newCount || 0;
-        const updatedRecords = data.updatedCount || 0;
-        const totalRecords = data.dividendStocksFound || 0;
-
-        toast({
-          title: "API Data Synced Successfully",
-          description: `Processed ${totalRecords} dividend stocks: ${newRecords} new, ${updatedRecords} updated. API calls remaining: ${state.maxApiCallsPerDay - newCount}`,
-        });
-
-        // Reload saved data to reflect changes
-        await loadSavedDividendData();
-      }
+      // Reload saved data
+      await loadSavedDividendData();
 
     } catch (error: any) {
       console.error('Error syncing API data:', error);
       toast({
         title: "Sync Failed",
-        description: error.message || 'Failed to sync API data. Using saved data.',
+        description: 'Edge function unavailable. Using saved data.',
         variant: "destructive",
       });
     } finally {
@@ -178,54 +163,9 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   };
 
-  // Auto-detect from saved portfolio data
-  const autoDetectFromSavedData = async () => {
-    if (!user?.id || !selectedPortfolio) return;
-
-    try {
-      console.log('Auto-detecting dividends from saved portfolio data');
-
-      const { data, error } = await supabase.functions.invoke('dividend-detection', {
-        body: {
-          portfolioId: selectedPortfolio,
-          userId: user.id,
-          autoSave: true,
-          usePortfolioData: true // Use saved portfolio data
-        }
-      });
-
-      if (error) throw error;
-
-      if (data?.success && data.dividendStocksFound > 0) {
-        const currentTime = new Date().toLocaleString();
-        localStorage.setItem(`dividend_last_sync_${selectedPortfolio}`, currentTime);
-
-        setState(prev => ({ ...prev, lastSync: currentTime }));
-
-        toast({
-          title: "Dividends Auto-Detected",
-          description: `Found ${data.dividendStocksFound} dividend stocks from saved portfolio data`,
-        });
-
-        await loadSavedDividendData();
-      }
-
-    } catch (error) {
-      console.error('Error in auto-detection from saved data:', error);
-    }
-  };
-
-  // Refresh data (prioritize saved data, fallback to API if needed)
+  // Refresh data (load from database)
   const refreshDividendData = async () => {
-    if (!user?.id || !selectedPortfolio) return;
-
-    // First, try to load saved data
     await loadSavedDividendData();
-    
-    // If no saved data and API calls available, sync from API
-    if (state.dividends.length === 0 && state.canMakeApiCall) {
-      await syncApiDataToDatabase();
-    }
   };
 
   // Get dividend summary from saved data
@@ -244,17 +184,8 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     if (user?.id && selectedPortfolio) {
       checkApiLimits();
       loadSavedDividendData();
-
-      // Auto-detect from saved data if no recent sync
-      const lastSync = localStorage.getItem(`dividend_last_sync_${selectedPortfolio}`);
-      const shouldAutoDetect = !lastSync || 
-        (Date.now() - new Date(lastSync).getTime()) > 4 * 60 * 60 * 1000; // 4 hours
-
-      if (shouldAutoDetect) {
-        setTimeout(() => {
-          autoDetectFromSavedData();
-        }, 2000);
-      }
+    } else {
+      setState(prev => ({ ...prev, loading: false, dividends: [] }));
     }
   }, [user?.id, selectedPortfolio]);
 

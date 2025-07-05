@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, TrendingDown, DollarSign, BarChart3, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, BarChart3, ArrowUpRight, ArrowDownRight, Database } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePortfolio } from "@/contexts/PortfolioContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,88 +30,60 @@ const PortfolioSummary = () => {
       }
 
       try {
-        console.log('Fetching comprehensive portfolio data from database and API');
+        console.log('Loading portfolio data from database');
         setLoading(true);
         
-        // First try to get saved metadata
+        // Get portfolio metadata
         const { data: metadata, error: metadataError } = await supabase
           .from('portfolio_metadata')
           .select('*')
           .eq('user_id', user.id)
           .eq('portfolio_id', selectedPortfolio)
-          .single();
+          .maybeSingle();
 
-        // Get positions data for holdings count
-        const { data: positions } = await supabase
+        // Get positions count
+        const { data: positions, error: positionsError } = await supabase
           .from('portfolio_positions')
-          .select('symbol, market_value')
+          .select('symbol, market_value, quantity')
           .eq('user_id', user.id)
           .eq('portfolio_id', selectedPortfolio);
 
-        let portfolioValues = {
-          totalValue: 0,
-          totalReturn: 0,
-          totalReturnPercentage: 0,
-          todayChange: 0,
-          todayChangePercentage: 0,
-          holdingsCount: positions?.length || 0,
-          cashBalance: 0,
-          lastSync: null as string | null
-        };
+        if (metadataError && metadataError.code !== 'PGRST116') {
+          console.error('Error fetching metadata:', metadataError);
+        }
+
+        if (positionsError) {
+          console.error('Error fetching positions:', positionsError);
+        }
+
+        const holdingsCount = positions?.length || 0;
+        const totalPositionValue = positions?.reduce((sum, pos) => sum + (pos.market_value || 0), 0) || 0;
 
         if (metadata) {
-          // Use saved metadata
-          portfolioValues = {
-            totalValue: metadata.total_value || 0,
+          setPortfolioData({
+            totalValue: metadata.total_value || totalPositionValue,
             totalReturn: metadata.total_return || 0,
             totalReturnPercentage: metadata.total_return_percentage || 0,
             todayChange: metadata.today_change || 0,
             todayChangePercentage: metadata.today_change_percentage || 0,
-            holdingsCount: positions?.length || metadata.holdings_count || 0,
+            holdingsCount,
             cashBalance: metadata.cash_balance || 0,
             lastSync: metadata.last_sync_at
-          };
-          console.log('Loaded portfolio data from database:', metadata);
-        } else {
-          // Try to fetch fresh data from Trading212 if this is a Trading212 portfolio
-          const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
-          
-          if (selectedPortfolio === trading212PortfolioId) {
-            try {
-              console.log('Fetching fresh Trading212 data to populate portfolio overview');
-              const { data: apiData, error: apiError } = await supabase.functions.invoke('trading212-sync', {
-                body: { portfolioId: selectedPortfolio, syncType: 'full' }
-              });
-
-              if (!apiError && apiData?.success && apiData.data) {
-                portfolioValues = {
-                  totalValue: apiData.data.totalValue || 0,
-                  totalReturn: apiData.data.totalResult || 0,
-                  totalReturnPercentage: apiData.data.totalResult ? 
-                    ((apiData.data.totalResult / (apiData.data.totalValue - apiData.data.totalResult)) * 100) : 0,
-                  todayChange: apiData.data.dayChange || 0,
-                  todayChangePercentage: apiData.data.dayChangePercent || 0,
-                  holdingsCount: apiData.data.positions?.length || 0,
-                  cashBalance: apiData.data.cash || 0,
-                  lastSync: new Date().toISOString()
-                };
-                console.log('Loaded fresh Trading212 data:', portfolioValues);
-              }
-            } catch (apiError) {
-              console.log('Could not fetch fresh Trading212 data, using saved data');
-            }
-          }
+          });
+          console.log('Loaded portfolio metadata from database');
+        } else if (holdingsCount > 0) {
+          // Use position data if no metadata
+          setPortfolioData(prev => ({
+            ...prev,
+            totalValue: totalPositionValue,
+            holdingsCount,
+            lastSync: new Date().toISOString()
+          }));
+          console.log('Using position data as fallback');
         }
-
-        setPortfolioData(portfolioValues);
 
       } catch (error) {
         console.error('Error loading portfolio data:', error);
-        // Set minimal data to avoid showing $0.00
-        setPortfolioData(prev => ({
-          ...prev,
-          holdingsCount: 0
-        }));
       } finally {
         setLoading(false);
       }
@@ -127,9 +99,7 @@ const PortfolioSummary = () => {
           <CardTitle className="flex items-center gap-2">
             <DollarSign className="h-5 w-5" />
             Portfolio Overview
-            <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-              Loading...
-            </Badge>
+            <Badge variant="secondary">Loading...</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -167,11 +137,10 @@ const PortfolioSummary = () => {
         <CardTitle className="flex items-center gap-2">
           <DollarSign className="h-5 w-5" />
           Portfolio Overview
-          {portfolioData.totalValue > 0 && (
-            <Badge variant="secondary" className="bg-green-100 text-green-800">
-              Database
-            </Badge>
-          )}
+          <Badge variant="secondary" className="bg-green-100 text-green-800">
+            <Database className="h-3 w-3 mr-1" />
+            Database
+          </Badge>
         </CardTitle>
         {portfolioData.lastSync && (
           <p className="text-sm text-muted-foreground">
@@ -208,66 +177,42 @@ const PortfolioSummary = () => {
           )}
         </div>
 
-        {portfolioData.totalValue > 0 && (
-          <>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">Today's Change</p>
-                <div className="flex items-center gap-1">
-                  {portfolioData.todayChange >= 0 ? (
-                    <TrendingUp className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <TrendingDown className="h-4 w-4 text-red-600" />
-                  )}
-                  <span className={`font-medium ${
-                    portfolioData.todayChange >= 0 ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {portfolioData.todayChange >= 0 ? '+' : ''}
-                    ${Math.abs(portfolioData.todayChange).toLocaleString('en-US', { 
-                      minimumFractionDigits: 2, 
-                      maximumFractionDigits: 2 
-                    })}
-                  </span>
-                </div>
-                <span className={`text-xs ${
-                  portfolioData.todayChangePercentage >= 0 ? 'text-green-600' : 'text-red-600'
-                }`}>
-                  ({portfolioData.todayChangePercentage >= 0 ? '+' : ''}
-                  {portfolioData.todayChangePercentage.toFixed(2)}%)
-                </span>
-              </div>
-
-              <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">Holdings</p>
-                <div className="flex items-center gap-1">
-                  <BarChart3 className="h-4 w-4 text-blue-600" />
-                  <span className="font-medium">{portfolioData.holdingsCount}</span>
-                </div>
-                <span className="text-xs text-muted-foreground">Positions</span>
-              </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <p className="text-sm text-muted-foreground">Today's Change</p>
+            <div className="flex items-center gap-1">
+              {portfolioData.todayChange >= 0 ? (
+                <TrendingUp className="h-4 w-4 text-green-600" />
+              ) : (
+                <TrendingDown className="h-4 w-4 text-red-600" />
+              )}
+              <span className={`font-medium ${
+                portfolioData.todayChange >= 0 ? 'text-green-600' : 'text-red-600'
+              }`}>
+                {portfolioData.todayChange >= 0 ? '+' : ''}
+                ${Math.abs(portfolioData.todayChange).toLocaleString('en-US', { 
+                  minimumFractionDigits: 2, 
+                  maximumFractionDigits: 2 
+                })}
+              </span>
             </div>
+          </div>
 
-            {portfolioData.cashBalance > 0 && (
-              <div className="border-t pt-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Cash Balance</span>
-                  <span className="font-medium">
-                    ${portfolioData.cashBalance.toLocaleString('en-US', { 
-                      minimumFractionDigits: 2, 
-                      maximumFractionDigits: 2 
-                    })}
-                  </span>
-                </div>
-              </div>
-            )}
-          </>
-        )}
+          <div className="space-y-1">
+            <p className="text-sm text-muted-foreground">Holdings</p>
+            <div className="flex items-center gap-1">
+              <BarChart3 className="h-4 w-4 text-blue-600" />
+              <span className="font-medium">{portfolioData.holdingsCount}</span>
+            </div>
+          </div>
+        </div>
 
         {portfolioData.totalValue === 0 && portfolioData.holdingsCount === 0 && (
           <div className="text-center py-4">
-            <p className="text-muted-foreground">No portfolio data available</p>
+            <Database className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+            <p className="text-muted-foreground">No portfolio data in database</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Connect your broker or add holdings to see portfolio overview
+              Connect your broker or sync data to see portfolio overview
             </p>
           </div>
         )}

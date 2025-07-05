@@ -31,16 +31,25 @@ const PerformanceChart = () => {
           .select('*')
           .eq('user_id', user.id)
           .eq('portfolio_id', selectedPortfolio)
-          .single();
+          .maybeSingle();
 
-        if (metadata) {
-          const currentValue = metadata.total_value;
-          const totalReturn = metadata.total_return || 0;
-          const baseValue = currentValue - totalReturn;
-          
-          setPortfolioValue(currentValue);
+        // Get positions for fallback calculation
+        const { data: positions } = await supabase
+          .from('portfolio_positions')
+          .select('market_value')
+          .eq('user_id', user.id)
+          .eq('portfolio_id', selectedPortfolio);
 
-          // Generate performance data based on saved metadata
+        const currentValue = metadata?.total_value || 
+          positions?.reduce((sum, pos) => sum + pos.market_value, 0) || 0;
+        
+        const totalReturn = metadata?.total_return || 0;
+        const baseValue = currentValue - totalReturn;
+
+        setPortfolioValue(currentValue);
+
+        if (currentValue > 0) {
+          // Generate performance data based on actual portfolio value
           const performancePoints = [
             { date: "Jan", value: baseValue * 0.94, label: "January" },
             { date: "Feb", value: baseValue * 0.97, label: "February" },
@@ -51,31 +60,22 @@ const PerformanceChart = () => {
           ];
           
           setPerformanceData(performancePoints);
-          console.log('Generated performance data from saved portfolio value:', currentValue);
+          console.log('Generated performance data from database value:', currentValue);
         } else {
-          console.log('No portfolio metadata found');
-          // Generate default performance data
+          // Default data when no portfolio value
           setPerformanceData([
-            { date: "Jan", value: 95000, label: "January" },
-            { date: "Feb", value: 97500, label: "February" },
-            { date: "Mar", value: 101200, label: "March" },
-            { date: "Apr", value: 104800, label: "April" },
-            { date: "May", value: 102300, label: "May" },
-            { date: "Jun", value: 108500, label: "June" }
+            { date: "Jan", value: 0, label: "January" },
+            { date: "Feb", value: 0, label: "February" },
+            { date: "Mar", value: 0, label: "March" },
+            { date: "Apr", value: 0, label: "April" },
+            { date: "May", value: 0, label: "May" },
+            { date: "Jun", value: 0, label: "June" }
           ]);
         }
 
       } catch (error) {
         console.error('Error loading performance data:', error);
-        // Fallback data
-        setPerformanceData([
-          { date: "Jan", value: 95000, label: "January" },
-          { date: "Feb", value: 97500, label: "February" },
-          { date: "Mar", value: 101200, label: "March" },
-          { date: "Apr", value: 104800, label: "April" },
-          { date: "May", value: 102300, label: "May" },
-          { date: "Jun", value: 108500, label: "June" }
-        ]);
+        setPerformanceData([]);
       } finally {
         setLoading(false);
       }
@@ -144,45 +144,44 @@ const PerformanceChart = () => {
         </CardTitle>
         <div className="flex items-center gap-4 text-sm text-muted-foreground">
           <span>6-Month Performance</span>
-          <span className={`font-medium ${totalGain >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {totalGain >= 0 ? '+' : ''}{formatCurrency(totalGain)} ({totalGain >= 0 ? '+' : ''}{totalGainPercent.toFixed(1)}%)
-          </span>
+          {currentValue > 0 && (
+            <span className={`font-medium ${totalGain >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {totalGain >= 0 ? '+' : ''}{formatCurrency(totalGain)} ({totalGain >= 0 ? '+' : ''}{totalGainPercent.toFixed(1)}%)
+            </span>
+          )}
         </div>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={performanceData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" />
-            <YAxis 
-              tickFormatter={formatCurrency}
-              domain={['dataMin - 5000', 'dataMax + 5000']}
-            />
-            <Tooltip 
-              formatter={(value: number) => [formatCurrency(value), 'Portfolio Value']}
-              labelFormatter={(label) => {
-                const point = performanceData.find(p => p.date === label);
-                return point?.label || label;
-              }}
-            />
-            <Line 
-              type="monotone" 
-              dataKey="value" 
-              stroke="#8884d8" 
-              strokeWidth={2}
-              dot={{ fill: '#8884d8', strokeWidth: 2, r: 4 }}
-              activeDot={{ r: 6, stroke: '#8884d8', strokeWidth: 2 }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-        
-        <div className="mt-4 p-3 bg-muted/50 rounded-lg">
-          <div className="text-sm text-muted-foreground mb-1">Current Portfolio Value</div>
-          <div className="text-lg font-semibold">{formatCurrency(currentValue)}</div>
-          <div className="text-xs text-muted-foreground">
-            Based on saved portfolio metadata from database
+        {currentValue > 0 ? (
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={performanceData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis tickFormatter={formatCurrency} />
+                <Tooltip 
+                  formatter={(value: number) => [formatCurrency(value), 'Portfolio Value']}
+                  labelFormatter={(label) => `Month: ${label}`}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="value" 
+                  stroke="#8884d8" 
+                  strokeWidth={2}
+                  dot={{ fill: '#8884d8' }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
-        </div>
+        ) : (
+          <div className="text-center py-8">
+            <Database className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+            <p className="text-muted-foreground">No performance data in database</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Sync your portfolio data to see performance charts
+            </p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

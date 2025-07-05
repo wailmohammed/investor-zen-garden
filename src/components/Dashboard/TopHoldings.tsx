@@ -1,296 +1,151 @@
 
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Database, TrendingUp, TrendingDown } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 import { usePortfolio } from "@/contexts/PortfolioContext";
 import { supabase } from "@/integrations/supabase/client";
 
-const TopHoldings = () => {
-  const { selectedPortfolio, portfolios } = usePortfolio();
-  const [holdings, setHoldings] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [lastSync, setLastSync] = useState<string | null>(null);
-  const [dataSource, setDataSource] = useState<'live' | 'cached' | 'mock'>('mock');
+interface Position {
+  symbol: string;
+  quantity: number;
+  market_value: number;
+  current_price: number;
+  unrealized_pnl: number;
+}
 
-  // Get current portfolio type
-  const currentPortfolio = portfolios.find(p => p.id === selectedPortfolio);
-  const portfolioType = currentPortfolio?.portfolio_type || 'stock';
+const TopHoldings = () => {
+  const { user } = useAuth();
+  const { selectedPortfolio } = usePortfolio();
+  const [holdings, setHoldings] = useState<Position[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchHoldings = async () => {
-      if (!selectedPortfolio) {
-        setHoldings([]);
+      if (!user?.id || !selectedPortfolio) {
+        setLoading(false);
         return;
       }
 
-      const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
-      const binancePortfolioId = localStorage.getItem('binance_portfolio_id');
-
-      if (selectedPortfolio === trading212PortfolioId) {
-        // Fetch Trading212 holdings with database fallback
-        try {
-          setIsLoading(true);
-          console.log('Fetching Trading212 holdings for portfolio:', selectedPortfolio);
-          
-          const { data, error } = await supabase.functions.invoke('trading212-sync', {
-            body: { portfolioId: selectedPortfolio }
-          });
-
-          console.log('Trading212 sync response:', data, error);
-
-          if (error) {
-            console.error('Trading212 sync error:', error);
-            throw error;
-          }
-
-          // Handle both success response and error response structures
-          if (data?.success && data.data?.positions && Array.isArray(data.data.positions)) {
-            console.log('Processing Trading212 positions:', data.data.positions.length);
-            
-            const totalValue = data.data.totalValue || 1;
-            const formattedHoldings = data.data.positions.slice(0, 10).map((position: any) => ({
-              symbol: position.symbol,
-              name: position.symbol,
-              value: `$${(position.marketValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-              allocation: `${(((position.marketValue || 0) / totalValue) * 100).toFixed(1)}%`,
-              change: `${(position.unrealizedPnL || 0) >= 0 ? '+' : ''}$${(position.unrealizedPnL || 0).toFixed(2)}`,
-              quantity: position.quantity,
-              avgPrice: position.averagePrice,
-              currentPrice: position.currentPrice
-            }));
-            
-            setHoldings(formattedHoldings);
-            setLastSync(data.data.lastSync || new Date().toISOString());
-            setDataSource(data.fromCache ? 'cached' : 'live');
-            console.log('Set holdings:', formattedHoldings.length, 'positions');
-          } else if (data?.error) {
-            console.log('Trading212 API error:', data.error, data.message);
-            // Try to fallback to database data
-            await fetchDatabaseFallback();
-          } else {
-            console.log('Unexpected response structure, trying database fallback');
-            await fetchDatabaseFallback();
-          }
-        } catch (error) {
-          console.error('Error fetching Trading212 holdings:', error);
-          await fetchDatabaseFallback();
-        } finally {
-          setIsLoading(false);
-        }
-      } else if (selectedPortfolio === binancePortfolioId) {
-        // Fetch real Binance holdings
-        try {
-          setIsLoading(true);
-          const { data, error } = await supabase.functions.invoke('binance-api', {
-            body: { portfolioId: selectedPortfolio }
-          });
-
-          if (error) throw error;
-
-          if (data?.success && data.data?.holdings) {
-            const formattedHoldings = data.data.holdings.slice(0, 10).map((holding: any) => ({
-              symbol: holding.symbol,
-              name: holding.name,
-              value: `$${holding.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-              allocation: `${((holding.value / data.data.totalValue) * 100).toFixed(1)}%`,
-              change: `${holding.changePercent24h >= 0 ? '+' : ''}${holding.changePercent24h.toFixed(2)}%`,
-              amount: holding.amount,
-              price: `$${holding.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}`
-            }));
-            setHoldings(formattedHoldings);
-            setDataSource('live');
-          }
-        } catch (error) {
-          console.error('Error fetching Binance holdings:', error);
-          setHoldings([]);
-        } finally {
-          setIsLoading(false);
-        }
-      } else if (portfolioType === 'crypto') {
-        // Fetch real crypto holdings from API
-        try {
-          setIsLoading(true);
-          const { data, error } = await supabase.functions.invoke('crypto-api', {
-            body: { portfolioId: selectedPortfolio }
-          });
-
-          if (error) throw error;
-
-          if (data?.success && data.data?.holdings) {
-            const formattedHoldings = data.data.holdings.map((holding: any) => ({
-              symbol: holding.symbol,
-              name: holding.name,
-              value: `$${holding.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-              allocation: `${((holding.value / data.data.totalValue) * 100).toFixed(1)}%`,
-              change: `${holding.changePercent24h >= 0 ? '+' : ''}${holding.changePercent24h.toFixed(2)}%`,
-              amount: holding.amount,
-              price: `$${holding.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-            }));
-            setHoldings(formattedHoldings);
-            setDataSource('live');
-          }
-        } catch (error) {
-          console.error('Error fetching crypto holdings:', error);
-          setHoldings([]);
-        } finally {
-          setIsLoading(false);
-        }
-      } else {
-        // Stock portfolio holdings (mock data)
-        setHoldings([
-          { symbol: 'AAPL', name: 'Apple Inc.', value: '$45,231.00', allocation: '18%', change: '+1.2%' },
-          { symbol: 'MSFT', name: 'Microsoft', value: '$38,950.00', allocation: '15%', change: '+0.8%' },
-          { symbol: 'GOOGL', name: 'Alphabet Inc.', value: '$32,100.00', allocation: '13%', change: '+2.1%' },
-          { symbol: 'AMZN', name: 'Amazon', value: '$28,750.00', allocation: '11%', change: '-0.5%' },
-          { symbol: 'TSLA', name: 'Tesla', value: '$25,900.00', allocation: '10%', change: '+3.4%' }
-        ]);
-        setDataSource('mock');
-      }
-    };
-
-    const fetchDatabaseFallback = async () => {
       try {
-        console.log('Attempting database fallback for Trading212 data');
-        
-        const { data: dbData, error: dbError } = await supabase
+        console.log('Loading holdings from database');
+        setLoading(true);
+
+        const { data, error } = await supabase
           .from('portfolio_positions')
-          .select('*')
+          .select('symbol, quantity, market_value, current_price, unrealized_pnl')
+          .eq('user_id', user.id)
           .eq('portfolio_id', selectedPortfolio)
-          .eq('broker_type', 'trading212')
-          .limit(10);
+          .order('market_value', { ascending: false })
+          .limit(5);
 
-        if (dbError) throw dbError;
-
-        if (dbData && dbData.length > 0) {
-          console.log('Found database positions:', dbData.length);
-          
-          const { data: metadata } = await supabase
-            .from('portfolio_metadata')
-            .select('total_value, last_sync_at')
-            .eq('portfolio_id', selectedPortfolio)
-            .eq('broker_type', 'trading212')
-            .single();
-
-          const totalValue = metadata?.total_value || 1;
-          
-          const formattedHoldings = dbData.map((position: any) => ({
-            symbol: position.symbol,
-            name: position.symbol,
-            value: `$${(position.market_value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-            allocation: `${(((position.market_value || 0) / totalValue) * 100).toFixed(1)}%`,
-            change: `${(position.unrealized_pnl || 0) >= 0 ? '+' : ''}$${(position.unrealized_pnl || 0).toFixed(2)}`,
-            quantity: position.quantity,
-            avgPrice: position.average_price,
-            currentPrice: position.current_price
-          }));
-          
-          setHoldings(formattedHoldings);
-          setLastSync(metadata?.last_sync_at || null);
-          setDataSource('cached');
-          console.log('Set database fallback holdings:', formattedHoldings.length);
-        } else {
-          console.log('No database positions found');
+        if (error) {
+          console.error('Error fetching holdings:', error);
           setHoldings([]);
+        } else {
+          setHoldings(data || []);
+          console.log(`Loaded ${data?.length || 0} holdings from database`);
         }
+
       } catch (error) {
-        console.error('Error fetching database fallback:', error);
+        console.error('Error loading holdings:', error);
         setHoldings([]);
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchHoldings();
-  }, [selectedPortfolio, portfolioType]);
+  }, [user?.id, selectedPortfolio]);
 
-  if (!selectedPortfolio) {
+  if (loading) {
     return (
-      <Card className="w-full">
-        <CardHeader className="pb-2">
-          <CardTitle>Top Holdings</CardTitle>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            Top Holdings
+            <Badge variant="secondary">Loading...</Badge>
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-center text-muted-foreground py-4">
-            Select a portfolio to view holdings
-          </p>
+          <div className="space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="animate-pulse">
+                <div className="h-4 bg-muted rounded w-3/4 mb-2"></div>
+                <div className="h-3 bg-muted rounded w-1/2"></div>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
     );
   }
 
-  const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
-  const isTrading212 = selectedPortfolio === trading212PortfolioId;
-
-  const getDataSourceBadge = () => {
-    switch (dataSource) {
-      case 'live':
-        return <Badge variant="default" className="bg-green-100 text-green-800">Live Data</Badge>;
-      case 'cached':
-        return <Badge variant="secondary" className="bg-blue-100 text-blue-800">Cached Data</Badge>;
-      default:
-        return <Badge variant="outline">Demo Data</Badge>;
-    }
-  };
+  if (!selectedPortfolio) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Top Holdings</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground">Select a portfolio to view holdings</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
-    <Card className="w-full">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle>Top Holdings</CardTitle>
-          {getDataSourceBadge()}
-        </div>
-        {lastSync && (
-          <p className="text-xs text-muted-foreground">
-            Last updated: {new Date(lastSync).toLocaleString()}
-          </p>
-        )}
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          Top Holdings
+          <Badge variant="secondary" className="bg-green-100 text-green-800">
+            <Database className="h-3 w-3 mr-1" />
+            Database
+          </Badge>
+        </CardTitle>
       </CardHeader>
       <CardContent>
-        {isLoading ? (
-          <div className="text-center py-4 text-muted-foreground">
-            Loading holdings...
-          </div>
-        ) : holdings.length === 0 ? (
-          <div className="text-center py-4">
-            <p className="text-muted-foreground mb-4">
-              {isTrading212 ? "No holdings data available from Trading212." : "No holdings data available"}
-            </p>
-            {isTrading212 && (
-              <Button asChild>
-                <a href="/broker-integration" className="inline-flex items-center gap-2">
-                  Manage Data Sync
-                  <ExternalLink className="h-4 w-4" />
-                </a>
-              </Button>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {holdings.map((holding) => (
-              <div key={holding.symbol} className="flex items-center justify-between py-2">
-                <div className="flex-1">
+        {holdings.length > 0 ? (
+          <div className="space-y-3">
+            {holdings.map((holding, index) => (
+              <div key={holding.symbol} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                <div>
                   <div className="font-medium">{holding.symbol}</div>
-                  <div className="text-sm text-muted-foreground">{holding.name}</div>
-                  {isTrading212 && holding.quantity && (
-                    <div className="text-xs text-muted-foreground">
-                      {holding.quantity} shares @ ${holding.currentPrice?.toFixed(2)}
-                    </div>
-                  )}
-                  {(portfolioType === 'crypto' || selectedPortfolio === localStorage.getItem('binance_portfolio_id')) && holding.amount && (
-                    <div className="text-xs text-muted-foreground">
-                      {holding.amount} @ {holding.price}
-                    </div>
-                  )}
+                  <div className="text-sm text-muted-foreground">
+                    {holding.quantity.toFixed(6)} shares @ ${holding.current_price.toFixed(2)}
+                  </div>
                 </div>
                 <div className="text-right">
-                  <div className="font-medium">{holding.value}</div>
-                  <div className="text-sm text-muted-foreground">{holding.allocation}</div>
-                  <div className={`text-sm ${holding.change.includes('+') ? 'text-green-600' : 'text-red-600'}`}>
-                    {holding.change}
+                  <div className="font-medium">
+                    ${holding.market_value.toLocaleString('en-US', { 
+                      minimumFractionDigits: 2, 
+                      maximumFractionDigits: 2 
+                    })}
+                  </div>
+                  <div className={`text-sm flex items-center gap-1 ${
+                    holding.unrealized_pnl >= 0 ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {holding.unrealized_pnl >= 0 ? (
+                      <TrendingUp className="h-3 w-3" />
+                    ) : (
+                      <TrendingDown className="h-3 w-3" />
+                    )}
+                    {holding.unrealized_pnl >= 0 ? '+' : ''}
+                    ${Math.abs(holding.unrealized_pnl).toFixed(2)}
                   </div>
                 </div>
               </div>
             ))}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <Database className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+            <p className="text-muted-foreground">No holdings found in database</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Sync your portfolio data to see top holdings
+            </p>
           </div>
         )}
       </CardContent>
