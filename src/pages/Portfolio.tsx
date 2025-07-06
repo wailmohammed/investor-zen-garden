@@ -1,6 +1,6 @@
 
 import React from 'react';
-import DashboardLayout from '@/components/Layout/DashboardLayout';
+import DashboardLayout from '@/components/DashboardLayout';
 import PortfolioSummary from '@/components/Dashboard/PortfolioSummary';
 import TopHoldings from '@/components/Dashboard/TopHoldings';
 import PerformanceChart from '@/components/Dashboard/PerformanceChart';
