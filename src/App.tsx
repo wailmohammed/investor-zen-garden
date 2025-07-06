@@ -13,6 +13,8 @@ import { PortfolioProvider } from './contexts/PortfolioContext';
 import { DividendDataProvider } from "@/contexts/DividendDataContext";
 import DividendStats from './pages/DividendStats';
 import Index from './pages/Index';
+import Login from './pages/Login';
+import Signup from './pages/Signup';
 import BrokerIntegration from './pages/BrokerIntegration';
 import CryptoPayment from './pages/CryptoPayment';
 
@@ -30,6 +32,8 @@ function App() {
               <DividendDataProvider>
                 <Routes>
                   <Route path="/" element={<Index />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/signup" element={<Signup />} />
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/portfolio" element={<Portfolio />} />
                   <Route path="/settings" element={<Settings />} />
