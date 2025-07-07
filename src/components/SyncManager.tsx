@@ -1,12 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RefreshCw, Clock, Database, TrendingUp, AlertCircle, CheckCircle, XCircle } from "lucide-react";
+import { Clock, Database, TrendingUp, AlertCircle, CheckCircle, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -39,7 +38,6 @@ const SyncManager: React.FC<SyncManagerProps> = ({ portfolioId }) => {
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [syncSchedules, setSyncSchedules] = useState<SyncSchedule[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     if (portfolioId && user) {
@@ -80,38 +78,6 @@ const SyncManager: React.FC<SyncManagerProps> = ({ portfolioId }) => {
       });
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleManualRefresh = async (brokerType: string) => {
-    try {
-      setIsRefreshing(true);
-      
-      const { data, error } = await supabase.functions.invoke(`${brokerType}-sync`, {
-        body: { portfolioId, forceRefresh: true }
-      });
-
-      if (error) throw error;
-
-      if (data?.success) {
-        toast({
-          title: "Sync Complete",
-          description: `${data.data.syncInfo?.positionsAdded || 0} positions added, ${data.data.syncInfo?.positionsUpdated || 0} updated`,
-        });
-        loadSyncData();
-      } else {
-        throw new Error(data?.message || 'Sync failed');
-      }
-      
-    } catch (error: any) {
-      console.error('Manual refresh error:', error);
-      toast({
-        title: "Sync Failed",
-        description: error.message || "Failed to refresh data",
-        variant: "destructive",
-      });
-    } finally {
-      setIsRefreshing(false);
     }
   };
 
@@ -173,7 +139,7 @@ const SyncManager: React.FC<SyncManagerProps> = ({ portfolioId }) => {
     return (
       <Card>
         <CardContent className="flex items-center justify-center py-8">
-          <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+          <Clock className="h-6 w-6 animate-spin mr-2" />
           Loading sync data...
         </CardContent>
       </Card>
@@ -201,8 +167,7 @@ const SyncManager: React.FC<SyncManagerProps> = ({ portfolioId }) => {
               <Alert>
                 <TrendingUp className="h-4 w-4" />
                 <AlertDescription>
-                  Auto-sync runs maximum 4 times per day (every 6 hours) to respect API limits. 
-                  Manual refresh is always available but may be rate-limited.
+                  Data automatically syncs 4 times per day (every 6 hours) to provide fresh information while respecting API limits.
                 </AlertDescription>
               </Alert>
 
@@ -224,24 +189,9 @@ const SyncManager: React.FC<SyncManagerProps> = ({ portfolioId }) => {
                         />
                       </div>
                     )}
-                    <Button 
-                      onClick={() => handleManualRefresh('trading212')}
-                      disabled={isRefreshing}
-                      className="w-full"
-                      size="sm"
-                    >
-                      {isRefreshing ? (
-                        <>
-                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                          Syncing...
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="h-4 w-4 mr-2" />
-                          Manual Refresh
-                        </>
-                      )}
-                    </Button>
+                    <div className="text-sm text-muted-foreground">
+                      Auto-sync active - next sync scheduled automatically
+                    </div>
                   </CardContent>
                 </Card>
 
@@ -262,25 +212,9 @@ const SyncManager: React.FC<SyncManagerProps> = ({ portfolioId }) => {
                         />
                       </div>
                     )}
-                    <Button 
-                      onClick={() => handleManualRefresh('binance')}
-                      disabled={isRefreshing}
-                      className="w-full"
-                      size="sm"
-                      variant="outline"
-                    >
-                      {isRefreshing ? (
-                        <>
-                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                          Syncing...
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="h-4 w-4 mr-2" />
-                          Manual Refresh
-                        </>
-                      )}
-                    </Button>
+                    <div className="text-sm text-muted-foreground">
+                      Auto-sync active - next sync scheduled automatically
+                    </div>
                   </CardContent>
                 </Card>
               </div>
@@ -333,7 +267,7 @@ const SyncManager: React.FC<SyncManagerProps> = ({ portfolioId }) => {
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  Auto-sync automatically fetches new data every 6 hours (maximum 4 times per day) 
+                  Auto-sync automatically fetches new data every 6 hours (4 times per day) 
                   to stay within API rate limits and provide fresh data.
                 </AlertDescription>
               </Alert>
@@ -350,17 +284,13 @@ const SyncManager: React.FC<SyncManagerProps> = ({ portfolioId }) => {
                             <p className="text-sm text-muted-foreground">
                               {schedule?.last_auto_sync 
                                 ? `Last sync: ${new Date(schedule.last_auto_sync).toLocaleString()}`
-                                : 'Never synced automatically'
+                                : 'Syncing automatically every 6 hours'
                               }
                             </p>
                           </div>
-                          <Button
-                            variant={schedule?.is_enabled ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => toggleAutoSync(brokerType, !schedule?.is_enabled)}
-                          >
-                            {schedule?.is_enabled ? "Disable" : "Enable"} Auto-sync
-                          </Button>
+                          <Badge variant={schedule?.is_enabled ? "default" : "secondary"}>
+                            {schedule?.is_enabled ? "Active" : "Disabled"}
+                          </Badge>
                         </div>
                       </CardContent>
                     </Card>

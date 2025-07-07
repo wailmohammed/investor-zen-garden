@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useDividendData } from "@/contexts/DividendDataContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePortfolio } from "@/contexts/PortfolioContext";
-import { DollarSign, Database, RefreshCw, Clock, Shield } from "lucide-react";
+import { DollarSign, Database, Clock, Shield } from "lucide-react";
 
 const DividendStatusIndicator = () => {
   const { user } = useAuth();
@@ -107,8 +107,9 @@ const DividendStatusIndicator = () => {
                 onClick={refreshDividendData}
                 disabled={loading || !canMakeApiCall}
               >
-                <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
-                {loading ? 'Syncing...' : 'Sync'}
+            <div className="text-sm text-muted-foreground">
+              Data updates automatically 4x daily
+            </div>
               </Button>
 
               {isAdmin && (

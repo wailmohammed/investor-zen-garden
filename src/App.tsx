@@ -17,6 +17,8 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import BrokerIntegration from './pages/BrokerIntegration';
 import CryptoPayment from './pages/CryptoPayment';
+import Profile from './pages/Profile';
+import Support from './pages/Support';
 
 // Create QueryClient instance
 const queryClient = new QueryClient();
@@ -41,6 +43,8 @@ function App() {
                   <Route path="/dividend-stats" element={<DividendStats />} />
                   <Route path="/brokers" element={<BrokerIntegration />} />
                   <Route path="/payment/crypto" element={<CryptoPayment />} />
+                  <Route path="/profile" element={<Profile />} />
+                  <Route path="/support" element={<Support />} />
                 </Routes>
               </DividendDataProvider>
             </PortfolioProvider>

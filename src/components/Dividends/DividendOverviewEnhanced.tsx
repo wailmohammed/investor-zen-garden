@@ -9,7 +9,7 @@ import { useDividendData } from "@/contexts/DividendDataContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePortfolio } from "@/contexts/PortfolioContext";
 import { SampleDataButton } from "@/components/SampleDataButton";
-import { TrendingUp, DollarSign, PieChart, Database, Target, AlertCircle, RefreshCw } from "lucide-react";
+import { TrendingUp, DollarSign, PieChart, Database, Target, AlertCircle } from "lucide-react";
 
 const DividendOverviewEnhanced = () => {
   const { user } = useAuth();
@@ -38,7 +38,6 @@ const DividendOverviewEnhanced = () => {
     apiCallsToday,
     maxApiCallsPerDay,
     getDividendSummary,
-    refreshDividendData,
     syncApiDataToDatabase
   } = dividendData;
 
@@ -65,16 +64,7 @@ const DividendOverviewEnhanced = () => {
       <Alert>
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
-          {error}
-          <Button 
-            onClick={refreshDividendData} 
-            variant="outline" 
-            size="sm" 
-            className="ml-2"
-          >
-            <RefreshCw className="h-4 w-4 mr-1" />
-            Retry
-          </Button>
+          {error} - Data will be updated automatically 4 times per day.
         </AlertDescription>
       </Alert>
     );
@@ -102,10 +92,6 @@ const DividendOverviewEnhanced = () => {
               <SampleDataButton />
               <Button onClick={syncApiDataToDatabase} variant="outline" size="sm">
                 Sync API Data
-              </Button>
-              <Button onClick={refreshDividendData} variant="outline" size="sm">
-                <RefreshCw className="h-4 w-4 mr-1" />
-                Refresh
               </Button>
             </div>
           </AlertDescription>
@@ -296,10 +282,6 @@ const DividendOverviewEnhanced = () => {
             </div>
             
             <div className="flex gap-2 pt-2">
-              <Button onClick={refreshDividendData} variant="outline" size="sm" className="flex-1">
-                <RefreshCw className="h-3 w-3 mr-1" />
-                Refresh
-              </Button>
               <SampleDataButton />
             </div>
           </CardContent>

@@ -8,7 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { usePortfolio } from "@/contexts/PortfolioContext";
 import { useDividendData } from "@/contexts/DividendDataContext";
 import { getSavedDividendData } from "@/services/dividendService";
-import { Database, TrendingUp, TrendingDown, RefreshCw, AlertCircle } from "lucide-react";
+import { Database, TrendingUp, TrendingDown, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface DividendStock {
@@ -39,6 +39,7 @@ const DividendPerformanceTable = () => {
     console.log('DividendDataContext not available, using direct database access');
   }
 
+  // Remove unused functions since we're removing manual refresh
   const loadDividendData = async () => {
     if (!user?.id || !selectedPortfolio) {
       setLoading(false);
@@ -80,14 +81,6 @@ const DividendPerformanceTable = () => {
     }
   }, [user?.id, selectedPortfolio, dividendContext?.dividends]);
 
-  const handleRefresh = async () => {
-    if (dividendContext) {
-      await dividendContext.refreshDividendData();
-    } else {
-      await loadDividendData();
-    }
-  };
-
   if (loading) {
     return (
       <Card>
@@ -100,7 +93,7 @@ const DividendPerformanceTable = () => {
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center h-48">
-            <RefreshCw className="h-8 w-8 animate-spin text-blue-500" />
+            <AlertCircle className="h-8 w-8 animate-spin text-blue-500" />
           </div>
         </CardContent>
       </Card>
@@ -120,12 +113,8 @@ const DividendPerformanceTable = () => {
         <CardContent>
           <Alert>
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>{error} - Data is updated automatically 4 times per day.</AlertDescription>
           </Alert>
-          <Button onClick={handleRefresh} className="mt-4">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Retry
-          </Button>
         </CardContent>
       </Card>
     );
@@ -168,12 +157,8 @@ const DividendPerformanceTable = () => {
             <h3 className="text-lg font-medium mb-2">No Dividend Data Found</h3>
             <p className="text-muted-foreground mb-4">
               No dividend stocks found in the database for this portfolio.
-              You may need to sync your portfolio data or add dividend stocks manually.
+              Data is updated automatically 4 times per day.
             </p>
-            <Button onClick={handleRefresh}>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh Data
-            </Button>
           </div>
         </CardContent>
       </Card>
@@ -183,18 +168,12 @@ const DividendPerformanceTable = () => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Database className="h-5 w-5" />
-            Dividend Performance
-            <Badge className="bg-green-100 text-green-800">
-              Database ({dividendStocks.length} stocks)
-            </Badge>
-          </div>
-          <Button variant="outline" size="sm" onClick={handleRefresh}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
+        <CardTitle className="flex items-center gap-2">
+          <Database className="h-5 w-5" />
+          Dividend Performance
+          <Badge className="bg-green-100 text-green-800">
+            Database ({dividendStocks.length} stocks)
+          </Badge>
         </CardTitle>
       </CardHeader>
       <CardContent>
