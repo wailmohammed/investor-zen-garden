@@ -21,11 +21,6 @@ const DividendTracking = () => {
     dividends,
     loading,
     lastSync,
-    apiCallsToday,
-    maxApiCallsPerDay,
-    canMakeApiCall,
-    refreshDividendData,
-    syncApiDataToDatabase,
     getDividendSummary
   } = useDividendData();
 
@@ -87,24 +82,9 @@ const DividendTracking = () => {
         <div className="flex justify-between items-center">
           <CardTitle>💾 Database-First Dividend Tracker</CardTitle>
           <div className="flex items-center gap-2">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={syncApiDataToDatabase}
-              disabled={loading || !canMakeApiCall}
-            >
-              <Zap className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              {loading ? 'Syncing API...' : `Sync API (${maxApiCallsPerDay - apiCallsToday} left)`}
-            </Button>
-            <Button 
-              variant="default" 
-              size="sm"
-              onClick={refreshDividendData}
-              disabled={loading}
-            >
-              <Database className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Load Database Data
-            </Button>
+            <div className="text-sm text-muted-foreground">
+              Data updates automatically 4x daily
+            </div>
           </div>
         </div>
 
@@ -119,15 +99,6 @@ const DividendTracking = () => {
           )}
         </div>
 
-        {/* API Limit Warning */}
-        {!canMakeApiCall && (
-          <Alert className="mt-2">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>
-              Daily API limit reached ({apiCallsToday}/{maxApiCallsPerDay}). Using saved database data. Limit resets at midnight.
-            </AlertDescription>
-          </Alert>
-        )}
       </CardHeader>
 
       <CardContent>
@@ -260,16 +231,16 @@ const DividendTracking = () => {
                   </div>
                   <div className="bg-muted rounded-lg p-4 flex flex-col items-center">
                     <RefreshCw className="h-8 w-8 mb-2 text-orange-600" />
-                    <div className="text-xs uppercase text-muted-foreground">API Calls Left</div>
-                    <div className="text-lg font-bold mt-1">{maxApiCallsPerDay - apiCallsToday}</div>
+                    <div className="text-xs uppercase text-muted-foreground">Updates</div>
+                    <div className="text-lg font-bold mt-1">4x Daily</div>
                   </div>
                 </div>
                 <div className="text-sm text-center text-muted-foreground mt-4">
                   💾 <strong>Database-First System:</strong> All dividend data is persistently stored in the database.
                   <br />
-                  🔄 Use "Sync API" only when you need fresh data. Use "Load Database Data" to refresh from saved records.
+                  🔄 Data updates automatically 4 times per day (every 6 hours).
                   <br />
-                  ⚡ API calls are limited but database data persists forever and loads instantly.
+                  ⚡ Database data persists forever and loads instantly.
                 </div>
               </TabsContent>
             </Tabs>
@@ -281,25 +252,8 @@ const DividendTracking = () => {
               No saved dividend data found in database
             </p>
             <p className="text-sm text-muted-foreground mb-4">
-              Click "Sync API" to fetch and save dividend data to the database, or "Load Database Data" to refresh.
+              Data updates automatically 4 times per day (every 6 hours).
             </p>
-            <div className="flex gap-2">
-              <Button 
-                onClick={syncApiDataToDatabase}
-                disabled={loading || !canMakeApiCall}
-              >
-                <Zap className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                {loading ? 'Syncing...' : 'Sync API Data'}
-              </Button>
-              <Button 
-                variant="outline"
-                onClick={refreshDividendData}
-                disabled={loading}
-              >
-                <Database className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                Load Database Data
-              </Button>
-            </div>
           </div>
         )}
       </CardContent>

@@ -101,29 +101,10 @@ const DividendStatusIndicator = () => {
                 {autoSyncEnabled ? 'Disable' : 'Enable'} Auto
               </Button>
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={refreshDividendData}
-                disabled={loading || !canMakeApiCall}
-              >
-            <div className="text-sm text-muted-foreground">
-              Data updates automatically 4x daily
-            </div>
-              </Button>
+              <div className="text-sm text-muted-foreground">
+                Data updates automatically 4x daily
+              </div>
 
-              {isAdmin && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={forceSyncData}
-                  disabled={loading}
-                  className="border-orange-300 text-orange-600 hover:bg-orange-50"
-                >
-                  <Shield className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
-                  Force
-                </Button>
-              )}
             </div>
           </div>
         </div>

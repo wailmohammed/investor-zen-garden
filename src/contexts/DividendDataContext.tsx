@@ -30,8 +30,6 @@ interface DividendDataState {
 }
 
 interface DividendDataContextType extends DividendDataState {
-  refreshDividendData: () => Promise<void>;
-  syncApiDataToDatabase: () => Promise<void>;
   getDividendSummary: () => {
     totalAnnualIncome: number;
     totalStocks: number;
@@ -121,72 +119,6 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   };
 
-  // Mock sync API data to database (since edge function is failing)
-  const syncApiDataToDatabase = async () => {
-    if (!user?.id || !selectedPortfolio) {
-      setState(prev => ({ ...prev, error: 'Please select a portfolio first' }));
-      return;
-    }
-
-    checkApiLimits();
-
-    if (!state.canMakeApiCall) {
-      toast({
-        title: "Daily API Limit Reached",
-        description: `You've used all ${state.maxApiCallsPerDay} API calls for today. Using saved data.`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      setState(prev => ({ ...prev, loading: true, error: null }));
-
-      console.log('Mock API sync - edge function unavailable');
-      
-      // Update API call counter
-      const newCount = state.apiCallsToday + 1;
-      localStorage.setItem('dividend_api_calls_today', newCount.toString());
-      
-      const currentTime = new Date().toLocaleString();
-      localStorage.setItem(`dividend_last_sync_${selectedPortfolio}`, currentTime);
-
-      setState(prev => ({
-        ...prev,
-        lastSync: currentTime,
-        apiCallsToday: newCount,
-        canMakeApiCall: newCount < state.maxApiCallsPerDay
-      }));
-
-      toast({
-        title: "API Sync Attempted",
-        description: "Edge function unavailable. Please add some sample dividend data manually or check your portfolio positions.",
-        variant: "default",
-      });
-
-      // Reload saved data
-      await loadSavedDividendData();
-
-    } catch (error: any) {
-      console.error('Error syncing API data:', error);
-      setState(prev => ({ 
-        ...prev, 
-        error: 'Failed to sync dividend data. Please try again later.'
-      }));
-      toast({
-        title: "Sync Failed",
-        description: 'Edge function unavailable. Using saved data.',
-        variant: "destructive",
-      });
-    } finally {
-      setState(prev => ({ ...prev, loading: false }));
-    }
-  };
-
-  // Refresh data (load from database)
-  const refreshDividendData = async () => {
-    await loadSavedDividendData();
-  };
 
   // Get dividend summary from saved data
   const getDividendSummary = () => {
@@ -222,8 +154,6 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const contextValue: DividendDataContextType = {
     ...state,
-    refreshDividendData,
-    syncApiDataToDatabase,
     getDividendSummary
   };
 
