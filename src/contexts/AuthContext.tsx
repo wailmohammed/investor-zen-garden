@@ -39,27 +39,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const checkAdminStatus = async (userId: string) => {
     try {
-      const { data, error } = await supabase
+      // Check if user has admin role from user_roles table
+      const { data: rolesData, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+        .eq('role', 'admin')
+        .maybeSingle();
+      
+      if (rolesError) {
+        console.error("Error checking admin role:", rolesError);
+        setIsAdmin(false);
+      } else {
+        setIsAdmin(!!rolesData);
+        console.log("Admin status updated:", !!rolesData, "for user:", userId);
+      }
+
+      // Get default currency from profiles
+      const { data: profileData } = await supabase
         .from('profiles')
-        .select('is_admin, default_currency')
+        .select('default_currency')
         .eq('id', userId)
         .single();
       
-      if (error) {
-        console.error("Error checking admin status:", error);
-        const currentUser = await supabase.auth.getUser();
-        if (currentUser.data.user?.email?.includes('admin')) {
-          setIsAdmin(true);
-        }
-        return;
-      }
-      
-      setIsAdmin(data?.is_admin || false);
-      setDefaultCurrency(data?.default_currency || 'USD');
-      
-      console.log("Admin status updated:", data?.is_admin || false, "for user:", userId);
+      setDefaultCurrency(profileData?.default_currency || 'USD');
     } catch (error) {
       console.error("Error in checkAdminStatus:", error);
+      setIsAdmin(false);
     }
   };
 
