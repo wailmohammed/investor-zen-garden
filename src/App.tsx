@@ -19,6 +19,12 @@ import BrokerIntegration from './pages/BrokerIntegration';
 import CryptoPayment from './pages/CryptoPayment';
 import Profile from './pages/Profile';
 import Support from './pages/Support';
+import Admin from './pages/Admin';
+import AdminWallets from './pages/AdminWallets';
+import EmailNotifications from './pages/EmailNotifications';
+import Tasks from './pages/Tasks';
+import Pricing from './pages/Pricing';
+import NotFound from './pages/NotFound';
 
 // Create QueryClient instance
 const queryClient = new QueryClient();
@@ -45,6 +51,12 @@ function App() {
                   <Route path="/payment/crypto" element={<CryptoPayment />} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/support" element={<Support />} />
+                  <Route path="/admin" element={<Admin />} />
+                  <Route path="/admin/wallets" element={<AdminWallets />} />
+                  <Route path="/email-notifications" element={<EmailNotifications />} />
+                  <Route path="/tasks" element={<Tasks />} />
+                  <Route path="/pricing" element={<Pricing />} />
+                  <Route path="*" element={<NotFound />} />
                 </Routes>
               </DividendDataProvider>
             </PortfolioProvider>
