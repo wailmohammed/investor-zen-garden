@@ -26,6 +26,7 @@ interface DividendDataState {
   apiCallsToday: number;
   maxApiCallsPerDay: number;
   canMakeApiCall: boolean;
+  autoSyncEnabled: boolean;
   error: string | null;
 }
 
@@ -35,6 +36,9 @@ interface DividendDataContextType extends DividendDataState {
     totalStocks: number;
     averageYield: number;
   };
+  refreshDividendData: () => Promise<void>;
+  forceSyncData: () => Promise<void>;
+  toggleAutoSync: () => void;
 }
 
 const DividendDataContext = createContext<DividendDataContextType | undefined>(undefined);
@@ -59,6 +63,7 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     apiCallsToday: 0,
     maxApiCallsPerDay: 4,
     canMakeApiCall: true,
+    autoSyncEnabled: localStorage.getItem('dividend_auto_sync') === 'true',
     error: null
   });
 
@@ -135,6 +140,56 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return { totalAnnualIncome, totalStocks, averageYield };
   };
 
+  // Refresh dividend data
+  const refreshDividendData = async () => {
+    await loadSavedDividendData();
+    toast({
+      title: "Data Refreshed",
+      description: "Dividend data has been refreshed from database",
+    });
+  };
+
+  // Force sync data (placeholder for future API sync)
+  const forceSyncData = async () => {
+    if (!state.canMakeApiCall) {
+      toast({
+        title: "API Limit Reached",
+        description: `You've reached the daily limit of ${state.maxApiCallsPerDay} API calls`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    await loadSavedDividendData();
+    
+    const newCallCount = state.apiCallsToday + 1;
+    localStorage.setItem('dividend_api_calls_today', newCallCount.toString());
+    setState(prev => ({ 
+      ...prev, 
+      apiCallsToday: newCallCount,
+      canMakeApiCall: newCallCount < state.maxApiCallsPerDay
+    }));
+
+    toast({
+      title: "Data Synced",
+      description: "Dividend data has been synchronized",
+    });
+  };
+
+  // Toggle auto-sync
+  const toggleAutoSync = () => {
+    const newValue = !state.autoSyncEnabled;
+    localStorage.setItem('dividend_auto_sync', newValue.toString());
+    setState(prev => ({ ...prev, autoSyncEnabled: newValue }));
+    
+    toast({
+      title: newValue ? "Auto-sync Enabled" : "Auto-sync Disabled",
+      description: newValue 
+        ? "Dividend data will update automatically 4x daily" 
+        : "Auto-sync has been disabled",
+    });
+  };
+
   // Load saved data when portfolio changes
   useEffect(() => {
     if (user?.id && selectedPortfolio) {
@@ -154,7 +209,10 @@ export const DividendDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const contextValue: DividendDataContextType = {
     ...state,
-    getDividendSummary
+    getDividendSummary,
+    refreshDividendData,
+    forceSyncData,
+    toggleAutoSync
   };
 
   return (
