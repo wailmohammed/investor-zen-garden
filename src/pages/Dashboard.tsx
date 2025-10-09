@@ -1,4 +1,5 @@
 
+import React from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import PortfolioSummary from "@/components/Dashboard/PortfolioSummary";
 import TopHoldings from "@/components/Dashboard/TopHoldings";
@@ -11,10 +12,12 @@ import DividendTracking from "@/components/Dashboard/DividendTracking";
 import DataSourceIndicator from "@/components/Dashboard/DataSourceIndicator";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePortfolio } from "@/contexts/PortfolioContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const Dashboard = () => {
   const { user } = useAuth();
   const { selectedPortfolio, portfolios } = usePortfolio();
+  const [portfolioMetadata, setPortfolioMetadata] = React.useState<any>(null);
 
   console.log("Dashboard - Rendering for user:", user?.email);
 
@@ -22,19 +25,43 @@ const Dashboard = () => {
   const currentPortfolio = portfolios.find(p => p.id === selectedPortfolio);
   const portfolioType = currentPortfolio?.portfolio_type || 'stock';
 
-  // Determine data source
-  const trading212PortfolioId = localStorage.getItem('trading212_portfolio_id');
-  const binancePortfolioId = localStorage.getItem('binance_portfolio_id');
-  const isTrading212Connected = selectedPortfolio === trading212PortfolioId;
-  const isBinanceConnected = selectedPortfolio === binancePortfolioId;
-  
+  // Fetch portfolio metadata to get broker_type and holdings_count
+  React.useEffect(() => {
+    const fetchPortfolioMetadata = async () => {
+      if (!selectedPortfolio) return;
+      
+      const { data } = await supabase
+        .from('portfolio_metadata')
+        .select('*')
+        .eq('portfolio_id', selectedPortfolio)
+        .single();
+      
+      if (data) {
+        console.log('Portfolio metadata:', data);
+        setPortfolioMetadata(data);
+      }
+    };
+    
+    fetchPortfolioMetadata();
+  }, [selectedPortfolio]);
+
+  // Determine data source from portfolio metadata
+  const brokerType = portfolioMetadata?.broker_type;
   let dataSource: 'Trading212' | 'CSV' | 'Mock' | 'CoinGecko' | 'Binance' = 'Mock';
-  if (isTrading212Connected) {
+  let isConnected = false;
+  
+  if (brokerType === 'trading212') {
     dataSource = 'Trading212';
-  } else if (isBinanceConnected) {
+    isConnected = true;
+  } else if (brokerType === 'binance') {
     dataSource = 'Binance';
+    isConnected = true;
   } else if (portfolioType === 'crypto') {
     dataSource = 'CoinGecko';
+    isConnected = true;
+  } else if (portfolioMetadata?.holdings_count > 0) {
+    dataSource = 'CSV';
+    isConnected = true;
   }
 
   return (
@@ -51,9 +78,10 @@ const Dashboard = () => {
           </div>
           <div>
             <DataSourceIndicator 
-              isConnected={isTrading212Connected || isBinanceConnected || portfolioType === 'crypto'}
+              isConnected={isConnected}
               dataSource={dataSource}
-              lastUpdated={new Date().toISOString()}
+              lastUpdated={portfolioMetadata?.last_sync_at || portfolioMetadata?.updated_at}
+              recordCount={portfolioMetadata?.holdings_count}
             />
           </div>
         </div>
