@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_wallets: {
+        Row: {
+          address: string
+          created_at: string | null
+          currency: string
+          id: string
+          is_active: boolean | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          address: string
+          created_at?: string | null
+          currency: string
+          id?: string
+          is_active?: boolean | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          address?: string
+          created_at?: string | null
+          currency?: string
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       api_sync_logs: {
         Row: {
           broker_type: string
