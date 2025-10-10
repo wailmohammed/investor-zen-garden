@@ -3,10 +3,11 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Database, TrendingUp, TrendingDown, RefreshCw } from "lucide-react";
+import { Database, TrendingUp, TrendingDown, RefreshCw, Trash2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePortfolio } from "@/contexts/PortfolioContext";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface Position {
   symbol: string;
@@ -22,6 +23,8 @@ const TopHoldings = () => {
   const [holdings, setHoldings] = useState<Position[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isClearing, setIsClearing] = useState(false);
+  const { toast } = useToast();
 
   const fetchHoldings = async () => {
     if (!user?.id || !selectedPortfolio) {
@@ -57,6 +60,65 @@ const TopHoldings = () => {
       setHoldings([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleClearAndResync = async () => {
+    if (!user?.id || !selectedPortfolio) return;
+
+    setIsClearing(true);
+    try {
+      // Clear old positions
+      const { error: deletePositionsError } = await supabase
+        .from('portfolio_positions')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('portfolio_id', selectedPortfolio)
+        .eq('broker_type', 'trading212');
+
+      if (deletePositionsError) throw deletePositionsError;
+
+      // Clear old metadata
+      const { error: deleteMetadataError } = await supabase
+        .from('portfolio_metadata')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('portfolio_id', selectedPortfolio)
+        .eq('broker_type', 'trading212');
+
+      if (deleteMetadataError) throw deleteMetadataError;
+
+      toast({
+        title: "Data Cleared",
+        description: "Old data cleared. Now syncing fresh data from Trading212...",
+      });
+
+      // Trigger fresh sync
+      const { data, error: syncError } = await supabase.functions.invoke('trading212-sync', {
+        body: { portfolioId: selectedPortfolio, forceRefresh: true }
+      });
+
+      if (syncError) throw syncError;
+
+      if (data?.success) {
+        toast({
+          title: "Sync Complete",
+          description: `Successfully synced ${data.data?.positions?.length || 0} positions from Trading212`,
+        });
+        // Refresh display
+        await fetchHoldings();
+      } else {
+        throw new Error(data?.message || 'Sync failed');
+      }
+    } catch (error: any) {
+      console.error('Clear & sync error:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to clear and sync data",
+        variant: "destructive",
+      });
+    } finally {
+      setIsClearing(false);
     }
   };
 
@@ -135,10 +197,21 @@ const TopHoldings = () => {
               Database ({holdings.length})
             </Badge>
           </div>
-          <Button onClick={fetchHoldings} variant="outline" size="sm">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              onClick={handleClearAndResync} 
+              variant="destructive" 
+              size="sm"
+              disabled={isClearing}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              {isClearing ? 'Clearing...' : 'Clear & Re-sync'}
+            </Button>
+            <Button onClick={fetchHoldings} variant="outline" size="sm">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent>
