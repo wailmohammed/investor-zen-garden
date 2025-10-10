@@ -80,10 +80,24 @@ const DividendContent = () => {
       }
     } catch (error: any) {
       console.error('Sync error:', error);
+      
+      const isAuthError = error.message?.includes('401') || error.message?.includes('unauthorized');
+      
       toast({
         title: "Sync Failed",
-        description: error.message || "Failed to sync with Trading212. Please check your API key in Broker Integration.",
+        description: isAuthError 
+          ? "Trading212 API key is invalid or expired. Please update it in Broker Integration." 
+          : error.message || "Failed to sync with Trading212.",
         variant: "destructive",
+        action: isAuthError ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.location.href = '/broker-integration'}
+          >
+            Update API Key
+          </Button>
+        ) : undefined,
       });
     } finally {
       setIsSyncing(false);
