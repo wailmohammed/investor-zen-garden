@@ -17,6 +17,9 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { DividendOverviewEnhanced } from "@/components/Dividends/DividendOverviewEnhanced";
 import { DividendPerformanceTable } from "@/components/Dividends/DividendPerformanceTable";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { RefreshCw } from "lucide-react";
 
 interface HoldingData {
   symbol: string;
@@ -43,9 +46,52 @@ const DividendContent = () => {
   const { user } = useAuth();
   const { portfolios, selectedPortfolio, setSelectedPortfolio } = usePortfolio();
   const [activeTab, setActiveTab] = useState("overview");
+  const { toast } = useToast();
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Sync Trading212 data
+  const handleSyncNow = async () => {
+    if (!selectedPortfolio || !user?.id) {
+      toast({
+        title: "Error",
+        description: "Please select a portfolio first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('trading212-sync', {
+        body: { portfolioId: selectedPortfolio }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast({
+          title: "Sync Complete",
+          description: `Successfully synced ${data.data?.positions?.length || 0} positions from Trading212`,
+        });
+        // Refetch dividends after sync
+        refetch();
+      } else {
+        throw new Error(data?.message || 'Sync failed');
+      }
+    } catch (error: any) {
+      console.error('Sync error:', error);
+      toast({
+        title: "Sync Failed",
+        description: error.message || "Failed to sync with Trading212. Please check your API key in Broker Integration.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // Fetch dividends from database for selected portfolio
-  const { data: dividends = [], isLoading } = useQuery({
+  const { data: dividends = [], isLoading, refetch } = useQuery({
     queryKey: ['saved-dividends', user?.id, selectedPortfolio],
     queryFn: async () => {
       if (!user?.id || !selectedPortfolio) return [];
@@ -172,6 +218,15 @@ const DividendContent = () => {
           <p className="text-muted-foreground">Track, analyze and forecast your dividend income from persistent database storage</p>
         </div>
         <div className="flex gap-2">
+          <Button 
+            variant="default" 
+            className="flex items-center gap-2"
+            onClick={handleSyncNow}
+            disabled={isSyncing || !selectedPortfolio}
+          >
+            <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Syncing...' : 'Sync Now'}
+          </Button>
           <Button variant="outline" className="flex items-center gap-2">
             <Target className="h-4 w-4" />
             Export Report
